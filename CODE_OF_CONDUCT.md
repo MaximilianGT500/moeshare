@@ -1,5 +1,5 @@
 <div align="center">
-  <h1><a href="https://github.com/maxsrl/moeshare" target="_blank"><img height="300" alt="LOGO" src="https://moeshare.de/assets/img/logo.png"></a></h1>
+  <h1><a href="https://github.com/MaximilianGT500/moeshare" target="_blank"><img height="300" alt="LOGO" src="https://moeshare.eu/assets/img/logo.png"></a></h1>
 </div>
 
 # Verhaltenskodex - MoeShare
@@ -38,7 +38,7 @@ Dieser Verhaltenskodex gilt in allen Community-Räumen und gilt auch, wenn eine 
 
 ## Durchsetzung
 
-Vorfälle von missbräuchlichem, belästigendem oder anderweitig inakzeptablem Verhalten können an die für die Durchsetzung verantwortlichen Community-Leiter gemeldet werden unter abuse@max.srl. Alle Beschwerden werden schnell und fair überprüft und untersucht.
+Vorfälle von missbräuchlichem, belästigendem oder anderweitig inakzeptablem Verhalten können den für die Durchsetzung verantwortlichen Community-Leitern über das [Kontaktformular](https://maxi.lol/kontakt/) gemeldet werden. Alle Beschwerden werden schnell und fair überprüft und untersucht.
 
 Alle Community-Leiter sind verpflichtet, die Privatsphäre und Sicherheit des Meldenden eines Vorfalls zu respektieren.
 

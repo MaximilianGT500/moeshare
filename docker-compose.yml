@@ -1,63 +1,64 @@
-version: '3.8'
 services:
   moeshare:
-    image: maxsrl/moeshare
+    image: ghcr.io/maximiliangt500/moeshare:latest
     container_name: moeshare
     restart: unless-stopped
+    init: true
     ports:
       - "3000:3000"
-    volumes:
-      - ./uploads:/opt/moeshare/uploads 
-      - ./public:/opt/moeshare/public
-      - ./db:/opt/moeshare/db
-      - type: bind
-        source: ./db
-        target: /opt/moeshare/db
-      - type: bind
-        source: ./uploads
-        target: /opt/moeshare/uploads
-    tmpfs: /tmp
-    tty: true
     environment:
-      - NODE_ENV=production
-      
-      - AUDIO_FORMATS=.mp3,.wav,.ogg,.aac,.flac # Unterstützte Audioformate
-      - VIDEO_FORMATS=.mp4,.avi,.mkv,.mov,.wmv # Unterstützte Videoformate
-      - IMAGE_FORMATS=.jpg,.jpeg,.png,.bmp,.svg,.webp,.tiff # Unterstützte Bildformate
+      TZ: Europe/Berlin
+      LOG_LEVEL: info
+      PUID: 1000
+      PGID: 1000
+    volumes:
+      - ./db:/opt/moeshare/db
+      - ./uploads:/opt/moeshare/uploads
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - KILL
+      - SETGID
+      - SETUID
+    stop_grace_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
 
-      - BASE_URL=http://localhost:3000 # Basis-URL der Anwendung
-      - PORT=3000 # Port der Anwendung
-      - JWT_TOKEN=CHANGEME # Zufälliger Token
-      - REMOVE_METADATA=true # Sollen Metadaten, wie der Standort entfernt werden nach dem Upload? (Dies beeinträchtigt die Leistung.)
-      - USE_PREVIEW=true # Soll ein Preview Bild erstellt werden?
-      - LOGS=false # Sollen Logs an die Discord-Webhook gesendet werden?
-      - ALLOW_METRICS=true # Dürfen Fehler an Sentry für die Fehlerbehebung gesendet werden? (Dies wird empfohlen und damit trägst Du zur verbesserung der Anwendung bei!)
-      - USE_HLS=true # Soll HLS für das Videostreaming verwendet werden? Dies erfordert mehr Speicher, ist aber bei großen Videos ratsam. (Erstellt eine .m3u8-Datei und .ts-Dateien)
-      - USE_DASHBOARD=false # Soll das Web-UI genutzt werden? 
+  caddy:
+    image: caddy:2-alpine
+    profiles:
+      - caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      moeshare:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
 
-      - SITE_TITLE=MoeShare # Meta-Tag title
-      - SITE_FAVICON=https://moeshare.de/assets/img/logo.png # Path zur .png-Datei oder zu einer .png-URL
-      - OG_TITLE=EXAMPLE # Meta-Tag og:title
-      - OG_DESCRIPTION=EXAMPLE # Meta-Tag og:description
-      - THEME_COLOR=&dominantColor # Meta-Tag theme-color - wenn &dominantColor als themecolor genommen wird, ist das Embed in der Dominanten Farbe der Datei. Sollte &random genommen werden, hat das Embed eine zufällige Farbe.
-      - FONT_COLOR='#343540' # Hier kannst du die Schriftfarbe definieren. (#HEXCOLOR)
-
-      - AUTHOR_URL=https://example.com # OEmbed
-      - AUTHOR_NAME=EXAMPLE # OEmbed
-      - PROVIDER_NAME=EXAMPLE.COM # OEmbed
-      - PROVIDER_URL=https://example.com # OEmbed
-
-      - USE_DOMINANT_COLOR=true # Soll die Dominate Farbe des Bildes für den Shadow genutzt werden? (dann true) Sollte lieber eine Static Farbe genutzt werden? (dann false und fülle dominantColorStatic aus)
-      - DOMINANT_COLOR_STATIC=#ffffff # Diese Farbe wird anstelle der Dominanten Farbe genutzt. (#HEXCOLOR)
-      - BOX_SHADOW_COLOR=#ffffff # Wird Angewand, wenn die Datei kein Bild ist. (#HEXCOLOR)
-
-      - COPYRIGHT_TEXT=&copy; 2023 MoeShare - All Rights Reserved # Copyright Text
-
-      - DISCORD_WEBHOOK_NAME=MoeShare # Dies ist der Name der Webhook
-      - DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/XXXX/XXXX # Für Discord-Webhook logging (Nur ausfüllen wenn LOGS = true)
-      - DISCORD_WEBHOOK_SUCCESS_COLOR=0x03fc28 # Embed-Farbe bei INFO Logs (0xHEXCOLORCODEOHNE-#)
-      - DISCORD_WEBHOOK_ERROR_COLOR=0xfc0303 # Embed-Farbe bei ERROR Logs (0xHEXCOLORCODEOHNE-#)
-
-      - REDIRECT_URL=https://example.com # Wohin soll man Weitergeleitet werden, wenn man / aufruft?
-    #env_file:
-    #  - .env # Nenne example.env zu .env um!
+volumes:
+  caddy-data:
+  caddy-config:

@@ -1,0 +1,3 @@
+{$DOMAIN} {
+	reverse_proxy moeshare:3000
+}

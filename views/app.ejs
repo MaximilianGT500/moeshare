@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="de" data-mui-color-scheme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title><%= title %></title>
+<% if (head) { -%>
+  <%- head %>
+<% } else { -%>
+  <meta property="og:title" content="<%= siteTitle %>" />
+  <meta property="og:locale" content="de_DE" />
+  <meta name="robots" content="noindex" />
+<% } -%>
+  <link rel="icon" href="<%= favicon || '/favicon.svg' %>" />
+  <meta name="color-scheme" content="dark light" />
+  <script nonce="<%= cspNonce %>">
+    (function () {
+      try {
+        var root = document.documentElement;
+        var mode = localStorage.getItem('mui-mode') || 'dark';
+        var scheme = mode === 'system'
+          ? (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
+          : mode;
+        if (scheme !== 'light') scheme = 'dark';
+        root.setAttribute('data-mui-color-scheme', scheme);
+        root.style.colorScheme = scheme;
+      } catch (e) {}
+    })();
+  </script>
+  <style>
+    html, body { margin: 0; background: #15121b; color: #e7e0ed; }
+    html[data-mui-color-scheme="light"], html[data-mui-color-scheme="light"] body { background: #fef7ff; color: #1d1a23; }
+  </style>
+  <%- assets.head %>
+</head>
+<body>
+  <div id="root"></div>
+  <noscript><%- noscript %></noscript>
+  <script id="moeshare-data" type="application/json"><%- boot %></script>
+  <%- assets.body %>
+</body>
+</html>

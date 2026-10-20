@@ -1,0 +1,9 @@
+#!/bin/sh
+set -e
+cd /opt/moeshare
+export MOESHARE_COMMAND=moeshare
+
+if [ "$(id -u)" = "0" ]; then
+  exec setpriv --reuid="$(stat -c %u db)" --regid="$(stat -c %g db)" --clear-groups node cli.js "$@"
+fi
+exec node cli.js "$@"

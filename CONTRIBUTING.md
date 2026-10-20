@@ -1,5 +1,5 @@
 <div align="center">
-  <h1><a href="https://github.com/maxsrl/moeshare" target="_blank"><img height="300" alt="LOGO" src="https://moeshare.de/assets/img/logo.png"></a></h1>
+  <h1><a href="https://github.com/MaximilianGT500/moeshare" target="_blank"><img height="300" alt="LOGO" src="https://moeshare.eu/assets/img/logo.png"></a></h1>
 </div>
 
 # Mitwirken an MoeShare
@@ -26,19 +26,19 @@ Alle Arten von Beiträgen sind willkommen und werden geschätzt. Siehe das [Inha
 ## Verhaltenskodex
 
 Dieses Projekt und alle daran Beteiligten unterliegen dem
-[MoeShare Verhaltenskodex](https://github.com/maxsrl/moeshareblob/master/CODE_OF_CONDUCT.md).
+[MoeShare Verhaltenskodex](CODE_OF_CONDUCT.md).
 Durch deine Teilnahme wird von dir erwartet, diesen Kodex einzuhalten. Bitte melde unakzeptables Verhalten
-an .
+über das [Kontaktformular](https://maxi.lol/kontakt/).
 
 ## Ich habe eine Frage
 
-> Wenn du eine Frage stellen möchtest, gehen wir davon aus, dass du die verfügbare [Dokumentation](https://docs.moeshare.de) gelesen hast.
+> Wenn du eine Frage stellen möchtest, gehen wir davon aus, dass du die verfügbare [Dokumentation](https://github.com/MaximilianGT500/moeshare#readme) gelesen hast.
 
-Bevor du eine Frage stellst, ist es am besten, nach vorhandenen [Problemen](https://github.com/maxsrl/moeshare/issues) zu suchen, die dir möglicherweise helfen könnten. Falls du ein passendes Problem gefunden hast und immer noch Klarstellungen benötigst, kannst du deine Frage in diesem Problem stellen. Es ist auch ratsam, zuerst im Internet nach Antworten zu suchen.
+Bevor du eine Frage stellst, ist es am besten, nach vorhandenen [Problemen](https://github.com/MaximilianGT500/moeshare/issues) zu suchen, die dir möglicherweise helfen könnten. Falls du ein passendes Problem gefunden hast und immer noch Klarstellungen benötigst, kannst du deine Frage in diesem Problem stellen. Es ist auch ratsam, zuerst im Internet nach Antworten zu suchen.
 
 Wenn du dann immer noch das Bedürfnis hast, eine Frage zu stellen und Klarstellungen benötigst, empfehlen wir folgendes:
 
-- Eröffne ein [Problem](https://github.com/maxsrl/moeshare/issues/new).
+- Eröffne ein [Problem](https://github.com/MaximilianGT500/moeshare/issues/new).
 - Gib so viel Kontext wie möglich darüber an, worauf du stößt.
 - Gib Projekt- und Plattformversionen an (Node.js, npm usw.), je nachdem, was relevant erscheint.
 
@@ -56,8 +56,8 @@ Wir kümmern uns dann so schnell wie möglich um das Problem.
 Ein guter Fehlerbericht sollte andere nicht dazu zwingen, dich nach weiteren Informationen zu fragen. Daher bitten wir dich, sorgfältig zu recherchieren, Informationen zu sammeln und das Problem in deinem Bericht ausführlich zu beschreiben. Bitte führe die folgenden Schritte im Voraus durch, um uns bei der Behebung eines potenziellen Fehlers so schnell wie möglich zu helfen.
 
 - Stelle sicher, dass du die neueste Version verwendest.
-- Ermittle, ob dein Fehler wirklich ein Fehler ist und kein Fehler auf deiner Seite, z. B. durch die Verwendung von inkompatiblen Umgebungskomponenten/Versionen (Stelle sicher, dass du die [Dokumentation](https://docs.moeshare.de) gelesen hast. Wenn du Unterstützung suchst, solltest du [diesen Abschnitt](#ich-habe-eine-frage) überprüfen).
-- Um zu sehen, ob andere Benutzer das gleiche Problem haben (und möglicherweise bereits gelöst haben), überprüfe, ob bereits ein Fehlerbericht für deinen Fehler oder Fehler im [Fehler-Tracker](https://github.com/maxsrl/moeshareissues?q=label%3Abug) vorhanden ist.
+- Ermittle, ob dein Fehler wirklich ein Fehler ist und kein Fehler auf deiner Seite, z. B. durch die Verwendung von inkompatiblen Umgebungskomponenten/Versionen (Stelle sicher, dass du die [Dokumentation](https://github.com/MaximilianGT500/moeshare#readme) gelesen hast. Wenn du Unterstützung suchst, solltest du [diesen Abschnitt](#ich-habe-eine-frage) überprüfen).
+- Um zu sehen, ob andere Benutzer das gleiche Problem haben (und möglicherweise bereits gelöst haben), überprüfe, ob bereits ein Fehlerbericht für deinen Fehler oder Fehler im [Fehler-Tracker](https://github.com/MaximilianGT500/moeshare/issues?q=label%3Abug) vorhanden ist.
 - Stelle sicher, dass du auch im Internet (einschließlich Stack Overflow) nachgeschaut hast, ob Benutzer außerhalb der GitHub-Community das Problem diskutiert haben.
 - Sammle Informationen über den Fehler:
 - Stack-Trace (Traceback)
@@ -73,7 +73,7 @@ Ein guter Fehlerbericht sollte andere nicht dazu zwingen, dich nach weiteren Inf
 
 Wir verwenden GitHub Issues, um Fehler und Fehler zu verfolgen. Wenn du auf ein Problem mit dem Projekt stößt:
 
-- Eröffne ein [Problem](https://github.com/maxsrl/moeshare/issues/new). (Da wir zu diesem Zeitpunkt noch nicht sicher sein können, ob es sich um einen Fehler handelt, bitten wir dich, noch nicht über einen Fehler zu sprechen und das Problem nicht zu kennzeichnen.)
+- Eröffne ein [Problem](https://github.com/MaximilianGT500/moeshare/issues/new). (Da wir zu diesem Zeitpunkt noch nicht sicher sein können, ob es sich um einen Fehler handelt, bitten wir dich, noch nicht über einen Fehler zu sprechen und das Problem nicht zu kennzeichnen.)
 - Erkläre das erwartete Verhalten und das tatsächliche Verhalten.
 - Bitte gib so viele Informationen wie möglich an und beschreibe die *Reproduktionsschritte*, die jemand anderes befolgen kann, um das Problem selbst zu reproduzieren. Dies enthält normalerweise deinen Code. Für gute Fehlerberichte solltest du das Problem isolieren und einen reduzierten Testfall erstellen.
 - Gib die Informationen an, die du im vorherigen Abschnitt gesammelt hast.
@@ -91,13 +91,13 @@ Dieser Abschnitt führt dich durch das Einreichen einer Verbesserungsidee für M
 #### Vor dem Einreichen einer Verbesserung
 
 - Stelle sicher, dass du die neueste Version verwendest.
-- Lies die [Dokumentation](https://docs.moeshare.de) sorgfältig durch und finde heraus, ob die Funktionalität bereits abgedeckt ist, vielleicht durch eine individuelle Konfiguration.
-- Führe eine [Suche](https://github.com/maxsrl/moeshare/issues) durch, um zu sehen, ob die Verbesserung bereits vorgeschlagen wurde. Wenn dies der Fall ist, füge einen Kommentar zum vorhandenen Problem hinzu, anstatt ein neues zu erstellen.
+- Lies die [Dokumentation](https://github.com/MaximilianGT500/moeshare#readme) sorgfältig durch und finde heraus, ob die Funktionalität bereits abgedeckt ist, vielleicht durch eine individuelle Konfiguration.
+- Führe eine [Suche](https://github.com/MaximilianGT500/moeshare/issues) durch, um zu sehen, ob die Verbesserung bereits vorgeschlagen wurde. Wenn dies der Fall ist, füge einen Kommentar zum vorhandenen Problem hinzu, anstatt ein neues zu erstellen.
 - Finde heraus, ob deine Idee zum Umfang und den Zielen des Projekts passt. Es liegt an dir, ein starkes Argument vorzulegen, um die Entwickler des Projekts von den Vorteilen dieser Funktion zu überzeugen. Beachte, dass wir Funktionen möchten, die für die Mehrheit unserer Benutzer nützlich sind und nicht nur für eine kleine Teilmenge. Wenn du nur eine Minderheit von Benutzern ansprichst, solltest du in Erwägung ziehen, ein Add-On/Plugin-Bibliothek zu schreiben.
 
 #### Wie reiche ich einen guten Vorschlag zur Verbesserung ein?
 
-Vorschläge zur Verbesserung werden als [GitHub-Probleme](https://github.com/maxsrl/moeshare/issues) verfolgt.
+Vorschläge zur Verbesserung werden als [GitHub-Probleme](https://github.com/MaximilianGT500/moeshare/issues) verfolgt.
 
 - Verwende eine **klare und beschreibende Überschrift** für das Problem, um den Vorschlag zu identifizieren.
 - Gib eine **Schritt-für-Schritt-Beschreibung der vorgeschlagenen Verbesserung** in so vielen Details wie möglich an.
