@@ -21,6 +21,8 @@ MoeShare nimmt Bilder, Videos, Audio und beliebige Dateien von ShareX, aus dem B
 
 Mehr zum Projekt, Screenshots und eine Kurzanleitung gibt es auf [moeshare.eu](https://moeshare.eu).
 
+Offizielle Instance: [v3.moeshare.eu](https://v3.moeshare.eu).
+
 ## Inhalt
 
 - [Funktionen](#funktionen)
