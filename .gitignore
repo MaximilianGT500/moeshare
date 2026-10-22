@@ -1,8 +1,7 @@
 node_modules/
-client/node_modules/
-db/
-uploads/
-_backup/
+/db/
+/uploads/
+/_backup/
 .env
 .env.*
 *.log

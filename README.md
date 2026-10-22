@@ -19,7 +19,9 @@
 
 MoeShare nimmt Bilder, Videos, Audio, Texte und beliebige Dateien von ShareX, aus dem Browser oder per Link entgegen und macht daraus Links mit schöner Vorschau, auch in Discord. Dazu kürzt es lange Adressen und sammelt Dateien in Alben. Jede Person gestaltet ihre Vorschauseiten selbst und kann eine eigene Domain verbinden. Eingerichtet wird alles im Browser: Beim ersten Start führt dich ein Assistent durch Datenbank, Admin-Konto und Einstellungen, eine `.env` brauchst du nicht.
 
-Mehr zum Projekt, Screenshots und eine Kurzanleitung gibt es auf [moeshare.eu](https://moeshare.eu), ausprobieren kannst du MoeShare in der [Demo](https://v3.moeshare.eu). Was sich in jeder Version geändert hat, steht im [Changelog](https://moeshare.eu/changelog.html).
+Mehr zum Projekt, Screenshots und eine Kurzanleitung gibt es auf [moeshare.eu](https://moeshare.eu). Was sich in jeder Version geändert hat, steht im [Changelog](https://moeshare.eu/changelog.html).
+
+Offizielle Instance: [v3.moeshare.eu](https://v3.moeshare.eu).
 
 ## Inhalt
 
