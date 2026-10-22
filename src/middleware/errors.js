@@ -4,6 +4,7 @@ const multer = require('multer');
 const logger = require('../lib/logger');
 const { HttpError } = require('../lib/errors');
 const { renderMessage } = require('../lib/render');
+const i18n = require('../lib/i18n');
 const { pathOf } = require('./requestLog');
 
 const log = logger.scope('http');
@@ -24,8 +25,10 @@ function normalize(error) {
   return null;
 }
 
+const tr = (req, text) => i18n.translate(req.language, text);
+
 function notFound(req, res) {
-  if (wantsJson(req)) return res.status(404).json({ error: 'Nicht gefunden' });
+  if (wantsJson(req)) return res.status(404).json({ error: tr(req, 'Nicht gefunden') });
   return renderMessage(res, 404, 'Diese Seite gibt es nicht.');
 }
 
@@ -35,13 +38,13 @@ function errorHandler(error, req, res, next) {
   if (res.headersSent) return res.destroy();
 
   if (!known) {
-    if (wantsJson(req)) return res.status(500).json({ error: `Interner Serverfehler (Fehler-ID ${req.id})`, requestId: req.id });
+    if (wantsJson(req)) return res.status(500).json({ error: tr(req, `Interner Serverfehler (Fehler-ID ${req.id})`), requestId: req.id });
     return renderMessage(res, 500, 'Hier ist etwas schiefgelaufen. Versuche es gleich noch einmal.', {
       title: 'Fehler',
       requestId: req.id,
     });
   }
-  if (wantsJson(req)) return res.status(known.status).json(known);
+  if (wantsJson(req)) return res.status(known.status).json({ ...known.toJSON(), error: tr(req, known.message) });
   return renderMessage(res, known.status, known.message, { title: known.status === 404 ? 'Nicht gefunden' : 'Fehler' });
 }
 

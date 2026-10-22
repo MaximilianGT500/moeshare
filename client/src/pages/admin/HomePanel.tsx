@@ -14,6 +14,7 @@ import { isCancelled, useSudo } from '../../components/Sudo';
 import { useElementHeight, useElementWidth } from '../../lib/hooks';
 import { HomeView, STAT_META } from '../home/HomeView';
 import { c, fonts, radius } from '../../theme/tokens';
+import { t } from '../../lib/i18n';
 
 const KEYS = ['home.enabled', 'home.headline', 'home.text', 'home.stats', 'home.activity', 'home.signIn', 'site.redirectUrl'] as const;
 const STAT_ORDER = Object.keys(STAT_META) as HomeStatKey[];
@@ -79,10 +80,12 @@ export function HomePanel({
     setErrors((previous) => (previous[key] ? { ...previous, [key]: '' } : previous));
   };
 
+  const textDefault = initial.localizedDefaults?.['home.text'];
+  const rawText = (draft['home.text'] as string) || '';
   const home: HomeOptions = {
     enabled: draft['home.enabled'] === true,
     headline: (draft['home.headline'] as string) || '',
-    text: (draft['home.text'] as string) || '',
+    text: textDefault && rawText === textDefault.value ? textDefault.localized : rawText,
     stats: (draft['home.stats'] as HomeStatKey[]) || [],
     activity: draft['home.activity'] === true,
     signIn: draft['home.signIn'] === true,
@@ -107,7 +110,7 @@ export function HomePanel({
       setSaved(pick(result.values));
       setDraft(pick(result.values));
       onSaved({ ...initial, values: result.values, secrets: result.secrets });
-      toast('Startseite gespeichert', { variant: 'success' });
+      toast(t('Startseite gespeichert'), { variant: 'success' });
     } catch (failure) {
       if (isCancelled(failure)) return;
       if (failure instanceof ApiError && failure.field) setErrors({ [failure.field]: failure.message });
@@ -130,18 +133,18 @@ export function HomePanel({
       }}
     >
       <Stack spacing={4}>
-        <SettingsSection title="Startseite" description="Was Besucher sehen, wenn sie die Adresse ohne Pfad öffnen.">
+        <SettingsSection title={t('Startseite')} description={t('Was Besucher sehen, wenn sie die Adresse ohne Pfad öffnen.')}>
           <SwitchRow
             id="home-enabled"
-            label="Startseite anzeigen"
-            description="Mit Statistiken, Text und Links. Aus: Besucher werden weitergeleitet."
+            label={t('Startseite anzeigen')}
+            description={t('Mit Statistiken, Text und Links. Aus: Besucher werden weitergeleitet.')}
             checked={home.enabled}
             onChange={(on) => set('home.enabled', on)}
           />
           {!home.enabled && (
             <SettingRow
-              label="Weiterleiten zu"
-              description="Leer lassen, dann landen Besucher bei der Anmeldung oder im eigenen Dashboard."
+              label={t('Weiterleiten zu')}
+              description={t('Leer lassen, dann landen Besucher bei der Anmeldung oder im eigenen Dashboard.')}
               stacked
             >
               <TextField
@@ -152,7 +155,7 @@ export function HomePanel({
                 placeholder="https://example.com"
                 error={!!errors['site.redirectUrl']}
                 helperText={errors['site.redirectUrl']}
-                slotProps={{ htmlInput: { 'aria-label': 'Weiterleiten zu', spellCheck: false, style: { fontFamily: fonts.mono } } }}
+                slotProps={{ htmlInput: { 'aria-label': t('Weiterleiten zu'), spellCheck: false, style: { fontFamily: fonts.mono } } }}
               />
             </SettingRow>
           )}
@@ -160,8 +163,8 @@ export function HomePanel({
 
         {home.enabled && (
           <>
-            <SettingsSection title="Inhalt">
-              <SettingRow label="Überschrift" description="Leer lassen für den Namen der Seite." stacked>
+            <SettingsSection title={t('Inhalt')}>
+              <SettingRow label={t('Überschrift')} description={t('Leer lassen für den Namen der Seite.')} stacked>
                 <TextField
                   size="small"
                   fullWidth
@@ -170,10 +173,10 @@ export function HomePanel({
                   onChange={(event) => set('home.headline', event.target.value)}
                   error={!!errors['home.headline']}
                   helperText={errors['home.headline']}
-                  slotProps={{ htmlInput: { 'aria-label': 'Überschrift', maxLength: 80 } }}
+                  slotProps={{ htmlInput: { 'aria-label': t('Überschrift'), maxLength: 80 } }}
                 />
               </SettingRow>
-              <SettingRow label="Text" description="Ein paar Sätze, worum es auf deiner Seite geht." stacked>
+              <SettingRow label={t('Text')} description={t('Ein paar Sätze, worum es auf deiner Seite geht.')} stacked>
                 <TextField
                   fullWidth
                   multiline
@@ -181,21 +184,26 @@ export function HomePanel({
                   value={home.text}
                   onChange={(event) => set('home.text', event.target.value)}
                   error={!!errors['home.text']}
-                  helperText={errors['home.text'] || `${home.text.length} von 600 Zeichen`}
-                  slotProps={{ htmlInput: { 'aria-label': 'Text', maxLength: 600 } }}
+                  helperText={errors['home.text'] || t('{count} von 600 Zeichen', { count: home.text.length })}
+                  slotProps={{ htmlInput: { 'aria-label': t('Text'), maxLength: 600 } }}
                 />
               </SettingRow>
               <SwitchRow
                 id="home-signin"
-                label="Knopf zum Anmelden"
-                description="Angemeldete sehen stattdessen „Zum Dashboard“. „Konto erstellen“ erscheint, wenn sich jeder registrieren darf."
+                label={t('Knopf zum Anmelden')}
+                description={t(
+                  'Angemeldete sehen stattdessen „Zum Dashboard“. „Konto erstellen“ erscheint, wenn sich jeder registrieren darf.'
+                )}
                 checked={home.signIn}
                 onChange={(on) => set('home.signIn', on)}
               />
             </SettingsSection>
 
-            <SettingsSection title="Statistiken" description="Alle Werte gelten für den ganzen Server, nicht für einzelne Konten.">
-              <SettingRow label="Angezeigte Zahlen" stacked>
+            <SettingsSection
+              title={t('Statistiken')}
+              description={t('Alle Werte gelten für den ganzen Server, nicht für einzelne Konten.')}
+            >
+              <SettingRow label={t('Angezeigte Zahlen')} stacked>
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                   {STAT_ORDER.map((key) => {
                     const active = home.stats.includes(key);
@@ -219,20 +227,20 @@ export function HomePanel({
               </SettingRow>
               <SwitchRow
                 id="home-activity"
-                label="Uploads der letzten 14 Tage"
-                description="Als Diagramm neben der Überschrift."
+                label={t('Uploads der letzten 14 Tage')}
+                description={t('Als Diagramm neben der Überschrift.')}
                 checked={home.activity}
                 onChange={(on) => set('home.activity', on)}
               />
             </SettingsSection>
 
             <SettingsSection
-              title="Links und Rechtliches"
-              description="Eigene Links, Impressum und Datenschutz erscheinen unten auf jeder Seite, auch hier."
+              title={t('Links und Rechtliches')}
+              description={t('Eigene Links, Impressum und Datenschutz erscheinen unten auf jeder Seite, auch hier.')}
             >
-              <SettingRow label="Bearbeiten unter Einstellungen" description="Einstellungen › Rechtliches und Links">
+              <SettingRow label={t('Bearbeiten unter Einstellungen')} description={t('Einstellungen › Rechtliches und Links')}>
                 <Button variant="tonal" onClick={onOpenSettings}>
-                  Öffnen
+                  {t('Öffnen')}
                 </Button>
               </SettingRow>
             </SettingsSection>
@@ -243,10 +251,10 @@ export function HomePanel({
       <Box sx={{ position: { lg: 'sticky' }, top: { lg: 96 } }}>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, mb: 1.5, px: 0.5 }}>
           <Typography variant="h6" component="h2">
-            Vorschau
+            {t('Vorschau')}
           </Typography>
           <Button size="small" href="/" target="_blank" rel="noopener" endIcon={<OpenInNewRounded />}>
-            Seite öffnen
+            {t('Seite öffnen')}
           </Button>
         </Box>
         {home.enabled ? (
@@ -256,8 +264,11 @@ export function HomePanel({
         ) : (
           <Box sx={{ p: 4, borderRadius: `${radius.lg}px`, bgcolor: c.surfaceContainerLow, color: 'text.secondary' }}>
             <Typography>
-              Die Startseite ist aus. Wer {site.baseUrl} öffnet, landet{' '}
-              {redirect ? `auf ${redirect}` : 'bei der Anmeldung oder im eigenen Dashboard'}.
+              {redirect
+                ? t('Die Startseite ist aus. Wer {baseUrl} öffnet, landet auf {redirect}.', { baseUrl: site.baseUrl, redirect })
+                : t('Die Startseite ist aus. Wer {baseUrl} öffnet, landet bei der Anmeldung oder im eigenen Dashboard.', {
+                    baseUrl: site.baseUrl,
+                  })}
             </Typography>
           </Box>
         )}

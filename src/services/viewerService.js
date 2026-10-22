@@ -11,6 +11,8 @@ const summary = (user) => ({
   role: user.role,
   isAdmin: user.isAdmin,
   canCustomizeEmbed: user.isAdmin || settings.get('embed.allowUserTemplates'),
+  canDesign:
+    user.isAdmin || settings.get('embed.allowUserTemplates') || settings.get('view.allowUserDesigns') || settings.get('profiles.enabled'),
 });
 
 async function confirmMethods(user) {

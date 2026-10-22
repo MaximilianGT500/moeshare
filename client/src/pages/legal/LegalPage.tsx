@@ -95,7 +95,7 @@ export function LegalPage() {
           </Box>
         </m.article>
       </Box>
-      <SiteFooter site={site} sx={{ position: 'relative', zIndex: 1, px: 2, pb: 3 }} />
+      <SiteFooter site={site} report sx={{ position: 'relative', zIndex: 1, px: 2, pb: 3 }} />
     </Box>
   );
 }

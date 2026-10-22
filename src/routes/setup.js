@@ -1,9 +1,10 @@
 'use strict';
 
 const express = require('express');
-const rateLimit = require('express-rate-limit');
 const { badRequest } = require('../lib/errors');
 const { text, flag } = require('../lib/input');
+const { tr } = require('../lib/i18n');
+const { limiter } = require('../lib/limiter');
 const { renderPage } = require('../lib/render');
 const { isSecure } = require('../lib/request');
 const { sameOriginOnly } = require('../middleware/auth');
@@ -16,16 +17,11 @@ const webhook = require('../services/webhookService');
 
 const router = express.Router();
 
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: 120,
-  standardHeaders: 'draft-7',
-  legacyHeaders: false,
-  message: { error: 'Zu viele Versuche. Warte ein paar Minuten und versuche es dann erneut.' },
-});
+const setupLimiter = limiter({ windowMs: 15 * 60 * 1000, limit: 120 });
 
-const guarded = [sameOriginOnly, limiter];
+const guarded = [sameOriginOnly, setupLimiter];
 const tokenOf = (req) => text(req.body.token, 100);
+const localizedChecks = (req) => setup.checks().map((check) => ({ ...check, label: tr(req, check.label), detail: tr(req, check.detail) }));
 
 router.get('/setup', async (req, res) => {
   if (!(await setup.isOpen())) return res.redirect('/login');
@@ -41,7 +37,8 @@ router.get('/setup', async (req, res) => {
         tokenRejected: Boolean(token) && !valid,
         settings: valid ? setup.wizardSettings() : null,
         suggestedBaseUrl: `${isSecure(req) ? 'https' : 'http'}://${req.get('host')}`,
-        checks: valid ? setup.checks() : null,
+        checks: valid ? localizedChecks(req) : null,
+        database: valid ? setup.databaseState() : null,
         passwordMinLength: settings.get('auth.passwordMinLength'),
       },
     },
@@ -59,6 +56,15 @@ router.post('/api/setup/webhook-test', guarded, async (req, res) => {
   const problem = await webhook.test(url || undefined);
   if (problem) throw badRequest(problem, { field: 'webhook.url' });
   res.json({ ok: true });
+});
+
+router.post('/api/setup/database/test', guarded, async (req, res) => {
+  res.json({ ok: true, ...(await setup.testDatabase({ token: tokenOf(req), url: text(req.body.url, 2000) })) });
+});
+
+router.post('/api/setup/database', guarded, async (req, res) => {
+  const result = await setup.useDatabase({ token: tokenOf(req), url: text(req.body.url, 2000) });
+  res.json({ ok: true, ...result, open: await setup.isOpen(), checks: localizedChecks(req) });
 });
 
 router.post('/api/setup', guarded, async (req, res) => {

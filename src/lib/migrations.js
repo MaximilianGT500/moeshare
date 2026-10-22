@@ -3,6 +3,9 @@
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const { build } = require('./db/dialect');
+const { TABLES, createSchema, createTable, createIndexes, addColumns, introspect } = require('./db/schema');
+const { parseBerlinDate } = require('./format');
 
 const sha256 = (value) => crypto.createHash('sha256').update(String(value)).digest('hex');
 
@@ -11,7 +14,7 @@ async function columnsOf(db, table) {
   return new Set(rows.map((row) => row.name));
 }
 
-async function addColumns(db, table, definitions) {
+async function legacyAddColumns(db, table, definitions) {
   const existing = await columnsOf(db, table);
   for (const [name, definition] of definitions) {
     if (!existing.has(name)) await db.run(`ALTER TABLE ${table} ADD COLUMN ${name} ${definition}`);
@@ -34,7 +37,7 @@ async function adoptConvertedTables(db) {
   }
 }
 
-const MIGRATIONS = [
+const LEGACY = [
   {
     version: 1,
     name: 'Grundschema',
@@ -63,7 +66,7 @@ const MIGRATIONS = [
           views INTEGER NOT NULL DEFAULT 0
         )
       `);
-      await addColumns(db, 'file_data', [['views', 'INTEGER NOT NULL DEFAULT 0']]);
+      await legacyAddColumns(db, 'file_data', [['views', 'INTEGER NOT NULL DEFAULT 0']]);
       await db.run('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username)');
       await db.run('CREATE INDEX IF NOT EXISTS idx_users_token ON users(token)');
       await db.run('CREATE INDEX IF NOT EXISTS idx_file_data_username_id ON file_data(username, id)');
@@ -75,7 +78,7 @@ const MIGRATIONS = [
     version: 2,
     name: 'Anmeldung, Sitzungen, Einstellungen und Nutzerverwaltung',
     async up(db) {
-      await addColumns(db, 'users', [
+      await legacyAddColumns(db, 'users', [
         ['status', "TEXT NOT NULL DEFAULT 'active'"],
         ['suspended_reason', 'TEXT'],
         ['quota_bytes', 'INTEGER'],
@@ -277,11 +280,66 @@ const MIGRATIONS = [
   },
 ];
 
+const MIGRATIONS = [
+  {
+    version: 6,
+    name: 'Alben, Tags, Links, Texte, Schutz und Speicherorte',
+    async up(db) {
+      const look = introspect(db);
+      if ((await look.columns('settings')).has('key')) await db.run('ALTER TABLE settings RENAME COLUMN key TO name');
+      await addColumns(db, 'users', ['preferences']);
+      await addColumns(db, 'file_data', [
+        'slug',
+        'created_at',
+        'storage',
+        'expires_at',
+        'password_hash',
+        'max_views',
+        'original_name',
+        'title',
+        'syntax',
+        'variants',
+      ]);
+      const rows = await db.all('SELECT id, filename, slug, creation_date, created_at FROM file_data ORDER BY id');
+      const used = new Set(rows.filter((row) => row.slug).map((row) => row.slug));
+      const now = Date.now();
+      for (const row of rows) {
+        if (row.slug && row.created_at) continue;
+        let slug = row.slug;
+        if (!slug) {
+          slug = used.has(row.filename) ? `${row.id}-${row.filename}` : row.filename;
+          used.add(slug);
+        }
+        await db.run('UPDATE file_data SET slug = ?, created_at = ? WHERE id = ?', [
+          slug,
+          row.created_at || parseBerlinDate(row.creation_date) || now,
+          row.id,
+        ]);
+      }
+      for (const table of ['links', 'albums', 'album_files', 'file_tags']) await createTable(db, table);
+      for (const table of TABLES) await createIndexes(db, table.name);
+    },
+  },
+  {
+    version: 7,
+    name: 'Designs, eigene Domains, Papierkorb, Statistiken, Profile, Meldungen und E-Mail',
+    async up(db) {
+      await addColumns(db, 'users', ['email', 'email_verified_at', 'design', 'profile']);
+      await addColumns(db, 'file_data', ['deleted_at', 'deleted_by', 'listed', 'blocked_at', 'blocked_reason']);
+      await addColumns(db, 'albums', ['blocked_at', 'blocked_reason']);
+      await addColumns(db, 'links', ['blocked_at', 'blocked_reason']);
+      for (const table of ['user_domains', 'stats_daily', 'stats_sources', 'reports']) await createTable(db, table);
+      for (const table of ['users', 'file_data']) await createIndexes(db, table);
+    },
+  },
+];
+
 const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
 
 const timestamp = () => new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15);
 
 async function usersTable(db) {
+  if (db.client !== 'sqlite') return (await introspect(db).hasTable('users')) ? 'users' : null;
   for (const name of ['users', `${CONVERTED_PREFIX}users`]) if (await hasTable(db, name)) return name;
   return null;
 }
@@ -289,8 +347,7 @@ async function usersTable(db) {
 async function hasUsers(db) {
   const table = await usersTable(db);
   if (!table) return false;
-  const row = await db.get(`SELECT COUNT(*) AS count FROM "${table}"`);
-  return row.count > 0;
+  return (await db.count(`SELECT COUNT(*) AS count FROM ${db.client === 'sqlite' ? `"${table}"` : table}`)) > 0;
 }
 
 async function backup(db, file, version, logger) {
@@ -306,37 +363,81 @@ async function backup(db, file, version, logger) {
   return target;
 }
 
-async function migrate(db, { file, logger }) {
-  const { user_version: current } = await db.get('PRAGMA user_version');
-  const pending = MIGRATIONS.filter((migration) => migration.version > current);
-  if (!pending.length) return { from: current, to: current, backup: null };
-
-  const fresh = current === 0 && !(await usersTable(db));
-  const copy = file && (await hasUsers(db)) ? await backup(db, file, current, logger) : null;
-  let applied = 0;
-
-  for (const migration of pending) {
-    await db.run('BEGIN IMMEDIATE');
-    try {
-      const { user_version: now } = await db.get('PRAGMA user_version');
-      if (now >= migration.version) {
-        await db.run('COMMIT');
-        continue;
-      }
-      await migration.up(db);
-      await db.run(`PRAGMA user_version = ${migration.version}`);
-      await db.run('COMMIT');
-      applied += 1;
-      if (!fresh) logger.info(`Datenbank aktualisiert: ${migration.name}`, { version: migration.version });
-    } catch (error) {
-      await db.run('ROLLBACK').catch(() => {});
-      error.message = `Migration v${migration.version} fehlgeschlagen: ${error.message}`;
-      throw error;
-    }
-  }
-
-  if (fresh && applied) logger.info('Neue Datenbank angelegt', { version: LATEST_VERSION });
-  return { from: current, to: LATEST_VERSION, backup: copy };
+async function readVersion(db) {
+  if (db.client === 'sqlite') return Number((await db.get('PRAGMA user_version')).user_version) || 0;
+  if (!(await introspect(db).hasTable('moeshare_schema'))) return 0;
+  const row = await db.get('SELECT version FROM moeshare_schema WHERE id = 1');
+  return row ? Number(row.version) : 0;
 }
 
-module.exports = { migrate };
+async function writeVersion(db, version) {
+  if (db.client === 'sqlite') {
+    await db.run(`PRAGMA user_version = ${Number(version)}`);
+    return;
+  }
+  await db.run(
+    'CREATE TABLE IF NOT EXISTS moeshare_schema (id INTEGER NOT NULL PRIMARY KEY, version INTEGER NOT NULL, updated_at BIGINT NOT NULL)'
+  );
+  await db.upsert('moeshare_schema', { id: 1, version, updated_at: Date.now() }, ['id']);
+}
+
+async function atomically(exec, client, fn) {
+  if (client === 'mysql') return fn();
+  await exec(client === 'sqlite' ? 'BEGIN IMMEDIATE' : 'BEGIN');
+  try {
+    const result = await fn();
+    await exec('COMMIT');
+    return result;
+  } catch (error) {
+    await exec('ROLLBACK').catch(() => {});
+    throw error;
+  }
+}
+
+async function migrate(adapter, { file, logger }) {
+  return adapter.withLock(async (exec) => {
+    const db = build(exec, adapter.client);
+    const current = await readVersion(db);
+    if (current >= LATEST_VERSION) return { from: current, to: current, backup: null };
+
+    if (current === 0 && !(await hasUsers(db))) {
+      const created = await atomically(exec, adapter.client, async () => {
+        if ((await readVersion(db)) >= LATEST_VERSION) return false;
+        if (adapter.client === 'sqlite' && (await usersTable(db))) return false;
+        await createSchema(db);
+        await writeVersion(db, LATEST_VERSION);
+        return true;
+      });
+      if (created) {
+        logger.info('Neue Datenbank angelegt', { version: LATEST_VERSION });
+        return { from: 0, to: LATEST_VERSION, backup: null };
+      }
+    }
+
+    const start = await readVersion(db);
+    if (adapter.client !== 'sqlite' && start === 0) {
+      throw new Error('Die Datenbank enthält schon Tabellen, die nicht von MoeShare stammen. Nimm eine leere Datenbank.');
+    }
+    const pending = [...(adapter.client === 'sqlite' ? LEGACY : []), ...MIGRATIONS].filter((migration) => migration.version > start);
+    const copy =
+      adapter.client === 'sqlite' && file && pending.length && (await hasUsers(db)) ? await backup(db, file, start, logger) : null;
+
+    for (const migration of pending) {
+      try {
+        const applied = await atomically(exec, adapter.client, async () => {
+          if ((await readVersion(db)) >= migration.version) return false;
+          await migration.up(db);
+          await writeVersion(db, migration.version);
+          return true;
+        });
+        if (applied) logger.info(`Datenbank aktualisiert: ${migration.name}`, { version: migration.version });
+      } catch (error) {
+        error.message = `Migration v${migration.version} fehlgeschlagen: ${error.message}`;
+        throw error;
+      }
+    }
+    return { from: start, to: LATEST_VERSION, backup: copy };
+  });
+}
+
+module.exports = { migrate, readVersion, LATEST_VERSION };

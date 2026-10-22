@@ -2,6 +2,31 @@ import type { PublicKeyCredentialCreationOptionsJSON, PublicKeyCredentialRequest
 import type {
   AccountOverview,
   AdminUser,
+  Album,
+  BackupInfo,
+  DatabaseChoice,
+  DatabaseInfo,
+  DomainCheck,
+  DomainState,
+  EmailState,
+  ExpiryChoice,
+  FileItem,
+  LinkListResponse,
+  Preferences,
+  ProfileSettings,
+  PublicFilePage,
+  ReportKind,
+  ReportList,
+  ReportReason,
+  ShortLink,
+  StatsOverview,
+  StatsSeries,
+  StorageInfo,
+  TagCount,
+  TrashSummary,
+  UrlStyle,
+  UserDomain,
+  ViewDesign,
   ApiTokenInfo,
   AuditEvent,
   EmbedTemplate,
@@ -16,6 +41,7 @@ import type {
   SystemInfo,
   UserStats,
 } from './types';
+import { t } from './i18n';
 
 export class ApiError extends Error {
   readonly status: number;
@@ -33,9 +59,9 @@ export class ApiError extends Error {
   }
 }
 
-const SESSION_EXPIRED_MESSAGE = 'Deine Sitzung ist abgelaufen. Melde dich erneut an.';
+const SESSION_EXPIRED_MESSAGE = t('Deine Sitzung ist abgelaufen. Melde dich erneut an.');
 
-export const errorMessage = (error: unknown, fallback = 'Das hat nicht geklappt.') =>
+export const errorMessage = (error: unknown, fallback = t('Das hat nicht geklappt.')) =>
   error instanceof Error && error.message ? error.message : fallback;
 
 async function readError(res: Response): Promise<ApiError> {
@@ -47,10 +73,10 @@ async function readError(res: Response): Promise<ApiError> {
     (typeof body.error === 'string' && body.error) ||
     (typeof body.message === 'string' && body.message) ||
     (res.status === 413
-      ? 'Die Datei ist zu groß.'
+      ? t('Die Datei ist zu groß.')
       : res.status === 429
-        ? 'Zu viele Anfragen. Warte kurz und versuche es erneut.'
-        : `Die Anfrage ist fehlgeschlagen (HTTP ${res.status}).`);
+        ? t('Zu viele Anfragen. Warte kurz und versuche es erneut.')
+        : t('Die Anfrage ist fehlgeschlagen (HTTP {status}).', { status: res.status }));
   const code = typeof body.code === 'string' ? body.code : '';
   return new ApiError(message, res.status, {
     code,
@@ -68,7 +94,7 @@ async function api<T>(url: string, init: RequestInit = {}): Promise<T> {
       headers: { Accept: 'application/json', ...(init.headers || {}) },
     });
   } catch {
-    throw new ApiError('Keine Verbindung zum Server.', 0);
+    throw new ApiError(t('Keine Verbindung zum Server.'), 0);
   }
 
   if (res.redirected && new URL(res.url).pathname === '/login') {
@@ -77,7 +103,7 @@ async function api<T>(url: string, init: RequestInit = {}): Promise<T> {
   if (!res.ok) throw await readError(res);
   const type = res.headers.get('content-type') || '';
   if (!type.includes('application/json')) {
-    throw new ApiError(`Unerwartete Antwort vom Server (HTTP ${res.status}).`, res.status);
+    throw new ApiError(t('Unerwartete Antwort vom Server (HTTP {status}).', { status: res.status }), res.status);
   }
   return (await res.json()) as T;
 }
@@ -99,6 +125,37 @@ export interface UploadResponse {
   view: string;
   preview: string;
   delete: string;
+  id: number;
+  filename: string;
+  slug: string;
+  expiresAt: number | null;
+  protected: { password: boolean; maxViews: number | null };
+}
+
+export interface UploadOptions {
+  expires?: ExpiryChoice | string;
+  password?: string;
+  maxViews?: number | null;
+  urlStyle?: UrlStyle;
+  domain?: string;
+  title?: string;
+  tags?: string[];
+  album?: number | string | null;
+  syntax?: string;
+}
+
+function optionFields(options: UploadOptions): Array<[string, string]> {
+  const fields: Array<[string, string]> = [];
+  if (options.expires) fields.push(['expires', String(options.expires)]);
+  if (options.password) fields.push(['password', options.password]);
+  if (options.maxViews) fields.push(['maxViews', String(options.maxViews)]);
+  if (options.urlStyle) fields.push(['urlStyle', options.urlStyle]);
+  if (options.domain) fields.push(['domain', options.domain]);
+  if (options.title) fields.push(['title', options.title]);
+  if (options.tags && options.tags.length) fields.push(['tags', options.tags.join(',')]);
+  if (options.album) fields.push(['album', String(options.album)]);
+  if (options.syntax) fields.push(['syntax', options.syntax]);
+  return fields;
 }
 
 export interface UploadHandle {
@@ -106,7 +163,7 @@ export interface UploadHandle {
   abort: () => void;
 }
 
-export function uploadFile(file: File, onProgress: (fraction: number) => void): UploadHandle {
+export function uploadFile(file: File, onProgress: (fraction: number) => void, options: UploadOptions = {}): UploadHandle {
   const xhr = new XMLHttpRequest();
   const promise = new Promise<UploadResponse>((resolve, reject) => {
     xhr.open('POST', '/upload');
@@ -131,23 +188,32 @@ export function uploadFile(file: File, onProgress: (fraction: number) => void): 
       }
       const message =
         (typeof body.error === 'string' && body.error) ||
-        (xhr.status === 413 ? 'Die Datei ist zu groß.' : `Upload fehlgeschlagen (HTTP ${xhr.status}).`);
+        (xhr.status === 413 ? t('Die Datei ist zu groß.') : t('Upload fehlgeschlagen (HTTP {status}).', { status: xhr.status }));
       reject(new ApiError(message, xhr.status));
     });
-    xhr.addEventListener('error', () => reject(new ApiError('Netzwerkfehler beim Hochladen.', 0)));
+    xhr.addEventListener('error', () => reject(new ApiError(t('Netzwerkfehler beim Hochladen.'), 0)));
     xhr.addEventListener('abort', () => reject(new ApiError('Abgebrochen.', 0)));
 
     const form = new FormData();
+    for (const [key, value] of optionFields(options)) form.append(key, value);
     form.append('file', file);
     xhr.send(form);
   });
   return { promise, abort: () => xhr.abort() };
 }
 
-export type SortKey = 'newest' | 'oldest' | 'views' | 'size' | 'name';
-export type TypeFilter = '' | 'image' | 'video' | 'audio' | 'file';
+export type SortKey = 'newest' | 'oldest' | 'views' | 'size' | 'name' | 'expiring';
+export type TypeFilter = '' | 'image' | 'video' | 'audio' | 'text' | 'file';
 
-export function listFiles(params: { page: number; limit: number; search: string; type: TypeFilter; sort: SortKey }) {
+export function listFiles(params: {
+  page: number;
+  limit: number;
+  search: string;
+  type: TypeFilter;
+  sort: SortKey;
+  tag?: string;
+  album?: number | null;
+}) {
   const query = new URLSearchParams({
     page: String(params.page),
     limit: String(params.limit),
@@ -155,13 +221,112 @@ export function listFiles(params: { page: number; limit: number; search: string;
     type: params.type,
     sort: params.sort,
   });
+  if (params.tag) query.set('tag', params.tag);
+  if (params.album) query.set('album', String(params.album));
   return api<FileListResponse>(`/api/files?${query}`);
 }
+
+export interface FilePatch {
+  title?: string | null;
+  expires?: ExpiryChoice | string;
+  password?: string | null;
+  maxViews?: number | null;
+  tags?: string[];
+  syntax?: string | null;
+  listed?: boolean;
+}
+
+export const updateFile = (id: number, data: FilePatch) => patch<{ file: FileItem }>(`/api/files/${id}`, data);
+export const fetchFile = (id: number) => api<{ file: FileItem }>(`/api/files/${id}`);
+export const bulkFiles = (data: { action: string; ids: number[]; tags?: string[]; expires?: string; password?: string }) =>
+  post<{ ok: boolean; count: number; trashed: boolean }>('/api/files/bulk', data);
+export const fetchTags = () => api<{ tags: TagCount[] }>('/api/tags');
+
+export const listTrash = (page = 1, limit = 60) =>
+  api<FileListResponse & { summary: TrashSummary }>(`/api/trash?page=${page}&limit=${limit}`);
+export const restoreFile = (id: number) => post<{ ok: boolean; file: FileItem }>(`/api/trash/${id}/restore`);
+export const purgeFile = (id: number) => del<{ ok: boolean; summary: TrashSummary }>(`/api/trash/${id}`);
+export const emptyTrash = () => del<{ ok: boolean; count: number; summary: TrashSummary }>('/api/trash');
+
+export const zipUrl = (ids: number[], name?: string) =>
+  `/api/files/zip?ids=${ids.join(',')}${name ? `&name=${encodeURIComponent(name)}` : ''}`;
+
+export const fetchFileStats = (id: number, days = 30) => api<StatsSeries>(`/api/files/${id}/stats?days=${days}`);
+export const fetchLinkStats = (id: number, days = 30) => api<StatsSeries>(`/api/links/${id}/stats?days=${days}`);
+export const fetchAlbumStats = (id: number, days = 30) => api<StatsSeries>(`/api/albums/${id}/stats?days=${days}`);
+export const fetchStatsOverview = (days = 30) => api<StatsOverview>(`/api/stats/overview?days=${days}`);
+
+export const fileContentUrl = (id: number) => `/api/files/${id}/content`;
+
+export async function replaceFile(id: number, blob: Blob, name: string) {
+  const form = new FormData();
+  form.append('file', blob, name);
+  return api<{ ok: boolean; file: FileItem }>(`/api/files/${id}/replace`, { method: 'POST', body: form });
+}
+
+export const saveDesign = (design: ViewDesign) => put<{ ok: boolean; design: ViewDesign }>('/api/design', { design });
+export const resetDesign = () => del<{ ok: boolean }>('/api/design');
+export const previewDesign = (design: ViewDesign, scope: 'own' | 'default') =>
+  post<{ design: ViewDesign; css: string }>('/api/design/preview', { design, scope });
+export const saveProfile = (data: Partial<Omit<ProfileSettings, 'available' | 'urls' | 'counts' | 'blocked'>>) =>
+  put<{ ok: boolean; profile: ProfileSettings }>('/api/profile', data);
+export const fetchProfileFiles = (username: string, page: number) =>
+  api<PublicFilePage>(`/api/profiles/${encodeURIComponent(username)}/files?page=${page}`);
+
+export const sendReport = (data: {
+  kind?: ReportKind;
+  target?: string;
+  url?: string;
+  reason: ReportReason;
+  message: string;
+  contact: string;
+  website?: string;
+}) => post<{ ok: boolean; duplicate: boolean }>('/api/reports', data);
+export const fetchReports = (status: 'open' | 'closed', page = 1) => api<ReportList>(`/api/admin/reports?status=${status}&page=${page}`);
+export const resolveReport = (id: number, action: string, note = '') =>
+  post<{ ok: boolean; open: number }>(`/api/admin/reports/${id}/resolve`, { action, note });
+export const moderateContent = (kind: ReportKind, id: number, action: 'block' | 'unblock', reason = '') =>
+  post<{ ok: boolean; open: number }>('/api/admin/moderation', { kind, id, action, reason });
+
+export const createText = (content: string, options: UploadOptions = {}) =>
+  post<UploadResponse>('/api/texts', { content, ...Object.fromEntries(optionFields(options)) });
+
+export const listLinks = (params: { page: number; limit: number; search: string }) => {
+  const query = new URLSearchParams({ page: String(params.page), limit: String(params.limit), search: params.search });
+  return api<LinkListResponse>(`/api/links?${query}`);
+};
+export const createLink = (url: string, options: UploadOptions = {}) =>
+  post<{ success: boolean; url: string; code: string; id: number }>('/api/links', { url, ...Object.fromEntries(optionFields(options)) });
+export const updateLink = (
+  id: number,
+  data: { url?: string; title?: string | null; expires?: string; password?: string | null; maxClicks?: number | null }
+) => patch<{ link: ShortLink }>(`/api/links/${id}`, data);
+export const deleteLink = (id: number) => del<{ ok: boolean }>(`/api/links/${id}`);
+
+export const listAlbums = () => api<{ albums: Album[] }>('/api/albums');
+export const fetchAlbum = (id: number) => api<{ album: Album }>(`/api/albums/${id}`);
+export const createAlbum = (data: { title: string; description?: string; visibility?: string; password?: string; fileIds?: number[] }) =>
+  post<{ album: Album }>('/api/albums', data);
+export const updateAlbum = (
+  id: number,
+  data: { title?: string; description?: string; visibility?: string; password?: string | null; coverFileId?: number | null }
+) => patch<{ album: Album }>(`/api/albums/${id}`, data);
+export const deleteAlbum = (id: number) => del<{ ok: boolean }>(`/api/albums/${id}`);
+export const addToAlbum = (id: number, fileIds: number[]) => post<{ album: Album }>(`/api/albums/${id}/files`, { fileIds });
+export const removeFromAlbum = (id: number, fileIds: number[]) => del<{ album: Album }>(`/api/albums/${id}/files`, { fileIds });
+export const reorderAlbum = (id: number, fileIds: number[]) => put<{ album: Album }>(`/api/albums/${id}/order`, { fileIds });
+
+export const unlock = (kind: 'file' | 'link' | 'album', slug: string, password: string) =>
+  post<{ ok: boolean }>(`/${kind === 'file' ? 'view' : kind === 'link' ? 's' : 'a'}/${encodeURIComponent(slug)}/unlock`, { password });
+export const openOnce = (slug: string) => post<{ ok: boolean; until?: number }>(`/view/${encodeURIComponent(slug)}/open`, {});
+
+export const savePreferences = (data: Partial<Preferences>) => patch<{ preferences: Preferences }>('/api/account/preferences', data);
 
 export const fetchUserStats = () => api<UserStats>('/api/stats-cards');
 export const fetchHomeStats = () => api<HomeStats>('/api/home');
 export const deleteOwnFile = (filename: string) => del<{ success: boolean }>(`/file/${encodeURIComponent(filename)}`);
-export const uploadFromUrl = (url: string) => post<UploadResponse>('/api/fetch', { url });
+export const uploadFromUrl = (url: string, options: UploadOptions = {}) =>
+  post<UploadResponse>('/api/fetch', { url, ...Object.fromEntries(optionFields(options)) });
 
 export const fetchAccount = () => api<AccountOverview>('/api/account');
 export const changePassword = (current: string, next: string) =>
@@ -186,6 +351,15 @@ export const fetchActivity = (before?: number) =>
   api<{ events: AuditEvent[] }>(`/api/account/activity${before ? `?before=${before}` : ''}`);
 export const deleteAccount = (confirm: string) => del<{ ok: boolean; redirect: string }>('/api/account', { confirm });
 
+export const startEmailVerification = (email: string) => post<{ ok: boolean; email: EmailState }>('/api/account/email', { email });
+export const removeEmail = () => del<{ ok: boolean; email: EmailState }>('/api/account/email');
+export const fetchDomains = () => api<DomainState>('/api/account/domains');
+export const addDomain = (domain: string) =>
+  post<{ ok: boolean; domain: UserDomain; domains: DomainState }>('/api/account/domains', { domain });
+export const verifyDomain = (id: number) =>
+  post<{ ok: boolean; result: DomainCheck; domains: DomainState }>(`/api/account/domains/${id}/verify`);
+export const removeDomain = (id: number) => del<{ ok: boolean; domains: DomainState }>(`/api/account/domains/${id}`);
+
 export const reauthWithPassword = (password: string) => post<{ ok: boolean }>('/api/auth/reauth', { password });
 export const reauthWithCode = (code: string) => post<{ ok: boolean }>('/api/auth/reauth', { code });
 export const reauthPasskeyOptions = () =>
@@ -200,12 +374,20 @@ export const fetchAdminStats = () => api<GlobalStats>('/api/admin/stats');
 export const fetchSystem = () => api<SystemInfo>('/api/admin/system');
 export const listUsers = (search: string) =>
   api<{ users: AdminUser[] }>(`/api/admin/users${search ? `?search=${encodeURIComponent(search)}` : ''}`);
-export function listAllFiles(params: { page: number; limit: number; search: string }) {
+export function listAllFiles(params: { page: number; limit: number; search: string; trash?: boolean }) {
   const query = new URLSearchParams({ page: String(params.page), limit: String(params.limit), search: params.search });
+  if (params.trash) query.set('trash', '1');
   return api<FileListResponse>(`/api/admin/files?${query}`);
 }
-export const deleteAnyFile = (username: string, filename: string) =>
-  del<{ ok: boolean }>(`/api/admin/files/${encodeURIComponent(username)}/${encodeURIComponent(filename)}`);
+export const deleteAnyFile = (username: string, filename: string, permanent = false) =>
+  del<{ ok: boolean; trashed: boolean }>(
+    `/api/admin/files/${encodeURIComponent(username)}/${encodeURIComponent(filename)}${permanent ? '?permanent=1' : ''}`
+  );
+export const restoreAnyFile = (id: number) => post<{ ok: boolean; file: FileItem }>(`/api/admin/trash/${id}/restore`);
+export const purgeAnyFile = (id: number) => del<{ ok: boolean }>(`/api/admin/trash/${id}`);
+export const fetchAdminDomains = () => api<{ domains: UserDomain[] }>('/api/admin/domains');
+export const revokeDomain = (id: number) => del<{ ok: boolean; domains: UserDomain[] }>(`/api/admin/domains/${id}`);
+export const testMail = (to: string) => post<{ ok: boolean; to: string; ms: number }>('/api/admin/settings/mail-test', { to });
 
 export interface UserDetail {
   user: AdminUser;
@@ -247,12 +429,26 @@ export const createInvite = (data: {
   expiresInDays: number | null;
   maxUses: number | null;
   note: string;
-}) => post<{ ok: boolean; invite: Invite }>('/api/admin/invites', data);
+  email?: string;
+}) => post<{ ok: boolean; invite: Invite; sent: string | null; mailError: string | null }>('/api/admin/invites', data);
 export const revokeInvite = (code: string) => del<{ ok: boolean }>(`/api/admin/invites/${encodeURIComponent(code)}`);
 
 export const saveSettings = (changes: Record<string, SettingValue>) =>
   patch<SettingsPayload & { ok: boolean; changed: string[] }>('/api/admin/settings', changes);
 export const testWebhook = (url?: string) => post<{ ok: boolean }>('/api/admin/settings/webhook-test', { url });
+
+export const fetchDatabaseInfo = () => api<DatabaseInfo>('/api/admin/database');
+export const fetchStorageInfo = () => api<StorageInfo>('/api/admin/storage');
+export const testStorage = (data: Record<string, string | boolean>) =>
+  post<{ ok: boolean; ms: number; region: string }>('/api/admin/storage/test', data);
+export const migrateStorage = (to: 'local' | 's3') => post<{ ok: boolean }>('/api/admin/storage/migrate', { to });
+export const fetchBackups = () => api<BackupInfo>('/api/admin/backups');
+export const startBackup = (includeUploads: boolean) => post<BackupInfo & { ok: boolean }>('/api/admin/backups', { includeUploads });
+export const backupDownloadUrl = (name: string, location: string) =>
+  `/api/admin/backups/${encodeURIComponent(name)}/download?location=${encodeURIComponent(location)}`;
+export const probeBackupDownload = (name: string, location: string) => api<{ ok: boolean }>(`${backupDownloadUrl(name, location)}&probe=1`);
+export const deleteBackup = (name: string, location: string) =>
+  del<BackupInfo & { ok: boolean }>(`/api/admin/backups/${encodeURIComponent(name)}?location=${encodeURIComponent(location)}`);
 
 export const fetchAudit = (params: { category?: string; before?: number; userId?: number } = {}) => {
   const query = new URLSearchParams();
@@ -270,5 +466,9 @@ interface SetupPayload {
 
 export const validateSetup = (payload: SetupPayload) => post<{ ok: boolean }>('/api/setup/validate', payload);
 export const testSetupWebhook = (token: string, url: string) => post<{ ok: boolean }>('/api/setup/webhook-test', { token, url });
+export const testSetupDatabase = (token: string, url: string) =>
+  post<{ ok: boolean; label: string; version: string; accounts: number }>('/api/setup/database/test', { token, url });
+export const switchSetupDatabase = (token: string, url: string) =>
+  post<DatabaseChoice & { ok: boolean; switched: boolean; accounts?: number; open: boolean }>('/api/setup/database', { token, url });
 export const completeSetup = (payload: SetupPayload & { createToken: boolean }) =>
   post<{ ok: boolean; redirect: string; username: string; token: string | null; baseUrl: string }>('/api/setup', payload);

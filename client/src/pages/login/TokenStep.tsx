@@ -17,6 +17,7 @@ import type { MfaChallenge } from '../../lib/types';
 import { canReadClipboard } from '../../lib/clipboard';
 import { postAuth, Shake } from './AuthLayout';
 import { c, fonts, radius } from '../../theme/tokens';
+import { t } from '../../lib/i18n';
 
 export function TokenStep({
   next,
@@ -37,7 +38,7 @@ export function TokenStep({
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (!token.trim()) {
-      setError('Füge zuerst dein Token ein.');
+      setError(t('Füge zuerst dein Token ein.'));
       setAttempt((n) => n + 1);
       return;
     }
@@ -47,7 +48,7 @@ export function TokenStep({
     if (result.ok && result.data.mfa) return onMfa(result.data.mfa, true);
     if (result.ok && result.data.redirect) return onSuccess(result.data.redirect);
     setBusy(false);
-    setError(result.data.error || 'Dieses Token ist ungültig.');
+    setError(result.data.error || t('Dieses Token ist ungültig.'));
     setAttempt((n) => n + 1);
     return undefined;
   };
@@ -57,7 +58,7 @@ export function TokenStep({
       const text = (await navigator.clipboard.readText()).trim();
       if (text) setToken(text);
     } catch {
-      setError('Der Zugriff auf die Zwischenablage wurde nicht erlaubt. Füge das Token mit Strg+V ein.');
+      setError(t('Der Zugriff auf die Zwischenablage wurde nicht erlaubt. Füge das Token mit Strg+V ein.'));
     }
   };
 
@@ -80,10 +81,10 @@ export function TokenStep({
         </Box>
         <div>
           <Typography variant="h5" component="h1">
-            Mit Token anmelden
+            {t('Mit Token anmelden')}
           </Typography>
           <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
-            Das Token steht in deiner ShareX-Konfiguration im Header „Authorization“. Lege danach unter Konto ein Passwort fest.
+            {t('Das Token steht in deiner ShareX-Konfiguration im Header „Authorization“. Lege danach unter Konto ein Passwort fest.')}
           </Typography>
         </div>
       </Stack>
@@ -91,7 +92,7 @@ export function TokenStep({
         <Stack spacing={2}>
           <Shake attempt={attempt}>
             <TextField
-              label="Token"
+              label={t('Token')}
               fullWidth
               autoFocus
               type="password"
@@ -107,8 +108,8 @@ export function TokenStep({
                   sx: { fontFamily: fonts.mono, fontSize: '0.9rem' },
                   endAdornment: canReadClipboard() ? (
                     <InputAdornment position="end">
-                      <Tooltip title="Aus Zwischenablage einfügen">
-                        <IconButton aria-label="Aus Zwischenablage einfügen" onClick={paste} edge="end" size="small">
+                      <Tooltip title={t('Aus Zwischenablage einfügen')}>
+                        <IconButton aria-label={t('Aus Zwischenablage einfügen')} onClick={paste} edge="end" size="small">
                           <ContentPasteRounded fontSize="small" />
                         </IconButton>
                       </Tooltip>
@@ -131,13 +132,13 @@ export function TokenStep({
             disabled={busy}
             startIcon={busy ? <CircularProgress size={18} color="inherit" /> : null}
           >
-            {busy ? 'Wird geprüft' : 'Anmelden'}
+            {busy ? t('Wird geprüft') : t('Anmelden')}
           </Button>
         </Stack>
       </Box>
       <Box sx={{ display: 'flex', justifyContent: 'center' }}>
         <Button size="small" startIcon={<ArrowBackRounded />} onClick={onBack} sx={{ color: 'text.secondary' }}>
-          Zurück zur Anmeldung
+          {t('Zurück zur Anmeldung')}
         </Button>
       </Box>
     </Stack>

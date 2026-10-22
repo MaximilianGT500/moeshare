@@ -1,0 +1,32 @@
+services:
+  moeshare:
+    environment:
+      DATABASE_URL: mysql://moeshare:${MARIADB_PASSWORD:?MARIADB_PASSWORD fehlt in der .env}@mariadb:3306/moeshare
+    depends_on:
+      mariadb:
+        condition: service_healthy
+
+  mariadb:
+    image: mariadb:12.3
+    container_name: moeshare-mariadb
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: moeshare
+      MARIADB_USER: moeshare
+      MARIADB_PASSWORD: ${MARIADB_PASSWORD:?MARIADB_PASSWORD fehlt in der .env}
+      MARIADB_RANDOM_ROOT_PASSWORD: "1"
+      TZ: ${TZ:-Europe/Berlin}
+    volumes:
+      - ./mariadb:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"

@@ -13,7 +13,8 @@ import ExpandMoreRounded from '@mui/icons-material/ExpandMoreRounded';
 import CheckCircleRounded from '@mui/icons-material/CheckCircleRounded';
 import ErrorRounded from '@mui/icons-material/ErrorRounded';
 import ReplayRounded from '@mui/icons-material/ReplayRounded';
-import { ApiError, uploadFile, type UploadHandle, type UploadResponse } from '../../lib/api';
+import { ApiError, uploadFile, type UploadHandle, type UploadOptions, type UploadResponse } from '../../lib/api';
+import { t, tn } from '../../lib/i18n';
 import { formatBytes } from '../../lib/format';
 import { isTypingTarget } from '../../lib/hooks';
 import { mix } from '../../lib/color';
@@ -26,6 +27,7 @@ type Status = 'queued' | 'uploading' | 'done' | 'error';
 interface UploadItem {
   id: number;
   file: File;
+  options: UploadOptions;
   progress: number;
   status: Status;
   error?: string;
@@ -37,9 +39,10 @@ interface UploadContextValue {
   pick: () => void;
   enqueue: (files: FileList | File[]) => void;
   active: number;
+  setOptions: (options: UploadOptions) => void;
 }
 
-const UploadContext = createContext<UploadContextValue>({ pick: () => {}, enqueue: () => {}, active: 0 });
+const UploadContext = createContext<UploadContextValue>({ pick: () => {}, enqueue: () => {}, active: 0, setOptions: () => {} });
 export const useUploads = () => useContext(UploadContext);
 
 const CONCURRENCY = 2;
@@ -72,6 +75,10 @@ export function UploadProvider({
   const flushTimer = useRef(0);
   const onUploadedRef = useRef(onUploaded);
   onUploadedRef.current = onUploaded;
+  const optionsRef = useRef<UploadOptions>({});
+  const setOptions = useCallback((options: UploadOptions) => {
+    optionsRef.current = options;
+  }, []);
 
   const update = useCallback((id: number, patch: Partial<UploadItem>) => {
     setItems((list) => list.map((item) => (item.id === id ? { ...item, ...patch } : item)));
@@ -89,9 +96,10 @@ export function UploadProvider({
           return {
             id: nextId.current++,
             file,
+            options: optionsRef.current,
             progress: 0,
             status: tooBig ? ('error' as const) : ('queued' as const),
-            error: tooBig ? `Zu groß – erlaubt sind bis zu ${formatBytes(maxBytes!)}.` : undefined,
+            error: tooBig ? t('Zu groß – erlaubt sind bis zu {max}.', { max: formatBytes(maxBytes!) }) : undefined,
             thumb: guessType(file) === 'image' && file.size < 25 * 1024 * 1024 ? URL.createObjectURL(file) : undefined,
           };
         }),
@@ -106,12 +114,12 @@ export function UploadProvider({
     for (const item of waiting.slice(0, Math.max(0, CONCURRENCY - running))) {
       started.current.add(item.id);
       update(item.id, { status: 'uploading', progress: 0 });
-      const handle = uploadFile(item.file, (progress) => update(item.id, { progress }));
+      const handle = uploadFile(item.file, (progress) => update(item.id, { progress }), item.options);
       handles.current.set(item.id, handle);
       handle.promise
         .then((result) => {
           update(item.id, { status: 'done', progress: 1, result });
-          finished.current.push(result.view.split('/').pop() || '');
+          finished.current.push(result.filename || result.view.split('/').pop() || '');
           window.clearTimeout(flushTimer.current);
           flushTimer.current = window.setTimeout(() => {
             const names = finished.current.splice(0);
@@ -119,10 +127,10 @@ export function UploadProvider({
           }, 350);
         })
         .catch((error: unknown) => {
-          const message = error instanceof ApiError ? error.message : 'Upload fehlgeschlagen.';
+          const message = error instanceof ApiError ? error.message : t('Upload fehlgeschlagen.');
           update(item.id, { status: 'error', error: message });
           if (error instanceof ApiError && error.sessionExpired) {
-            toast(message, { variant: 'error', action: { label: 'Anmelden', onClick: () => window.location.assign('/login') } });
+            toast(message, { variant: 'error', action: { label: t('Anmelden'), onClick: () => window.location.assign('/login') } });
           }
         })
         .finally(() => handles.current.delete(item.id));
@@ -200,12 +208,14 @@ export function UploadProvider({
       if (!files.length) return;
       event.preventDefault();
       const named = files.map((file) =>
-        file.name === 'image.png' || !file.name ? new File([file], `Einfügen-${Date.now()}.png`, { type: file.type || 'image/png' }) : file
+        file.name === 'image.png' || !file.name
+          ? new File([file], t('Einfügen-{time}.png', { time: Date.now() }), { type: file.type || 'image/png' })
+          : file
       );
       toast(
         named.length === 1
-          ? 'Aus der Zwischenablage wird hochgeladen'
-          : `${named.length} Dateien aus der Zwischenablage werden hochgeladen`,
+          ? t('Aus der Zwischenablage wird hochgeladen')
+          : t('{count} Dateien aus der Zwischenablage werden hochgeladen', { count: named.length }),
         {
           variant: 'info',
           duration: 2400,
@@ -218,7 +228,7 @@ export function UploadProvider({
   }, [enqueue, toast]);
 
   const active = items.filter((item) => item.status === 'queued' || item.status === 'uploading').length;
-  const value = useMemo(() => ({ pick: () => input.current?.click(), enqueue, active }), [enqueue, active]);
+  const value = useMemo(() => ({ pick: () => input.current?.click(), enqueue, active, setOptions }), [enqueue, active, setOptions]);
 
   return (
     <UploadContext.Provider value={value}>
@@ -331,11 +341,11 @@ function DropOverlay({ open, maxBytes }: { open: boolean; maxBytes: number | nul
                   </Box>
                 </m.div>
                 <Typography variant="h4" component="p" sx={{ mt: 3 }}>
-                  Zum Hochladen loslassen
+                  {t('Zum Hochladen loslassen')}
                 </Typography>
                 <Typography variant="body2" sx={{ mt: 1, color: 'text.secondary' }}>
-                  Bilder, Videos, Audio und alle anderen Dateien
-                  {maxBytes ? ` – bis zu ${formatBytes(maxBytes)} pro Datei` : ''}.
+                  {t('Bilder, Videos, Audio und alle anderen Dateien')}
+                  {maxBytes ? t(' – bis zu {maxBytes} pro Datei', { maxBytes: formatBytes(maxBytes) }) : ''}.
                 </Typography>
               </Box>
             </m.div>
@@ -369,10 +379,10 @@ function UploadTray({
   const progress = items.reduce((sum, item) => sum + item.file.size * (item.status === 'error' ? 1 : item.progress), 0) / totalBytes;
 
   const title = active.length
-    ? `${active.length === 1 ? 'Eine Datei wird' : `${active.length} Dateien werden`} hochgeladen`
+    ? tn(active.length, 'Eine Datei wird hochgeladen', '{count} Dateien werden hochgeladen')
     : failed
-      ? `${failed} ${failed === 1 ? 'Upload ist' : 'Uploads sind'} fehlgeschlagen`
-      : `${done === 1 ? 'Datei' : `${done} Dateien`} hochgeladen`;
+      ? tn(failed, '1 Upload ist fehlgeschlagen', '{count} Uploads sind fehlgeschlagen')
+      : tn(done, 'Datei hochgeladen', '{count} Dateien hochgeladen');
 
   return (
     <AnimatePresence>
@@ -393,19 +403,19 @@ function UploadTray({
                 </Typography>
                 {active.length > 0 && (
                   <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                    {Math.round(progress * 100)} % insgesamt
+                    {t('{percent} % insgesamt', { percent: Math.round(progress * 100) })}
                   </Typography>
                 )}
               </Box>
-              <Tooltip title={collapsed ? 'Liste zeigen' : 'Liste einklappen'}>
-                <IconButton size="small" onClick={onToggle} aria-label={collapsed ? 'Liste zeigen' : 'Liste einklappen'}>
+              <Tooltip title={collapsed ? t('Liste zeigen') : t('Liste einklappen')}>
+                <IconButton size="small" onClick={onToggle} aria-label={collapsed ? t('Liste zeigen') : t('Liste einklappen')}>
                   <ExpandMoreRounded
                     sx={{ transform: collapsed ? 'rotate(180deg)' : 'none', transition: `transform 250ms ${css.standard}` }}
                   />
                 </IconButton>
               </Tooltip>
-              <Tooltip title={active.length ? 'Alle abbrechen' : 'Schließen'}>
-                <IconButton size="small" onClick={onClose} aria-label={active.length ? 'Alle Uploads abbrechen' : 'Schließen'}>
+              <Tooltip title={active.length ? t('Alle abbrechen') : t('Schließen')}>
+                <IconButton size="small" onClick={onClose} aria-label={active.length ? t('Alle Uploads abbrechen') : t('Schließen')}>
                   <CloseRounded />
                 </IconButton>
               </Tooltip>
@@ -488,9 +498,9 @@ function UploadRow({ item, onRemove, onRetry }: { item: UploadItem; onRemove: ()
       {item.status === 'error' && (
         <>
           <ErrorRounded sx={{ color: c.error }} />
-          {!item.error?.startsWith('Zu groß') && (
-            <Tooltip title="Erneut versuchen">
-              <IconButton size="small" onClick={onRetry} aria-label="Erneut versuchen">
+          {!item.error?.startsWith(t('Zu groß')) && (
+            <Tooltip title={t('Erneut versuchen')}>
+              <IconButton size="small" onClick={onRetry} aria-label={t('Erneut versuchen')}>
                 <ReplayRounded fontSize="small" />
               </IconButton>
             </Tooltip>
@@ -498,8 +508,8 @@ function UploadRow({ item, onRemove, onRetry }: { item: UploadItem; onRemove: ()
         </>
       )}
       {item.status !== 'done' && (
-        <Tooltip title={item.status === 'error' ? 'Entfernen' : 'Abbrechen'}>
-          <IconButton size="small" onClick={onRemove} aria-label={item.status === 'error' ? 'Entfernen' : 'Upload abbrechen'}>
+        <Tooltip title={item.status === 'error' ? t('Entfernen') : t('Abbrechen')}>
+          <IconButton size="small" onClick={onRemove} aria-label={item.status === 'error' ? t('Entfernen') : t('Upload abbrechen')}>
             <CloseRounded fontSize="small" />
           </IconButton>
         </Tooltip>

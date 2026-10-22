@@ -1,3 +1,16 @@
+{
+	on_demand_tls {
+		ask http://moeshare:3000/api/domains/tls
+	}
+}
+
 {$DOMAIN} {
+	reverse_proxy moeshare:3000
+}
+
+https:// {
+	tls {
+		on_demand
+	}
 	reverse_proxy moeshare:3000
 }

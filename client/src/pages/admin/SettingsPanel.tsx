@@ -8,6 +8,7 @@ import ButtonBase from '@mui/material/ButtonBase';
 import Chip from '@mui/material/Chip';
 import CircularProgress from '@mui/material/CircularProgress';
 import Link from '@mui/material/Link';
+import MenuItem from '@mui/material/MenuItem';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import ToggleButton from '@mui/material/ToggleButton';
@@ -24,12 +25,23 @@ import DnsRounded from '@mui/icons-material/DnsRounded';
 import SendRounded from '@mui/icons-material/SendRounded';
 import ContentCopyRounded from '@mui/icons-material/ContentCopyRounded';
 import OpenInNewRounded from '@mui/icons-material/OpenInNewRounded';
-import type { SettingsPayload, SettingValue, SiteLink } from '../../lib/types';
+import CloudRounded from '@mui/icons-material/CloudRounded';
+import BackupRounded from '@mui/icons-material/BackupRounded';
+import LanguageRounded from '@mui/icons-material/LanguageRounded';
+import MailOutlineRounded from '@mui/icons-material/MailOutlineRounded';
+import AppsRounded from '@mui/icons-material/AppsRounded';
+import PaletteOutlined from '@mui/icons-material/PaletteOutlined';
+import type { BackupInfo, ExpiryChoice, SettingsPayload, SettingValue, SiteLink, StorageInfo, UrlStyle } from '../../lib/types';
+import { EXPIRY_CHOICES, URL_STYLES, expiryLabel, urlStyleExample, urlStyleLabel } from '../../components/ShareOptions';
+import { StorageTools } from './StorageTools';
+import { BackupTools } from './BackupTools';
 import { LinkListEditor } from '../../components/LinkListEditor';
 import { providerIcon } from '../../lib/providers';
-import { ApiError, errorMessage, saveSettings, testWebhook } from '../../lib/api';
+import { ApiError, errorMessage, saveSettings, testMail, testWebhook } from '../../lib/api';
+import { CaddyHint, DomainList } from './DomainTools';
 import { SaveBar, SettingRow, SettingsSection, SwitchRow } from '../../components/SettingsKit';
 import { BytesField, ColorField } from '../../components/Fields';
+import { formatNumber } from '../../lib/format';
 import { BrandMark } from '../../components/BrandMark';
 import { CopyIconButton } from '../../components/CopyButton';
 import { useToast } from '../../components/Toaster';
@@ -37,28 +49,51 @@ import { isCancelled, useSudo } from '../../components/Sudo';
 import { buildScheme } from '../../theme/scheme';
 import { useThemeSeed } from '../../app/mount';
 import { c, ease, fonts, radius } from '../../theme/tokens';
+import { rich, t } from '../../lib/i18n';
 
 type Values = Record<string, SettingValue>;
-type SectionKey = 'allgemein' | 'uploads' | 'anmeldung' | 'dienste' | 'rechtliches' | 'benachrichtigungen' | 'system';
+type SectionKey =
+  | 'allgemein'
+  | 'uploads'
+  | 'funktionen'
+  | 'domains'
+  | 'speicher'
+  | 'sicherungen'
+  | 'email'
+  | 'anmeldung'
+  | 'dienste'
+  | 'rechtliches'
+  | 'benachrichtigungen'
+  | 'system';
 
 const SECTIONS: Array<{ key: SectionKey; label: string; icon: ReactNode; prefixes: string[] }> = [
-  { key: 'allgemein', label: 'Allgemein', icon: <TuneRounded />, prefixes: ['site.'] },
-  { key: 'uploads', label: 'Uploads', icon: <CloudUploadRounded />, prefixes: ['uploads.'] },
+  { key: 'allgemein', label: t('Allgemein'), icon: <TuneRounded />, prefixes: ['site.'] },
+  { key: 'uploads', label: t('Uploads'), icon: <CloudUploadRounded />, prefixes: ['uploads.'] },
+  {
+    key: 'funktionen',
+    label: t('Funktionen'),
+    icon: <AppsRounded />,
+    prefixes: ['links.', 'albums.', 'trash.', 'stats.', 'zip.', 'reports.', 'profiles.'],
+  },
+  { key: 'domains', label: t('Eigene Domains'), icon: <LanguageRounded />, prefixes: ['domains.'] },
+  { key: 'speicher', label: t('Speicherort'), icon: <CloudRounded />, prefixes: ['storage.'] },
+  { key: 'sicherungen', label: t('Sicherungen'), icon: <BackupRounded />, prefixes: ['backup.'] },
+  { key: 'email', label: t('E-Mail'), icon: <MailOutlineRounded />, prefixes: ['mail.'] },
   {
     key: 'anmeldung',
-    label: 'Anmeldung',
+    label: t('Anmeldung'),
     icon: <LoginRounded />,
     prefixes: ['auth.registration', 'auth.sessionDays', 'auth.passwordMinLength', 'auth.enforceMfa', 'auth.passkeys', 'auth.tokenLogin'],
   },
   {
     key: 'dienste',
-    label: 'Anmeldedienste',
+    label: t('Anmeldedienste'),
     icon: <HubRounded />,
     prefixes: ['auth.discord.', 'auth.github.', 'auth.google.', 'auth.microsoft.', 'auth.gitlab.', 'auth.oidc.'],
   },
-  { key: 'rechtliches', label: 'Rechtliches und Links', icon: <GavelRounded />, prefixes: ['legal.', 'site.links'] },
-  { key: 'benachrichtigungen', label: 'Benachrichtigungen', icon: <NotificationsRounded />, prefixes: ['webhook.'] },
-  { key: 'system', label: 'System', icon: <DnsRounded />, prefixes: ['system.'] },
+  { key: 'rechtliches', label: t('Rechtliches und Links'), icon: <GavelRounded />, prefixes: ['legal.', 'site.links'] },
+  { key: 'benachrichtigungen', label: t('Benachrichtigungen'), icon: <NotificationsRounded />, prefixes: ['webhook.'] },
+  { key: 'system', label: t('System'), icon: <DnsRounded />, prefixes: ['system.'] },
 ];
 
 const sectionOf = (key: string) =>
@@ -71,56 +106,82 @@ type ProviderKey = 'discord' | 'github' | 'google' | 'microsoft' | 'gitlab' | 'o
 const PROVIDERS: Array<{ key: ProviderKey; label: string; steps: string; console?: (values: Values) => string }> = [
   {
     key: 'discord',
-    label: 'Discord',
-    steps: 'Lege im Developer Portal eine Anwendung an und füge unter OAuth2 die Redirect-Adresse hinzu.',
+    label: t('Discord'),
+    steps: t('Lege im Developer Portal eine Anwendung an und füge unter OAuth2 die Redirect-Adresse hinzu.'),
     console: () => 'https://discord.com/developers/applications',
   },
   {
     key: 'github',
-    label: 'GitHub',
-    steps:
-      'Lege unter Settings › Developer settings › OAuth Apps eine App an und trage die Redirect-Adresse als Authorization callback URL ein.',
+    label: t('GitHub'),
+    steps: t(
+      'Lege unter Settings › Developer settings › OAuth Apps eine App an und trage die Redirect-Adresse als Authorization callback URL ein.'
+    ),
     console: (values) => `${String(values['auth.github.baseUrl'] || 'https://github.com')}/settings/developers`,
   },
   {
     key: 'google',
-    label: 'Google',
-    steps:
-      'Lege in der Google Cloud Console unter APIs und Dienste › Anmeldedaten eine OAuth-Client-ID vom Typ Webanwendung an und trage die Redirect-Adresse als autorisierte Weiterleitungs-URI ein.',
+    label: t('Google'),
+    steps: t(
+      'Lege in der Google Cloud Console unter APIs und Dienste › Anmeldedaten eine OAuth-Client-ID vom Typ Webanwendung an und trage die Redirect-Adresse als autorisierte Weiterleitungs-URI ein.'
+    ),
     console: () => 'https://console.cloud.google.com/apis/credentials',
   },
   {
     key: 'microsoft',
-    label: 'Microsoft',
-    steps:
-      'Registriere im Microsoft Entra Admin Center unter App-Registrierungen eine App mit der Plattform Web und der Redirect-Adresse. Unter Zertifikate und Geheimnisse erstellst du das Client-Secret.',
+    label: t('Microsoft'),
+    steps: t(
+      'Registriere im Microsoft Entra Admin Center unter App-Registrierungen eine App mit der Plattform Web und der Redirect-Adresse. Unter Zertifikate und Geheimnisse erstellst du das Client-Secret.'
+    ),
     console: () => 'https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade',
   },
   {
     key: 'gitlab',
-    label: 'GitLab',
-    steps:
-      'Lege unter Einstellungen › Anwendungen eine vertrauliche Anwendung mit den Scopes openid und profile und der Redirect-Adresse an.',
+    label: t('GitLab'),
+    steps: t(
+      'Lege unter Einstellungen › Anwendungen eine vertrauliche Anwendung mit den Scopes openid und profile und der Redirect-Adresse an.'
+    ),
     console: (values) => `${String(values['auth.gitlab.baseUrl'] || 'https://gitlab.com')}/-/user_settings/applications`,
   },
   {
     key: 'oidc',
     label: 'OIDC',
-    steps:
-      'Für Authentik, Keycloak, Authelia, Zitadel, Pocket ID und andere OpenID-Connect-Anbieter. Lege dort einen vertraulichen Client (Authorization Code) mit der Redirect-Adresse an.',
+    steps: t(
+      'Für Authentik, Keycloak, Authelia, Zitadel, Pocket ID und andere OpenID-Connect-Anbieter. Lege dort einen vertraulichen Client (Authorization Code) mit der Redirect-Adresse an.'
+    ),
   },
 ];
 
 const WEBHOOK_EVENTS = [
-  { key: 'upload', label: 'Uploads' },
-  { key: 'delete', label: 'Löschungen' },
-  { key: 'user', label: 'Benutzer' },
-  { key: 'security', label: 'Sicherheit' },
-  { key: 'processing', label: 'Verarbeitung' },
-  { key: 'system', label: 'Systemfehler' },
+  { key: 'upload', label: t('Uploads') },
+  { key: 'delete', label: t('Löschungen') },
+  { key: 'user', label: t('Benutzer') },
+  { key: 'security', label: t('Sicherheit') },
+  { key: 'processing', label: t('Verarbeitung') },
+  { key: 'system', label: t('Systemfehler') },
 ];
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+
+const LINK_STYLES = URL_STYLES.filter((style) => style !== 'original');
+
+const styleOptions = (styles: UrlStyle[]) =>
+  styles.map((style) => ({
+    value: style,
+    label: (
+      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, width: '100%', minWidth: 0 }}>
+        <span>{urlStyleLabel(style)}</span>
+        <Box component="span" sx={{ ml: 'auto', color: 'text.secondary', fontFamily: fonts.mono, fontSize: '0.8125rem' }}>
+          {urlStyleExample(style)}
+        </Box>
+      </Box>
+    ),
+  }));
+
+const expiryOptions = (unlimited?: string) =>
+  EXPIRY_CHOICES.map((choice: ExpiryChoice) => ({
+    value: choice,
+    label: choice === 'never' && unlimited ? unlimited : expiryLabel(choice),
+  }));
 
 function SchemeSwatches({ seed }: { seed: string }) {
   const swatches = useMemo(() => {
@@ -128,18 +189,18 @@ function SchemeSwatches({ seed }: { seed: string }) {
       const dark = buildScheme(seed, true);
       const light = buildScheme(seed, false);
       return [
-        { label: 'Primär', colors: [light.primary, dark.primary] },
-        { label: 'Container', colors: [light.primaryContainer, dark.primaryContainer] },
-        { label: 'Sekundär', colors: [light.secondaryContainer, dark.secondaryContainer] },
-        { label: 'Tertiär', colors: [light.tertiaryContainer, dark.tertiaryContainer] },
-        { label: 'Fläche', colors: [light.surfaceContainer, dark.surfaceContainer] },
+        { label: t('Primär'), colors: [light.primary, dark.primary] },
+        { label: t('Container'), colors: [light.primaryContainer, dark.primaryContainer] },
+        { label: t('Sekundär'), colors: [light.secondaryContainer, dark.secondaryContainer] },
+        { label: t('Tertiär'), colors: [light.tertiaryContainer, dark.tertiaryContainer] },
+        { label: t('Fläche'), colors: [light.surfaceContainer, dark.surfaceContainer] },
       ];
     } catch {
       return [];
     }
   }, [seed]);
   return (
-    <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }} aria-label="Farbvorschau hell und dunkel">
+    <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }} aria-label={t('Farbvorschau hell und dunkel')}>
       {swatches.map((swatch) => (
         <Box key={swatch.label} sx={{ textAlign: 'center' }}>
           <Box
@@ -163,11 +224,15 @@ export function SettingsPanel({
   currentUserTotp,
   initialSection = 'allgemein',
   onSaved,
+  storage,
+  backups,
 }: {
   initial: SettingsPayload;
   currentUserTotp: boolean;
   initialSection?: string;
   onSaved: (payload: SettingsPayload) => void;
+  storage: StorageInfo;
+  backups: BackupInfo;
 }) {
   const toast = useToast();
   const sudo = useSudo();
@@ -185,6 +250,8 @@ export function SettingsPanel({
   );
   const [busy, setBusy] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [mailTo, setMailTo] = useState('');
+  const [mailTesting, setMailTesting] = useState(false);
 
   const changedKeys = useMemo(() => {
     const keys = Object.keys(draft).filter((key) => !same(draft[key], saved[key]));
@@ -211,10 +278,10 @@ export function SettingsPanel({
       setSecretSet(result.secrets);
       setSecrets({});
       onSaved({ ...initial, values: result.values, secrets: result.secrets });
-      toast('Einstellungen gespeichert', { variant: 'success' });
+      toast(t('Einstellungen gespeichert'), { variant: 'success' });
       if (patch['site.uiColor'] !== undefined) applySeed(result.values['site.uiColor'] as string);
       if (patch['site.title'] !== undefined || patch['site.favicon'] !== undefined) {
-        toast('Name und Symbol siehst du nach dem Neuladen der Seite.', { variant: 'info' });
+        toast(t('Name und Symbol siehst du nach dem Neuladen der Seite.'), { variant: 'info' });
       }
     } catch (failure) {
       if (isCancelled(failure)) return;
@@ -307,6 +374,26 @@ export function SettingsPanel({
     </SettingRow>
   );
 
+  const select = (key: string, label: string, description: ReactNode, options: Array<{ value: string; label: ReactNode }>) => (
+    <SettingRow label={label} description={errors[key] || description}>
+      <TextField
+        select
+        size="small"
+        value={(v<string>(key) ?? '') as string}
+        onChange={(event) => set(key, event.target.value)}
+        error={!!errors[key]}
+        sx={{ width: { xs: '100%', sm: 320 }, flexShrink: 0 }}
+        slotProps={{ select: { SelectDisplayProps: { 'aria-label': label } } }}
+      >
+        {options.map((option) => (
+          <MenuItem key={option.value} value={option.value}>
+            {option.label}
+          </MenuItem>
+        ))}
+      </TextField>
+    </SettingRow>
+  );
+
   const list = (key: string, label: string, description: ReactNode, placeholder: string) => (
     <SettingRow label={label} description={description} stacked>
       <Autocomplete
@@ -324,7 +411,7 @@ export function SettingsPanel({
             size="small"
             placeholder={placeholder}
             error={!!errors[key]}
-            helperText={errors[key] || 'Mit Enter hinzufügen'}
+            helperText={errors[key] || t('Mit Enter hinzufügen')}
           />
         )}
       />
@@ -342,17 +429,17 @@ export function SettingsPanel({
             size="small"
             fullWidth
             value={pending ?? ''}
-            placeholder={stored && pending === undefined ? 'Gespeichert. Zum Ändern neu eingeben.' : ''}
+            placeholder={stored && pending === undefined ? t('Gespeichert. Zum Ändern neu eingeben.') : ''}
             onChange={(event) =>
               setSecrets((prev) => ({ ...prev, [key]: event.target.value === '' && !stored ? undefined : event.target.value }))
             }
             error={!!errors[key]}
-            helperText={errors[key] || (pending === '' ? 'Wird beim Speichern entfernt.' : undefined)}
+            helperText={errors[key] || (pending === '' ? t('Wird beim Speichern entfernt.') : undefined)}
             slotProps={{ htmlInput: { autoComplete: 'off', 'aria-label': label, spellCheck: false } }}
           />
           {stored && pending === undefined && (
             <Button onClick={() => setSecrets((prev) => ({ ...prev, [key]: '' }))} sx={{ flexShrink: 0 }}>
-              Entfernen
+              {t('Entfernen')}
             </Button>
           )}
         </Box>
@@ -371,7 +458,8 @@ export function SettingsPanel({
         onChange={(event) => set(key, event.target.value)}
         error={!!errors[key]}
         helperText={
-          errors[key] || `${((v<string>(key) as string) || '').length.toLocaleString('de-DE')} von ${max.toLocaleString('de-DE')} Zeichen`
+          errors[key] ||
+          t('{count} von {max} Zeichen', { count: formatNumber(((v<string>(key) as string) || '').length), max: formatNumber(max) })
         }
         slotProps={{ htmlInput: { 'aria-label': label, maxLength: max } }}
       />
@@ -399,8 +487,8 @@ export function SettingsPanel({
       <Box sx={{ flex: 1 }}>{value}</Box>
       <CopyIconButton
         value={value}
-        label="Adresse kopieren"
-        message="Redirect-Adresse kopiert"
+        label={t('Adresse kopieren')}
+        message={t('Redirect-Adresse kopiert')}
         icon={<ContentCopyRounded fontSize="inherit" />}
         size="small"
       />
@@ -413,7 +501,7 @@ export function SettingsPanel({
     const consoleUrl = meta.console ? meta.console(draft) : null;
     return (
       <Stack spacing={4}>
-        <SettingsSection title={`${meta.label} verbinden`} description={meta.steps}>
+        <SettingsSection title={t('{label} verbinden', { label: meta.label })} description={meta.steps}>
           <Box sx={{ px: { xs: 2, sm: 3 }, py: 2.25 }}>
             <Typography variant="body2" component="div" sx={{ color: 'text.secondary' }}>
               Redirect-Adresse:
@@ -428,73 +516,74 @@ export function SettingsPanel({
                 variant="body2"
                 sx={{ display: 'inline-block', mt: 1.5 }}
               >
-                Zur Einrichtung bei {meta.label} <OpenInNewRounded sx={{ fontSize: 14, verticalAlign: 'middle' }} />
+                {t('Zur Einrichtung bei {label}', { label: meta.label })}{' '}
+                <OpenInNewRounded sx={{ fontSize: 14, verticalAlign: 'middle' }} />
               </Link>
             )}
           </Box>
-          {key === 'oidc' && text('auth.oidc.name', 'Name auf dem Knopf', 'Zum Beispiel „Authentik“ oder der Name deines Vereins.')}
+          {key === 'oidc' && text('auth.oidc.name', t('Name auf dem Knopf'), t('Zum Beispiel „Authentik“ oder der Name deines Vereins.'))}
           {key === 'oidc' &&
-            text('auth.oidc.issuer', 'Issuer', 'Die Adresse des Anbieters, unter der /.well-known/openid-configuration liegt.', {
+            text('auth.oidc.issuer', t('Issuer'), t('Die Adresse des Anbieters, unter der /.well-known/openid-configuration liegt.'), {
               mono: true,
               placeholder: 'https://auth.example.com/application/o/moeshare',
             })}
           {key === 'github' &&
-            text('auth.github.baseUrl', 'GitHub-Adresse', 'Nur für GitHub Enterprise Server ändern.', {
+            text('auth.github.baseUrl', t('GitHub-Adresse'), t('Nur für GitHub Enterprise Server ändern.'), {
               mono: true,
               placeholder: 'https://github.com',
             })}
           {key === 'gitlab' &&
-            text('auth.gitlab.baseUrl', 'GitLab-Adresse', 'Für eine eigene GitLab-Instanz deren Adresse eintragen.', {
+            text('auth.gitlab.baseUrl', t('GitLab-Adresse'), t('Für eine eigene GitLab-Instanz deren Adresse eintragen.'), {
               mono: true,
               placeholder: 'https://gitlab.com',
             })}
           {key === 'microsoft' &&
             text(
               'auth.microsoft.tenant',
-              'Mandant',
-              'common für alle Konten, organizations nur Arbeits- und Schulkonten, consumers nur private Konten, oder die Mandanten-ID.',
+              t('Mandant'),
+              t('common für alle Konten, organizations nur Arbeits- und Schulkonten, consumers nur private Konten, oder die Mandanten-ID.'),
               {
                 mono: true,
               }
             )}
           {text(`auth.${key}.clientId`, 'Client-ID', undefined, { mono: true })}
-          {secret(`auth.${key}.clientSecret`, 'Client-Secret', 'Wird nach dem Speichern nicht wieder angezeigt.')}
+          {secret(`auth.${key}.clientSecret`, t('Client-Secret'), t('Wird nach dem Speichern nicht wieder angezeigt.'))}
           {key === 'oidc' &&
-            text('auth.oidc.scopes', 'Scopes', 'Durch Leerzeichen getrennt, beginnend mit openid.', {
+            text('auth.oidc.scopes', t('Scopes'), t('Durch Leerzeichen getrennt, beginnend mit openid.'), {
               mono: true,
-              placeholder: 'openid profile email',
+              placeholder: t('openid profile email'),
             })}
           {toggle(
             `auth.${key}.enabled`,
-            `Anmeldung mit ${name}`,
-            `Zeigt „Mit ${name} anmelden“. Wer schon ein Konto hat, verknüpft ${name} unter Konto › Sicherheit.`
+            t('Anmeldung mit {name}', { name }),
+            t('Zeigt „Mit {name} anmelden“. Wer schon ein Konto hat, verknüpft {name2} unter Konto › Sicherheit.', { name, name2: name })
           )}
           {toggle(
             `auth.${key}.allowRegistration`,
-            `Neue Konten mit ${name}`,
-            'Wer noch kein Konto hat, kann eins anlegen. Es gelten die Regeln unter Anmeldung › Registrierung.'
+            t('Neue Konten mit {name}', { name }),
+            t('Wer noch kein Konto hat, kann eins anlegen. Es gelten die Regeln unter Anmeldung › Registrierung.')
           )}
         </SettingsSection>
         {key === 'discord' && (
-          <SettingsSection title="Discord-Server" description="Neue Konten nur für Mitglieder deines Discord-Servers.">
+          <SettingsSection title={t('Discord-Server')} description={t('Neue Konten nur für Mitglieder deines Discord-Servers.')}>
             {text(
               'auth.discord.guildId',
               'Server-ID',
-              'Rechtsklick auf den Server › Server-ID kopieren, dafür den Entwicklermodus aktivieren. Leer: jedes Discord-Konto.',
+              t('Rechtsklick auf den Server › Server-ID kopieren, dafür den Entwicklermodus aktivieren. Leer: jedes Discord-Konto.'),
               { mono: true, placeholder: '123456789012345678' }
             )}
             {v<string>('auth.discord.guildId') &&
               list(
                 'auth.discord.roleIds',
-                'Benötigte Rollen',
-                'Optional: Rollen-IDs, von denen man mindestens eine haben muss.',
+                t('Benötigte Rollen'),
+                t('Optional: Rollen-IDs, von denen man mindestens eine haben muss.'),
                 'Rollen-ID'
               )}
             {v<string>('auth.discord.guildId') &&
               toggle(
                 'auth.discord.guildSkipsInvite',
-                'Mitglieder brauchen keine Einladung',
-                'Mitglieder deines Servers dürfen sich auch dann registrieren, wenn sonst eine Einladung nötig ist.'
+                t('Mitglieder brauchen keine Einladung'),
+                t('Mitglieder deines Servers dürfen sich auch dann registrieren, wenn sonst eine Einladung nötig ist.')
               )}
           </SettingsSection>
         )}
@@ -506,13 +595,30 @@ export function SettingsPanel({
     setTesting(true);
     try {
       await testWebhook(secrets['webhook.url'] || undefined);
-      toast('Testnachricht gesendet. Schau in deinen Discord-Kanal.', { variant: 'success' });
+      toast(t('Testnachricht gesendet. Schau in deinen Discord-Kanal.'), { variant: 'success' });
     } catch (failure) {
       toast(errorMessage(failure), { variant: 'error' });
     } finally {
       setTesting(false);
     }
   };
+
+  const runMailTest = async () => {
+    setMailTesting(true);
+    try {
+      const result = await testMail(mailTo.trim());
+      toast(t('Testnachricht an {to} verschickt ({ms} ms).', { to: result.to, ms: formatNumber(result.ms) }), {
+        variant: 'success',
+        duration: 6000,
+      });
+    } catch (failure) {
+      toast(errorMessage(failure), { variant: 'error', duration: 9000 });
+    } finally {
+      setMailTesting(false);
+    }
+  };
+
+  const mailUnsaved = changedKeys.some((key) => key.startsWith('mail.'));
 
   const baseUrl = v<string>('site.baseUrl');
   const originMismatch = baseUrl && baseUrl !== window.location.origin;
@@ -522,24 +628,31 @@ export function SettingsPanel({
   const content: Record<SectionKey, ReactNode> = {
     allgemein: (
       <Stack spacing={4}>
-        <SettingsSection title="Seite">
-          {text('site.title', 'Name', 'Erscheint im Browser-Tab, auf der Anmeldeseite und in Link-Vorschauen.')}
+        <SettingsSection title={t('Seite')}>
+          {text('site.title', t('Name'), t('Erscheint im Browser-Tab, auf der Anmeldeseite und in Link-Vorschauen.'))}
           {text(
             'site.baseUrl',
             'Basis-URL',
-            'Die öffentliche Adresse, unter der MoeShare erreichbar ist. Daraus entstehen alle Links, und Passkeys sind an diese Domain gebunden.',
+            t(
+              'Die öffentliche Adresse, unter der MoeShare erreichbar ist. Daraus entstehen alle Links, und Passkeys sind an diese Domain gebunden.'
+            ),
             { mono: true, placeholder: 'https://share.example.com' }
           )}
           {originMismatch && (
             <Box sx={{ px: { xs: 2, sm: 3 }, pb: 2 }}>
               <Alert severity="warning">
-                Du öffnest die Seite gerade über {window.location.origin}. Links und Passkeys verwenden {baseUrl}.
+                {t('Du öffnest die Seite gerade über {origin}. Links und Passkeys verwenden {baseUrl}.', {
+                  origin: window.location.origin,
+                  baseUrl,
+                })}
               </Alert>
             </Box>
           )}
           <SettingRow
-            label="Symbol"
-            description="Adresse eines Bildes (PNG oder SVG). Eigene Dateien legst du in den Ordner public und gibst den Pfad an, z. B. /logo.png."
+            label={t('Symbol')}
+            description={t(
+              'Adresse eines Bildes (PNG oder SVG). Eigene Dateien legst du in den Ordner public und gibst den Pfad an, z. B. /logo.png.'
+            )}
             stacked
           >
             <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
@@ -551,20 +664,20 @@ export function SettingsPanel({
                 onChange={(event) => set('site.favicon', event.target.value)}
                 error={!!errors['site.favicon']}
                 helperText={errors['site.favicon']}
-                slotProps={{ htmlInput: { 'aria-label': 'Symbol', spellCheck: false, style: { fontFamily: fonts.mono } } }}
+                slotProps={{ htmlInput: { 'aria-label': t('Symbol'), spellCheck: false, style: { fontFamily: fonts.mono } } }}
               />
             </Box>
           </SettingRow>
-          {text('site.copyright', 'Fußzeile', 'Kurzer Text unter Ansichts- und Anmeldeseiten, z. B. © 2026 Dein Name.')}
+          {text('site.copyright', t('Fußzeile'), t('Kurzer Text unter Ansichts- und Anmeldeseiten, z. B. © 2026 Dein Name.'))}
         </SettingsSection>
         <SettingsSection
-          title="Farbe der Oberfläche"
-          description="Aus einer Grundfarbe berechnet MoeShare alle Farben für helles und dunkles Design."
+          title={t('Farbe der Oberfläche')}
+          description={t('Aus einer Grundfarbe berechnet MoeShare alle Farben für helles und dunkles Design.')}
         >
-          <SettingRow label="Grundfarbe" description="Wird nach dem Speichern sofort übernommen." stacked>
+          <SettingRow label={t('Grundfarbe')} description={t('Wird nach dem Speichern sofort übernommen.')} stacked>
             <Stack spacing={2}>
               <ColorField
-                label="Grundfarbe"
+                label={t('Grundfarbe')}
                 value={v<string>('site.uiColor')}
                 onChange={(hex) => set('site.uiColor', hex)}
                 error={!!errors['site.uiColor']}
@@ -574,27 +687,58 @@ export function SettingsPanel({
             </Stack>
           </SettingRow>
         </SettingsSection>
+        <SettingsSection title={t('Sprache')} description={t('Jeder kann die Sprache im eigenen Konto ändern.')}>
+          {choice('site.language', t('Standardsprache'), t('Für Besucher und alle, die im Konto nichts anderes gewählt haben.'), [
+            { value: 'de', label: 'Deutsch' },
+            { value: 'en', label: 'English' },
+          ])}
+          {toggle(
+            'site.detectLanguage',
+            t('Sprache des Browsers verwenden'),
+            t('Besucher ohne Konto sehen MoeShare in der Sprache ihres Browsers, wenn es sie gibt.')
+          )}
+        </SettingsSection>
+        <SettingsSection
+          title={t('Weitere Domains')}
+          description={t(
+            'Links lassen sich auch unter anderen Adressen verschicken, die auf diesen Server zeigen. Die Basis-URL bleibt die Hauptadresse.'
+          )}
+        >
+          {list(
+            'site.domains',
+            t('Domains'),
+            t('Jede Domain muss per DNS und Reverse-Proxy auf MoeShare zeigen. Anmeldung und Verwaltung laufen weiter über die Basis-URL.'),
+            'https://i.example.com'
+          )}
+        </SettingsSection>
+        <SettingsSection title={t('App')}>
+          {toggle(
+            'site.pwa',
+            t('Als App installierbar'),
+            t('MoeShare lässt sich auf Handy und Computer installieren und taucht dann im Teilen-Menü auf. Braucht HTTPS.')
+          )}
+        </SettingsSection>
       </Stack>
     ),
 
     uploads: (
       <Stack spacing={4}>
         <SettingsSection
-          title="Größe und Speicher"
-          description="Gilt für alle, die kein eigenes Limit haben. Einzelne Benutzer stellst du unter Benutzer ein."
+          title={t('Größe und Speicher')}
+          description={t('Gilt für alle, die kein eigenes Limit haben. Einzelne Benutzer stellst du unter Benutzer ein.')}
         >
-          <SettingRow label="Größte erlaubte Datei" description="Pro Upload." stacked>
+          <SettingRow label={t('Größte erlaubte Datei')} description={t('Pro Upload.')} stacked>
             <BytesField
-              label="Dateigröße"
+              label={t('Dateigröße')}
               value={v<number | null>('uploads.maxFileBytes')}
               onChange={(value) => set('uploads.maxFileBytes', value)}
               error={!!errors['uploads.maxFileBytes']}
               helperText={errors['uploads.maxFileBytes']}
             />
           </SettingRow>
-          <SettingRow label="Speicher pro Benutzer" description="Wie viel jedes Konto insgesamt belegen darf." stacked>
+          <SettingRow label={t('Speicher pro Benutzer')} description={t('Wie viel jedes Konto insgesamt belegen darf.')} stacked>
             <BytesField
-              label="Speicher"
+              label={t('Speicher')}
               value={v<number | null>('uploads.defaultQuotaBytes')}
               onChange={(value) => set('uploads.defaultQuotaBytes', value)}
               error={!!errors['uploads.defaultQuotaBytes']}
@@ -602,93 +746,406 @@ export function SettingsPanel({
             />
           </SettingRow>
         </SettingsSection>
-        <SettingsSection title="Verarbeitung">
-          {toggle(
-            'uploads.preview',
-            'Vorschaubilder',
-            'Kleinere Vorschauen für Bilder und Standbilder für Videos. Macht die Galerie deutlich schneller.'
+        <SettingsSection
+          title={t('Adressen und Ablauf')}
+          description={t('Voreinstellungen für alle. Jeder kann sie im Konto für sich ändern und beim Hochladen anpassen.')}
+        >
+          {select('uploads.urlStyle', t('Adressstil'), t('Wie neue Links aussehen.'), styleOptions(URL_STYLES))}
+          {select(
+            'uploads.defaultExpiry',
+            t('Automatisch löschen nach'),
+            t('Gilt, wenn beim Hochladen nichts anderes gewählt wird.'),
+            expiryOptions()
           )}
-          {toggle(
-            'uploads.removeMetadata',
-            'Standortdaten entfernen',
-            'Löscht GPS-Koordinaten aus Fotos, bevor sie öffentlich erreichbar sind.'
-          )}
-          {toggle(
-            'uploads.dominantColor',
-            'Hauptfarbe erkennen',
-            'Bestimmt die prägende Farbe eines Bildes für Ansichtsseite und Discord-Rand.'
-          )}
-          {toggle(
-            'uploads.hls',
-            'Videos als Stream (HLS)',
-            'Wandelt Videos zusätzlich in einen Stream um. Lädt große Videos schneller, braucht aber mehr Speicher und Rechenzeit.'
-          )}
-          {toggle(
-            'uploads.urlFetch',
-            'Hochladen per Link',
-            'Im Dashboard Dateien direkt aus dem Internet übernehmen. Adressen im internen Netz sind immer gesperrt.'
+          {select(
+            'uploads.maxExpiry',
+            t('Höchstens aufbewahren'),
+            t('Spätestens nach dieser Zeit wird jeder neue Upload gelöscht, egal was gewählt wurde.'),
+            expiryOptions(t('Unbegrenzt'))
           )}
         </SettingsSection>
         <SettingsSection
-          title="Dateitypen"
-          description="Bestimmt, welche Endungen als Bild, Video oder Audio gelten. Andere Dateien werden als Datei gespeichert."
+          title={t('Texte')}
+          description={t('Text und Code direkt einfügen statt eine Datei hochzuladen, mit Syntaxhervorhebung.')}
         >
-          {list('uploads.formats.image', 'Bilder', 'GIFs sind immer dabei.', 'Endung, z. B. .avif')}
-          {list('uploads.formats.video', 'Videos', undefined, 'Endung, z. B. .m4v')}
-          {list('uploads.formats.audio', 'Audio', undefined, 'Endung, z. B. .opus')}
+          {toggle('uploads.texts', t('Texte erlauben'), t('Im Dashboard, mit ShareX und über die API.'))}
+          <SettingRow label={t('Längster Text')} description={t('Größere Texte lädt man als Datei hoch.')} stacked>
+            <BytesField
+              label={t('Textgröße')}
+              value={v<number | null>('uploads.textMaxBytes')}
+              onChange={(value) => set('uploads.textMaxBytes', value)}
+              error={!!errors['uploads.textMaxBytes']}
+              helperText={errors['uploads.textMaxBytes']}
+            />
+          </SettingRow>
+        </SettingsSection>
+        <SettingsSection title={t('Verarbeitung')}>
+          {toggle(
+            'uploads.preview',
+            t('Vorschaubilder'),
+            t('Kleinere Vorschauen für Bilder und Standbilder für Videos. Macht die Galerie deutlich schneller.')
+          )}
+          {toggle(
+            'uploads.removeMetadata',
+            t('Standortdaten entfernen'),
+            t('Löscht GPS-Koordinaten aus Fotos, bevor sie öffentlich erreichbar sind.')
+          )}
+          {toggle(
+            'uploads.dominantColor',
+            t('Hauptfarbe erkennen'),
+            t('Bestimmt die prägende Farbe eines Bildes für Ansichtsseite und Discord-Rand.')
+          )}
+          {toggle(
+            'uploads.hls',
+            t('Videos als Stream (HLS)'),
+            t('Wandelt Videos zusätzlich in einen Stream um. Lädt große Videos schneller, braucht aber mehr Speicher und Rechenzeit.')
+          )}
+          {toggle(
+            'uploads.urlFetch',
+            t('Hochladen per Link'),
+            t('Im Dashboard Dateien direkt aus dem Internet übernehmen. Adressen im internen Netz sind immer gesperrt.')
+          )}
+        </SettingsSection>
+        <SettingsSection
+          title={t('Dateitypen')}
+          description={t('Bestimmt, welche Endungen als Bild, Video oder Audio gelten. Andere Dateien werden als Datei gespeichert.')}
+        >
+          {list('uploads.formats.image', t('Bilder'), t('GIFs sind immer dabei.'), t('Endung, z. B. .avif'))}
+          {list('uploads.formats.video', t('Videos'), undefined, t('Endung, z. B. .m4v'))}
+          {list('uploads.formats.audio', t('Audio'), undefined, t('Endung, z. B. .opus'))}
+        </SettingsSection>
+      </Stack>
+    ),
+
+    funktionen: (
+      <Stack spacing={4}>
+        <SettingsSection title={t('Kurzlinks')} description={t('Lange Adressen kürzen, im Dashboard oder mit ShareX.')}>
+          {toggle('links.enabled', t('Link-Kürzer'), t('Angemeldete können Kurzlinks anlegen. Sie leiten über /s/… zum Ziel weiter.'))}
+          {select('links.urlStyle', t('Adressstil für Kurzlinks'), t('Wie neue Kurzlinks aussehen.'), styleOptions(LINK_STYLES))}
+        </SettingsSection>
+        <SettingsSection title={t('Alben')}>
+          {toggle('albums.enabled', t('Alben'), t('Dateien in Alben sammeln und gemeinsam über einen Link teilen.'))}
+          {toggle('zip.enabled', t('ZIP-Download'), t('Alben und ausgewählte Dateien lassen sich als ZIP-Archiv herunterladen.'))}
+        </SettingsSection>
+        <SettingsSection
+          title={t('Papierkorb')}
+          description={t('Gelöschte Dateien lassen sich eine Weile wiederherstellen. So lange zählen sie weiter zum Speicher.')}
+        >
+          {toggle(
+            'trash.enabled',
+            t('Papierkorb'),
+            t('Ausgeschaltet ist Löschen sofort endgültig. Was schon im Papierkorb liegt, bleibt bis zum Ablauf.')
+          )}
+          {number('trash.days', t('Aufbewahren'), t('Danach löscht MoeShare die Dateien endgültig.'), {
+            min: 1,
+            max: 365,
+            unit: t('Tage'),
+          })}
+        </SettingsSection>
+        <SettingsSection
+          title={t('Statistiken')}
+          description={t(
+            'Aufrufe, Downloads und Herkunft pro Tag. Gespeichert werden nur Zähler und Domains, keine IP-Adressen oder Geräte.'
+          )}
+        >
+          {toggle('stats.enabled', t('Statistiken zählen'), t('Jeder sieht die Zahlen zu den eigenen Dateien, Alben und Kurzlinks.'))}
+          {number('stats.retentionDays', t('Aufbewahren'), t('Ältere Tage löscht MoeShare automatisch.'), {
+            min: 30,
+            max: 1825,
+            unit: t('Tage'),
+          })}
+        </SettingsSection>
+        <SettingsSection title={t('Öffentliche Seiten')}>
+          {toggle(
+            'profiles.enabled',
+            t('Profilseiten'),
+            t(
+              'Jeder kann unter /u/name eine öffentliche Seite mit Beschreibung, Links, öffentlichen Alben und ausgewählten Dateien einschalten.'
+            )
+          )}
+          {toggle(
+            'reports.enabled',
+            t('Melden'),
+            t('Besucher können Dateien, Alben, Kurzlinks und Profile melden. Die Meldungen landen unter Administration › Meldungen.')
+          )}
+          <SettingRow
+            icon={<PaletteOutlined />}
+            label={t('Vorschauseiten')}
+            description={t('Designs, erlaubte Anpassungen und eigenes CSS stellst du unter Gestalten ein.')}
+          >
+            <Button variant="tonal" href="/design#vorschauseite">
+              {t('Gestalten öffnen')}
+            </Button>
+          </SettingRow>
+        </SettingsSection>
+      </Stack>
+    ),
+
+    domains: (
+      <Stack spacing={4}>
+        <SettingsSection
+          title={t('Eigene Domains')}
+          description={t(
+            'Benutzer verbinden eine eigene Domain und bestätigen sie mit einem TXT-Eintrag. Danach sind ihre Dateien, Alben, Kurzlinks und Profile auch darüber erreichbar.'
+          )}
+        >
+          {toggle(
+            'domains.enabled',
+            t('Eigene Domains erlauben'),
+            t('Ausgeschaltet antworten bereits verbundene Domains nicht mehr, bleiben aber gespeichert.')
+          )}
+          {number('domains.maxPerUser', t('Domains pro Benutzer'), t('Wie viele Domains jedes Konto verbinden darf.'), {
+            min: 1,
+            max: 20,
+            unit: t('Domains'),
+          })}
+          {text(
+            'domains.target',
+            t('Ziel für CNAME-Einträge'),
+            t('Auf diesen Hostnamen sollen eigene Domains zeigen. Meist der Hostname der Basis-URL.'),
+            {
+              mono: true,
+              placeholder: (() => {
+                try {
+                  return new URL(String(v<string>('site.baseUrl') || '')).hostname;
+                } catch {
+                  return 'share.example.com';
+                }
+              })(),
+            }
+          )}
+          {toggle(
+            'domains.https',
+            t('HTTPS'),
+            t('Links über eigene Domains beginnen mit https://. Nur abschalten, wenn dein Proxy für sie kein HTTPS kann.')
+          )}
+        </SettingsSection>
+        <SettingsSection title={t('Reverse-Proxy')}>
+          <CaddyHint upstream={`localhost:${initial.environment.port}`} />
+        </SettingsSection>
+        <SettingsSection title={t('Verbundene Domains')}>
+          <DomainList />
+        </SettingsSection>
+      </Stack>
+    ),
+
+    email: (
+      <Stack spacing={4}>
+        <SettingsSection
+          title={t('E-Mail-Versand')}
+          description={t(
+            'Für „Passwort vergessen“, das Bestätigen von Adressen, Einladungen und Hinweise an Admins. Funktioniert mit jedem SMTP-Server.'
+          )}
+        >
+          {toggle('mail.enabled', t('E-Mails verschicken'), t('Erst einschalten, wenn die Testnachricht ankommt.'))}
+          {text('mail.host', t('SMTP-Server'), undefined, { mono: true, placeholder: 'smtp.example.com' })}
+          {number('mail.port', t('Port'), t('Meist 587 mit STARTTLS oder 465 mit TLS.'), { min: 1, max: 65535, unit: '' })}
+          {choice(
+            'mail.security',
+            t('Verschlüsselung'),
+            t('STARTTLS beginnt unverschlüsselt und wechselt dann, TLS ist von Anfang an verschlüsselt.'),
+            [
+              { value: 'starttls', label: 'STARTTLS' },
+              { value: 'tls', label: 'TLS' },
+              { value: 'none', label: t('Keine') },
+            ]
+          )}
+          {text('mail.username', t('Benutzername'), t('Leer lassen, wenn der Server keine Anmeldung braucht.'), { mono: true })}
+          {secret('mail.password', t('Passwort'), t('Wird verschlüsselt gespeichert und nicht wieder angezeigt.'))}
+        </SettingsSection>
+        <SettingsSection title={t('Absender')}>
+          {text('mail.from', t('Absenderadresse'), t('Muss zum SMTP-Zugang passen, sonst landen Nachrichten im Spam.'), {
+            mono: true,
+            placeholder: 'noreply@example.com',
+          })}
+          {text('mail.fromName', t('Absendername'), t('Leer: der Name der Seite.'), {
+            placeholder: String(v<string>('site.title') || 'MoeShare'),
+          })}
+        </SettingsSection>
+        <SettingsSection title={t('Test')}>
+          <SettingRow
+            label={t('Testnachricht')}
+            description={
+              mailUnsaved
+                ? t('Speichere zuerst deine Änderungen. Der Test nutzt die gespeicherten Einstellungen.')
+                : t('Leer: an deine eigene, bestätigte Adresse.')
+            }
+            stacked
+          >
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start', flexWrap: { xs: 'wrap', sm: 'nowrap' } }}>
+              <TextField
+                size="small"
+                fullWidth
+                type="email"
+                placeholder={t('E-Mail-Adresse')}
+                value={mailTo}
+                onChange={(event) => setMailTo(event.target.value)}
+                slotProps={{ htmlInput: { 'aria-label': t('Empfänger der Testnachricht') } }}
+              />
+              <Button
+                variant="tonal"
+                onClick={runMailTest}
+                disabled={mailTesting || mailUnsaved}
+                startIcon={mailTesting ? <CircularProgress size={16} color="inherit" /> : <SendRounded />}
+                sx={{ flexShrink: 0, height: 40 }}
+              >
+                {t('Senden')}
+              </Button>
+            </Box>
+          </SettingRow>
+        </SettingsSection>
+      </Stack>
+    ),
+
+    speicher: (
+      <Stack spacing={4}>
+        <SettingsSection title={t('Neue Uploads')}>
+          {choice('storage.driver', t('Speicherort'), t('Gilt für neue Uploads. Vorhandene Dateien verschiebst du weiter unten.'), [
+            { value: 'local', label: t('Auf dem Server') },
+            { value: 's3', label: 'S3' },
+          ])}
+        </SettingsSection>
+        <SettingsSection
+          title={t('S3-Zugang')}
+          description={t('Für AWS S3, Cloudflare R2, Backblaze B2, MinIO, Wasabi und andere S3-kompatible Dienste.')}
+        >
+          {text(
+            'storage.s3.endpoint',
+            t('Endpoint'),
+            t('Für AWS leer lassen. Bei R2 die Adresse aus dem Cloudflare-Dashboard, bei MinIO die deines Servers.'),
+            { mono: true, placeholder: 'https://s3.eu-central-003.backblazeb2.com' }
+          )}
+          {text(
+            'storage.s3.region',
+            t('Region'),
+            t('Bei AWS zum Beispiel eu-central-1, bei R2 auto. Leer: wird aus dem Endpoint abgeleitet.'),
+            {
+              mono: true,
+              placeholder: 'eu-central-1',
+            }
+          )}
+          {text('storage.s3.bucket', t('Bucket'), undefined, { mono: true })}
+          {text('storage.s3.accessKeyId', t('Access Key ID'), undefined, { mono: true })}
+          {secret('storage.s3.secretAccessKey', t('Secret Access Key'), t('Wird verschlüsselt gespeichert und nicht wieder angezeigt.'))}
+          {text('storage.s3.prefix', t('Ordner im Bucket'), t('Optional. So kann sich MoeShare einen Bucket mit anderem teilen.'), {
+            mono: true,
+            placeholder: 'moeshare',
+          })}
+          {toggle(
+            'storage.s3.pathStyle',
+            t('Pfad-Adressen'),
+            t('Für MinIO und andere selbst betriebene Dienste einschalten, die keine Bucket-Subdomains kennen.')
+          )}
+          {choice(
+            'storage.s3.delivery',
+            t('Auslieferung'),
+            t(
+              'Über den Server bleibt der Bucket privat und alles läuft durch MoeShare. Direkt laden Besucher über eine kurzlebige, signierte Adresse aus S3, das entlastet den Server.'
+            ),
+            [
+              { value: 'proxy', label: t('Über den Server') },
+              { value: 'redirect', label: t('Direkt aus S3') },
+            ]
+          )}
+        </SettingsSection>
+        <SettingsSection title={t('Dateien')} description={t('Wo die Dateien gerade liegen. Beim Verschieben bleiben alle Links gleich.')}>
+          <StorageTools
+            initial={storage}
+            draft={draft}
+            secret={secrets['storage.s3.secretAccessKey']}
+            unsaved={changedKeys.some((key) => key.startsWith('storage.'))}
+          />
+        </SettingsSection>
+      </Stack>
+    ),
+
+    sicherungen: (
+      <Stack spacing={4}>
+        <SettingsSection
+          title={t('Automatische Sicherung')}
+          description={t(
+            'Sichert Datenbank und Einstellungen, auf Wunsch auch alle Dateien. Die Sicherungen liegen in db/backups oder in deinem S3-Bucket.'
+          )}
+        >
+          {toggle('backup.enabled', t('Automatisch sichern'), t('Läuft im Hintergrund, auch wenn niemand angemeldet ist.'))}
+          {number('backup.intervalHours', t('Abstand'), t('Wie oft eine neue Sicherung entsteht.'), {
+            min: 1,
+            max: 720,
+            unit: t('Stunden'),
+          })}
+          {number(
+            'backup.keep',
+            t('Aufbewahren'),
+            t('So viele automatische Sicherungen bleiben, ältere werden gelöscht. Manuelle bleiben, bis du sie löschst.'),
+            { min: 1, max: 100, unit: t('Stück') }
+          )}
+          {toggle(
+            'backup.includeUploads',
+            t('Dateien mitsichern'),
+            t('Die Sicherung wird dann etwa so groß wie dein Upload-Ordner. Dateien, die schon in S3 liegen, sind nicht dabei.')
+          )}
+          {choice('backup.target', t('Ablage'), t('S3 nutzt den Zugang unter Speicherort, im Ordner backups.'), [
+            { value: 'local', label: t('Auf dem Server') },
+            { value: 's3', label: t('Im S3-Bucket') },
+          ])}
+        </SettingsSection>
+        <SettingsSection title={t('Vorhandene Sicherungen')}>
+          <BackupTools initial={backups} includeUploads={Boolean(saved['backup.includeUploads'])} />
         </SettingsSection>
       </Stack>
     ),
 
     anmeldung: (
       <Stack spacing={4}>
-        <SettingsSection title="Registrierung">
-          {choice('auth.registration', 'Neue Konten', 'Admins können unter Benutzer immer Konten anlegen.', [
-            { value: 'closed', label: 'Nur durch Admins' },
-            { value: 'invite', label: 'Mit Einladung' },
-            { value: 'open', label: 'Für alle offen' },
+        <SettingsSection title={t('Registrierung')}>
+          {choice('auth.registration', t('Neue Konten'), t('Admins können unter Benutzer immer Konten anlegen.'), [
+            { value: 'closed', label: t('Nur durch Admins') },
+            { value: 'invite', label: t('Mit Einladung') },
+            { value: 'open', label: t('Für alle offen') },
           ])}
         </SettingsSection>
-        <SettingsSection title="Sicherheit">
+        <SettingsSection title={t('Sicherheit')}>
           {choice(
             'auth.enforceMfa',
-            'Zwei-Faktor-Pflicht',
-            'Betroffene müssen eine Authenticator-App einrichten, bevor sie weiterarbeiten können.',
+            t('Zwei-Faktor-Pflicht'),
+            t('Betroffene müssen eine Authenticator-App einrichten, bevor sie weiterarbeiten können.'),
             [
-              { value: 'off', label: 'Freiwillig' },
-              { value: 'admins', label: 'Für Admins' },
-              { value: 'all', label: 'Für alle' },
+              { value: 'off', label: t('Freiwillig') },
+              { value: 'admins', label: t('Für Admins') },
+              { value: 'all', label: t('Für alle') },
             ]
           )}
           {lockoutRisk && (
             <Box sx={{ px: { xs: 2, sm: 3 }, pb: 2 }}>
               <Alert severity="warning">
-                Du selbst hast noch keine Authenticator-App. Nach dem Speichern wirst du direkt zur Einrichtung geschickt.
+                {t('Du selbst hast noch keine Authenticator-App. Nach dem Speichern wirst du direkt zur Einrichtung geschickt.')}
               </Alert>
             </Box>
           )}
-          {number('auth.passwordMinLength', 'Mindestlänge für Passwörter', 'Gilt für neue und geänderte Passwörter.', {
+          {number('auth.passwordMinLength', t('Mindestlänge für Passwörter'), t('Gilt für neue und geänderte Passwörter.'), {
             min: 8,
             max: 64,
-            unit: 'Zeichen',
+            unit: t('Zeichen'),
           })}
           {number(
             'auth.sessionDays',
-            'Angemeldet bleiben',
-            'So lange bleibt man mit „Angemeldet bleiben“ eingeloggt, solange man die Seite ab und zu benutzt.',
-            { min: 1, max: 365, unit: 'Tage' }
+            t('Angemeldet bleiben'),
+            t('So lange bleibt man mit „Angemeldet bleiben“ eingeloggt, solange man die Seite ab und zu benutzt.'),
+            { min: 1, max: 365, unit: t('Tage') }
           )}
         </SettingsSection>
-        <SettingsSection title="Anmeldeverfahren">
+        <SettingsSection title={t('Anmeldeverfahren')}>
           {toggle(
             'auth.passkeys',
-            'Passkeys',
-            'Anmeldung mit Fingerabdruck, Gesicht oder Geräte-PIN. Braucht HTTPS und eine korrekte Basis-URL.'
+            t('Passkeys'),
+            t('Anmeldung mit Fingerabdruck, Gesicht oder Geräte-PIN. Braucht HTTPS und eine korrekte Basis-URL.')
           )}
           {toggle(
             'auth.tokenLogin',
-            'Anmeldung mit ShareX-Token',
-            'Übergangshilfe für Konten aus der alten Version, die ihr Passwort nicht kennen. Schalte sie ab, sobald alle ein Passwort haben.'
+            t('Anmeldung mit ShareX-Token'),
+            t(
+              'Übergangshilfe für Konten aus der alten Version, die ihr Passwort nicht kennen. Schalte sie ab, sobald alle ein Passwort haben.'
+            )
           )}
         </SettingsSection>
       </Stack>
@@ -700,7 +1157,7 @@ export function SettingsPanel({
           exclusive
           value={provider}
           onChange={(_event, next: ProviderKey | null) => next && setProvider(next)}
-          aria-label="Anmeldedienst"
+          aria-label={t('Anmeldedienst')}
           sx={{
             flexWrap: 'wrap',
             gap: 1,
@@ -717,7 +1174,7 @@ export function SettingsPanel({
               </Box>
               {key === 'oidc' ? v<string>('auth.oidc.name') || label : label}
               {v<boolean>(`auth.${key}.enabled`) && (
-                <Box component="span" aria-label="aktiv" sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: c.primary }} />
+                <Box component="span" aria-label={t('aktiv')} sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: c.primary }} />
               )}
             </ToggleButton>
           ))}
@@ -729,28 +1186,44 @@ export function SettingsPanel({
     rechtliches: (
       <Stack spacing={4}>
         <SettingsSection
-          title="Impressum"
-          description="Erscheint unten auf jeder Seite. Verlinke eine bestehende Seite oder schreib den Text hier, dann zeigt MoeShare ihn unter /impressum."
+          title={t('Impressum')}
+          description={t(
+            'Erscheint unten auf jeder Seite. Verlinke eine bestehende Seite oder schreib den Text hier, dann zeigt MoeShare ihn unter /impressum.'
+          )}
         >
-          {text('legal.imprintUrl', 'Link', 'Hat Vorrang vor dem eigenen Text.', {
+          {text('legal.imprintUrl', t('Link'), t('Hat Vorrang vor dem eigenen Text.'), {
             mono: true,
             placeholder: 'https://example.com/impressum',
           })}
-          {longText('legal.imprintText', 'Eigener Text', 'Zeilenumbrüche bleiben erhalten, Adressen und E-Mails werden zu Links.', 20000)}
+          {longText(
+            'legal.imprintText',
+            t('Eigener Text'),
+            t('Zeilenumbrüche bleiben erhalten, Adressen und E-Mails werden zu Links.'),
+            20000
+          )}
         </SettingsSection>
         <SettingsSection
-          title="Datenschutz"
-          description="Erscheint unten auf jeder Seite. Verlinke deine Datenschutzerklärung oder schreib sie hier, dann zeigt MoeShare sie unter /datenschutz."
+          title={t('Datenschutz')}
+          description={t(
+            'Erscheint unten auf jeder Seite. Verlinke deine Datenschutzerklärung oder schreib sie hier, dann zeigt MoeShare sie unter /datenschutz.'
+          )}
         >
-          {text('legal.privacyUrl', 'Link', 'Hat Vorrang vor dem eigenen Text.', {
+          {text('legal.privacyUrl', t('Link'), t('Hat Vorrang vor dem eigenen Text.'), {
             mono: true,
             placeholder: 'https://example.com/datenschutz',
           })}
-          {longText('legal.privacyText', 'Eigener Text', 'Zeilenumbrüche bleiben erhalten, Adressen und E-Mails werden zu Links.', 100000)}
+          {longText(
+            'legal.privacyText',
+            t('Eigener Text'),
+            t('Zeilenumbrüche bleiben erhalten, Adressen und E-Mails werden zu Links.'),
+            100000
+          )}
         </SettingsSection>
         <SettingsSection
-          title="Eigene Links"
-          description="Zum Beispiel dein Discord-Server, eine Status-Seite oder Kontakt. Sie stehen neben Impressum und Datenschutz im Fuß jeder Seite."
+          title={t('Eigene Links')}
+          description={t(
+            'Zum Beispiel dein Discord-Server, eine Status-Seite oder Kontakt. Sie stehen neben Impressum und Datenschutz im Fuß jeder Seite.'
+          )}
         >
           <Box sx={{ px: { xs: 2, sm: 3 }, py: 2.25 }}>
             <LinkListEditor
@@ -766,27 +1239,31 @@ export function SettingsPanel({
 
     benachrichtigungen: (
       <Stack spacing={4}>
-        <SettingsSection title="Discord-Webhook" description="MoeShare meldet ausgewählte Ereignisse in einen Discord-Kanal.">
-          {secret('webhook.url', 'Webhook-Adresse', 'In Discord unter Kanal bearbeiten › Integrationen › Webhooks.')}
-          <SettingRow label="Test" description="Schickt eine Testnachricht an die eingetragene Adresse.">
+        <SettingsSection title={t('Discord-Webhook')} description={t('MoeShare meldet ausgewählte Ereignisse in einen Discord-Kanal.')}>
+          {secret('webhook.url', t('Webhook-Adresse'), t('In Discord unter Kanal bearbeiten › Integrationen › Webhooks.'))}
+          <SettingRow label={t('Test')} description={t('Schickt eine Testnachricht an die eingetragene Adresse.')}>
             <Button
               variant="tonal"
               startIcon={testing ? <CircularProgress size={16} color="inherit" /> : <SendRounded />}
               disabled={testing || (!secretSet['webhook.url'] && !secrets['webhook.url'])}
               onClick={runWebhookTest}
             >
-              Testnachricht senden
+              {t('Testnachricht senden')}
             </Button>
           </SettingRow>
-          {toggle('webhook.enabled', 'Benachrichtigungen senden', 'Schickt die gewählten Ereignisse an den Webhook.')}
-          {text('webhook.name', 'Absendername', 'Name, unter dem die Nachrichten erscheinen.')}
-          <SettingRow label="Farben" description="Rand der Nachrichten für Erfolg und Fehler." stacked>
+          {toggle('webhook.enabled', t('Benachrichtigungen senden'), t('Schickt die gewählten Ereignisse an den Webhook.'))}
+          {text('webhook.name', t('Absendername'), t('Name, unter dem die Nachrichten erscheinen.'))}
+          <SettingRow label={t('Farben')} description={t('Rand der Nachrichten für Erfolg und Fehler.')} stacked>
             <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-              <ColorField label="Erfolg" value={v<string>('webhook.successColor')} onChange={(hex) => set('webhook.successColor', hex)} />
-              <ColorField label="Fehler" value={v<string>('webhook.errorColor')} onChange={(hex) => set('webhook.errorColor', hex)} />
+              <ColorField
+                label={t('Erfolg')}
+                value={v<string>('webhook.successColor')}
+                onChange={(hex) => set('webhook.successColor', hex)}
+              />
+              <ColorField label={t('Fehler')} value={v<string>('webhook.errorColor')} onChange={(hex) => set('webhook.errorColor', hex)} />
             </Box>
           </SettingRow>
-          <SettingRow label="Ereignisse" stacked>
+          <SettingRow label={t('Ereignisse')} stacked>
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
               {WEBHOOK_EVENTS.map((event) => {
                 const selected = ((v<string[]>('webhook.events') || []) as string[]).includes(event.key);
@@ -812,44 +1289,58 @@ export function SettingsPanel({
 
     system: (
       <Stack spacing={4}>
-        <SettingsSection title="Betrieb">
+        <SettingsSection title={t('Betrieb')}>
           {toggle(
             'system.trustProxy',
-            'Hinter einem Reverse-Proxy',
-            'Einschalten, wenn nginx, Caddy, Traefik oder Cloudflare vor MoeShare sitzen. Sonst sehen alle Besucher gleich aus und das Bremsen falscher Anmeldungen trifft alle.'
+            t('Hinter einem Reverse-Proxy'),
+            t(
+              'Einschalten, wenn nginx, Caddy, Traefik oder Cloudflare vor MoeShare sitzen. Sonst sehen alle Besucher gleich aus und das Bremsen falscher Anmeldungen trifft alle.'
+            )
           )}
           {initial.environment.errorReports === 'off' ? (
             <SettingRow
-              label="Fehlerberichte"
-              description="Abgeschaltet über die Umgebungsvariable GLITCHTIP_DSN. Ohne sie gehen Berichte an das GlitchTip des MoeShare-Projekts, sobald du sie hier erlaubst."
+              label={t('Fehlerberichte')}
+              description={t(
+                'Abgeschaltet über die Umgebungsvariable GLITCHTIP_DSN. Ohne sie gehen Berichte an das GlitchTip des MoeShare-Projekts, sobald du sie hier erlaubst.'
+              )}
             />
           ) : (
             toggle(
               'system.errorReports',
-              initial.environment.errorReports === 'custom' ? 'Fehlerberichte an dein GlitchTip' : 'Fehlerberichte an die Entwickler',
-              `Schickt Fehlermeldungen und vom Browser blockierte Inhalte an ${
-                initial.environment.errorReports === 'custom' ? 'das GlitchTip aus GLITCHTIP_DSN' : 'das GlitchTip des MoeShare-Projekts'
-              }, damit Fehler schneller behoben werden. Benutzernamen, IP-Adressen, Dateinamen und Links werden vorher entfernt.`
+              initial.environment.errorReports === 'custom' ? t('Fehlerberichte an dein GlitchTip') : t('Fehlerberichte an die Entwickler'),
+              initial.environment.errorReports === 'custom'
+                ? t(
+                    'Schickt Fehlermeldungen und vom Browser blockierte Inhalte an das GlitchTip aus GLITCHTIP_DSN, damit Fehler schneller behoben werden. Benutzernamen, IP-Adressen, Dateinamen und Links werden vorher entfernt.'
+                  )
+                : t(
+                    'Schickt Fehlermeldungen und vom Browser blockierte Inhalte an das GlitchTip des MoeShare-Projekts, damit Fehler schneller behoben werden. Benutzernamen, IP-Adressen, Dateinamen und Links werden vorher entfernt.'
+                  )
             )
           )}
         </SettingsSection>
         <SettingsSection
-          title="Datenschutz"
-          description="Aktivitäten wie Anmeldungen werden protokolliert, damit du fremde Zugriffe erkennst."
+          title={t('Datenschutz')}
+          description={t('Aktivitäten wie Anmeldungen werden protokolliert, damit du fremde Zugriffe erkennst.')}
         >
-          {toggle('system.logIps', 'IP-Adressen speichern', 'Bei Sitzungen und im Aktivitätsprotokoll. Werden mit den Einträgen gelöscht.')}
-          {number('system.auditRetentionDays', 'Aktivität aufbewahren', 'Ältere Einträge löscht MoeShare automatisch.', {
+          {toggle(
+            'system.logIps',
+            t('IP-Adressen speichern'),
+            t('Bei Sitzungen und im Aktivitätsprotokoll. Werden mit den Einträgen gelöscht.')
+          )}
+          {number('system.auditRetentionDays', t('Aktivität aufbewahren'), t('Ältere Einträge löscht MoeShare automatisch.'), {
             min: 7,
             max: 730,
-            unit: 'Tage',
+            unit: t('Tage'),
           })}
         </SettingsSection>
         <SettingsSection
-          title="Server"
-          description="Der Port steht schon vor dem Start fest. Ändern kannst du ihn mit der Umgebungsvariable PORT, er gilt dann nach einem Neustart."
+          title={t('Server')}
+          description={t(
+            'Der Port steht schon vor dem Start fest. Ändern kannst du ihn mit der Umgebungsvariable PORT, er gilt dann nach einem Neustart.'
+          )}
         >
           <SettingRow
-            label="Port"
+            label={t('Port')}
             description={
               <Box component="span" sx={{ fontFamily: fonts.mono }}>
                 {initial.environment.port}
@@ -857,18 +1348,21 @@ export function SettingsPanel({
             }
           />
           <SettingRow
-            label="Protokoll"
+            label={t('Protokoll')}
             description={
               <>
-                Stufe{' '}
-                <Box component="span" sx={{ fontFamily: fonts.mono }}>
-                  {initial.environment.logLevel}
-                </Box>
-                , Format{' '}
-                <Box component="span" sx={{ fontFamily: fonts.mono }}>
-                  {initial.environment.logFormat}
-                </Box>
-                . Ändern mit LOG_LEVEL (debug, info, warn, error) und LOG_FORMAT (text, json).
+                {rich('Stufe {level}, Format {format}. Ändern mit LOG_LEVEL (debug, info, warn, error) und LOG_FORMAT (text, json).', {
+                  level: (
+                    <Box component="span" sx={{ fontFamily: fonts.mono }}>
+                      {initial.environment.logLevel}
+                    </Box>
+                  ),
+                  format: (
+                    <Box component="span" sx={{ fontFamily: fonts.mono }}>
+                      {initial.environment.logFormat}
+                    </Box>
+                  ),
+                })}
               </>
             }
           />
@@ -889,7 +1383,7 @@ export function SettingsPanel({
     >
       <Box
         component="nav"
-        aria-label="Einstellungsbereiche"
+        aria-label={t('Einstellungsbereiche')}
         sx={{
           position: { md: 'sticky' },
           top: { md: 96 },
@@ -928,10 +1422,10 @@ export function SettingsPanel({
               </Box>
               {s.label}
               {dirtySections.has(s.key) && (
-                <Tooltip title="Ungespeicherte Änderungen">
+                <Tooltip title={t('Ungespeicherte Änderungen')}>
                   <Box
                     component="span"
-                    aria-label="geändert"
+                    aria-label={t('geändert')}
                     sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: c.primary, ml: { xs: 0, md: 'auto' } }}
                   />
                 </Tooltip>

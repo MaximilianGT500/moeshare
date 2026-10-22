@@ -16,6 +16,12 @@ const sessions = require('./services/sessionService');
 const audit = require('./services/auditService');
 const oauth = require('./services/oauthService');
 const invites = require('./services/inviteService');
+const files = require('./services/fileService');
+const links = require('./services/linkService');
+const storage = require('./services/storageService');
+const backups = require('./services/backupService');
+const domains = require('./services/domainService');
+const stats = require('./services/statsService');
 const { createApp } = require('./app');
 
 const log = logger.scope('server');
@@ -57,19 +63,47 @@ async function prepareUserFolders() {
 function scheduleMaintenance() {
   const run = async () => {
     try {
-      const [expiredSessions, expiredFlows, auditEntries, oldInvites] = await Promise.all([
+      const [expiredSessions, expiredFlows, auditEntries, oldInvites, oldStats] = await Promise.all([
         sessions.cleanup(),
         ephemeral.prune(),
         audit.prune(),
         invites.prune(),
+        stats.prune(),
       ]);
-      log.debug('Wartung erledigt', { sessions: expiredSessions, flows: expiredFlows, audit: auditEntries, invites: oldInvites });
+      log.debug('Wartung erledigt', {
+        sessions: expiredSessions,
+        flows: expiredFlows,
+        audit: auditEntries,
+        invites: oldInvites,
+        stats: oldStats,
+      });
     } catch (error) {
       log.error('Die Wartung ist fehlgeschlagen', { error });
     }
   };
   run();
   setInterval(run, 60 * 60 * 1000).unref();
+
+  const everyMinute = async () => {
+    const token = await ephemeral.acquire('minute', 50 * 1000).catch(() => null);
+    if (!token) return;
+    try {
+      const [expiredFiles, expiredLinks, trashed] = await Promise.all([files.removeExpired(), links.removeExpired(), files.purgeTrash()]);
+      if (expiredFiles || expiredLinks || trashed)
+        log.debug('Abgelaufenes entfernt', { files: expiredFiles, links: expiredLinks, trash: trashed });
+      await backups.tick();
+      await domains.checkPending();
+    } catch (error) {
+      log.error('Die minütliche Wartung ist fehlgeschlagen', { error });
+    }
+  };
+  setTimeout(everyMinute, 5000).unref();
+  setInterval(everyMinute, 60 * 1000).unref();
+
+  storage
+    .cleanupLocalCopies()
+    .then((removed) => removed && log.info('Lokale Kopien von S3-Dateien aufgeräumt', { files: removed }))
+    .catch((error) => log.warn('Lokale Kopien von S3-Dateien ließen sich nicht prüfen', { error }));
 }
 
 const newer = (a, b) => {
@@ -104,12 +138,21 @@ function logSummary() {
     ['Passkeys', settings.get('auth.passkeys')],
     [providers.length ? `Anmeldung mit ${providers.join(', ')}` : 'Anmeldung über Dienste', providers.length > 0],
     ['Discord-Webhook', settings.get('webhook.enabled') && Boolean(settings.get('webhook.url'))],
+    ['Speicher in S3', storage.activeDriver() === 's3'],
+    ['Automatische Sicherungen', settings.get('backup.enabled')],
+    ['Papierkorb', settings.get('trash.enabled')],
+    ['Statistiken', settings.get('stats.enabled')],
+    ['Eigene Domains', settings.get('domains.enabled')],
+    ['Profilseiten', settings.get('profiles.enabled')],
+    ['Meldungen', settings.get('reports.enabled')],
+    ['E-Mail-Versand', settings.get('mail.enabled') && Boolean(settings.get('mail.host'))],
   ];
   const active = features.filter(([, on]) => on).map(([name]) => name);
   const inactive = features.filter(([, on]) => !on).map(([name]) => name);
   log.info(`MoeShare ${config.version} läuft auf ${settings.get('site.baseUrl')}`, {
     port: config.port,
     node: process.versions.node,
+    db: db.describe(),
     log: logger.level,
   });
   if (active.length) log.info(`Aktiv: ${active.join(', ')}`);
@@ -143,7 +186,18 @@ async function start() {
   try {
     await db.ready;
   } catch (error) {
-    return fatal('Die Datenbank konnte nicht geöffnet werden', error, `Prüfe die Dateirechte im Ordner ${config.paths.data}.`);
+    if (config.database.error) {
+      return fatal(
+        'Die Datenbank-Adresse ist ungültig',
+        error,
+        'Beispiele: sqlite:db/datenbank.sqlite, postgres://moeshare:passwort@localhost:5432/moeshare, mysql://moeshare:passwort@localhost:3306/moeshare'
+      );
+    }
+    const hint =
+      db.client === 'sqlite'
+        ? `Prüfe die Dateirechte im Ordner ${config.paths.data}.`
+        : 'Prüfe DATABASE_URL, ob der Datenbankserver erreichbar ist und ob Benutzer, Passwort und Datenbankname stimmen.';
+    return fatal(`Die Datenbank (${db.describe()}) konnte nicht geöffnet werden`, error, hint);
   }
 
   try {
@@ -151,6 +205,8 @@ async function start() {
     settings.startSync();
     secrets.loadKey();
     await prepareUserFolders();
+    await domains.refresh();
+    domains.start();
   } catch (error) {
     return fatal('MoeShare konnte nicht starten', error);
   }

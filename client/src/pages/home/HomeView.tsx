@@ -19,24 +19,26 @@ import { AmbientBackdrop } from '../../components/Ambient';
 import { AnimatedNumber } from '../../components/AnimatedNumber';
 import { BrandMark } from '../../components/BrandMark';
 import { ThemeToggleButton } from '../../components/ThemeToggle';
-import { FooterLinks } from '../../components/SiteFooter';
-import { formatBytes, formatNumber, plural } from '../../lib/format';
+import { FooterLinks, reportLink } from '../../components/SiteFooter';
+import { LanguageLink } from '../../components/LanguageSwitch';
+import { formatBytes, formatNumber } from '../../lib/format';
 import { mix } from '../../lib/color';
 import { c, ease, radius } from '../../theme/tokens';
+import { locale, t, tn } from '../../lib/i18n';
 
 export const STAT_META: Record<HomeStatKey, { label: string; icon: ReactElement; format: (value: number) => string }> = {
-  files: { label: 'Dateien', icon: <InsertDriveFileRounded />, format: formatNumber },
-  storage: { label: 'Speicher belegt', icon: <StorageRounded />, format: formatBytes },
-  views: { label: 'Aufrufe', icon: <VisibilityRounded />, format: formatNumber },
-  users: { label: 'Mitglieder', icon: <GroupRounded />, format: formatNumber },
-  images: { label: 'Bilder', icon: <ImageRounded />, format: formatNumber },
-  videos: { label: 'Videos', icon: <MovieRounded />, format: formatNumber },
-  audio: { label: 'Audiodateien', icon: <GraphicEqRounded />, format: formatNumber },
-  today: { label: 'Heute hochgeladen', icon: <TodayRounded />, format: formatNumber },
+  files: { label: t('Dateien'), icon: <InsertDriveFileRounded />, format: formatNumber },
+  storage: { label: t('Speicher belegt'), icon: <StorageRounded />, format: formatBytes },
+  views: { label: t('Aufrufe'), icon: <VisibilityRounded />, format: formatNumber },
+  users: { label: t('Mitglieder'), icon: <GroupRounded />, format: formatNumber },
+  images: { label: t('Bilder'), icon: <ImageRounded />, format: formatNumber },
+  videos: { label: t('Videos'), icon: <MovieRounded />, format: formatNumber },
+  audio: { label: t('Audiodateien'), icon: <GraphicEqRounded />, format: formatNumber },
+  today: { label: t('Heute hochgeladen'), icon: <TodayRounded />, format: formatNumber },
 };
 
-const WEEKDAYS = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
-const dayLabel = new Intl.DateTimeFormat('de-DE', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
+const weekday = new Intl.DateTimeFormat(locale, { weekday: 'short', timeZone: 'UTC' });
+const dayLabel = new Intl.DateTimeFormat(locale, { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
 const dateOf = (day: string) => new Date(`${day}T12:00:00Z`);
 
 interface HomeViewProps {
@@ -53,8 +55,10 @@ function UploadPulse({ days }: { days: HomeActivityDay[] }) {
   const total = days.reduce((sum, day) => sum + day.uploads, 0);
   const busiest = days.reduce((best, day) => (day.uploads > best.uploads ? day : best), days[0]);
   const summary = total
-    ? `${plural(total, 'Upload', 'Uploads')} in den letzten 14 Tagen, die meisten am ${dayLabel.format(dateOf(busiest.day))}.`
-    : 'In den letzten 14 Tagen wurde nichts hochgeladen.';
+    ? tn(total, '1 Upload in den letzten 14 Tagen, am {day}.', '{count} Uploads in den letzten 14 Tagen, die meisten am {day}.', {
+        day: dayLabel.format(dateOf(busiest.day)),
+      })
+    : t('In den letzten 14 Tagen wurde nichts hochgeladen.');
 
   return (
     <Box
@@ -70,10 +74,10 @@ function UploadPulse({ days }: { days: HomeActivityDay[] }) {
     >
       <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
         <Typography component="figcaption" variant="subtitle1" sx={{ fontWeight: 700 }}>
-          Uploads der letzten 14 Tage
+          {t('Uploads der letzten 14 Tage')}
         </Typography>
         <Typography variant="body2" sx={{ color: 'text.secondary', fontVariantNumeric: 'tabular-nums' }}>
-          {total ? `${formatNumber(total)} insgesamt` : 'noch ruhig hier'}
+          {total ? t('{total} insgesamt', { total: formatNumber(total) }) : t('noch ruhig hier')}
         </Typography>
       </Box>
       <Box role="img" aria-label={summary} sx={{ mt: 3, position: 'relative' }}>
@@ -91,7 +95,7 @@ function UploadPulse({ days }: { days: HomeActivityDay[] }) {
               px: 2,
             }}
           >
-            Sobald jemand etwas hochlädt, wächst hier das Diagramm.
+            {t('Sobald jemand etwas hochlädt, wächst hier das Diagramm.')}
           </Typography>
         )}
         <Box
@@ -109,7 +113,7 @@ function UploadPulse({ days }: { days: HomeActivityDay[] }) {
             return (
               <Tooltip
                 key={day.day}
-                title={`${dayLabel.format(dateOf(day.day))}: ${plural(day.uploads, 'Upload', 'Uploads')}`}
+                title={tn(day.uploads, '{day}: 1 Upload', '{day}: {count} Uploads', { day: dayLabel.format(dateOf(day.day)) })}
                 placement="top"
               >
                 <Box sx={{ height: '100%', display: 'flex', alignItems: 'flex-end' }}>
@@ -141,7 +145,7 @@ function UploadPulse({ days }: { days: HomeActivityDay[] }) {
                 fontWeight: index === days.length - 1 ? 800 : 500,
               }}
             >
-              {WEEKDAYS[dateOf(day.day).getUTCDay()]}
+              {weekday.format(dateOf(day.day)).replace(/\.$/, '')}
             </Typography>
           ))}
         </Box>
@@ -286,16 +290,16 @@ export function HomeView({ site, home, stats, user, registration, preview = fals
               <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', mt: 4 }}>
                 {user ? (
                   <Button variant="contained" size="large" href="/dashboard" onClick={inert} startIcon={<DashboardRounded />}>
-                    Zum Dashboard
+                    {t('Zum Dashboard')}
                   </Button>
                 ) : (
                   <>
                     <Button variant="contained" size="large" href="/login" onClick={inert} startIcon={<LoginRounded />}>
-                      Anmelden
+                      {t('Anmelden')}
                     </Button>
                     {registration && (
                       <Button variant="tonal" size="large" href="/register" onClick={inert}>
-                        Konto erstellen
+                        {t('Konto erstellen')}
                       </Button>
                     )}
                   </>
@@ -326,11 +330,13 @@ export function HomeView({ site, home, stats, user, registration, preview = fals
           color: 'text.secondary',
         }}
       >
-        <FooterLinks links={[...(site.links || []), ...(site.legal || [])]} inert={inert} strong />
-        <Box sx={{ ml: { sm: 'auto' }, display: 'flex', flexWrap: 'wrap', columnGap: 2, rowGap: 0.5 }}>
+        <FooterLinks links={[...(site.links || []), ...(site.legal || []), ...reportLink(site)]} inert={inert} strong />
+        <Box sx={{ ml: { sm: 'auto' }, display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 2, rowGap: 0.5 }}>
+          <LanguageLink inert={inert} />
           {site.copyright && <Typography variant="caption">{site.copyright}</Typography>}
           <Typography variant="caption" sx={{ opacity: 0.75 }}>
-            Läuft mit MoeShare{site.version ? ` ${site.version}` : ''}
+            {t('Läuft mit MoeShare')}
+            {site.version ? ` ${site.version}` : ''}
           </Typography>
         </Box>
       </Box>

@@ -9,12 +9,13 @@ import { errorMessage, fetchAudit } from '../../lib/api';
 import { ActivityList } from '../../components/ActivityList';
 import { useToast } from '../../components/Toaster';
 import { c, radius } from '../../theme/tokens';
+import { t } from '../../lib/i18n';
 
 const CATEGORIES = [
-  { key: '', label: 'Alles' },
-  { key: 'signin', label: 'Anmeldungen' },
-  { key: 'security', label: 'Sicherheit' },
-  { key: 'admin', label: 'Verwaltung' },
+  { key: '', label: t('Alles') },
+  { key: 'signin', label: t('Anmeldungen') },
+  { key: 'security', label: t('Sicherheit') },
+  { key: 'admin', label: t('Verwaltung') },
 ];
 
 export function ActivityPanel({ initial, retentionDays }: { initial: AuditEvent[]; retentionDays: number }) {
@@ -54,7 +55,7 @@ export function ActivityPanel({ initial, retentionDays }: { initial: AuditEvent[
           />
         ))}
         <Typography variant="caption" sx={{ color: 'text.secondary', ml: { sm: 'auto' } }}>
-          Einträge werden nach {retentionDays} Tagen gelöscht.
+          {t('Einträge werden nach {retentionDays} Tagen gelöscht.', { retentionDays })}
         </Typography>
       </Box>
       <Box
@@ -67,7 +68,7 @@ export function ActivityPanel({ initial, retentionDays }: { initial: AuditEvent[
           transition: 'opacity 160ms ease',
         }}
       >
-        <ActivityList events={events} showPeople empty="In diesem Bereich gibt es noch keine Einträge." />
+        <ActivityList events={events} showPeople empty={t('In diesem Bereich gibt es noch keine Einträge.')} />
         {more && (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 1.5 }}>
             <Button
@@ -75,7 +76,7 @@ export function ActivityPanel({ initial, retentionDays }: { initial: AuditEvent[
               disabled={loading}
               startIcon={loading ? <CircularProgress size={16} color="inherit" /> : null}
             >
-              Ältere anzeigen
+              {t('Ältere anzeigen')}
             </Button>
           </Box>
         )}

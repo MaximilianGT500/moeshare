@@ -1,4 +1,5 @@
 import type { FileType } from './types';
+import { t } from './i18n';
 
 export interface ShareFormat {
   key: 'view' | 'direct' | 'markdown' | 'bbcode' | 'html';
@@ -18,19 +19,19 @@ export function shareFormats(file: Shareable): ShareFormat[] {
   const { view, direct } = file.urls;
   const isImage = file.type === 'image';
   return [
-    { key: 'view', label: 'Ansichts-Link', value: view, copied: 'Ansichts-Link kopiert' },
-    { key: 'direct', label: 'Direktlink', value: direct, copied: 'Direktlink kopiert' },
+    { key: 'view', label: t('Ansichts-Link'), value: view, copied: t('Ansichts-Link kopiert') },
+    { key: 'direct', label: t('Direktlink'), value: direct, copied: t('Direktlink kopiert') },
     {
       key: 'markdown',
-      label: 'Markdown',
+      label: t('Markdown'),
       value: isImage ? `![${filename}](${direct})` : `[${filename}](${view})`,
-      copied: 'Markdown kopiert',
+      copied: t('Markdown kopiert'),
     },
     {
       key: 'bbcode',
-      label: 'BBCode',
+      label: t('BBCode'),
       value: isImage ? `[img]${direct}[/img]` : `[url=${view}]${filename}[/url]`,
-      copied: 'BBCode kopiert',
+      copied: t('BBCode kopiert'),
     },
     {
       key: 'html',
@@ -38,7 +39,7 @@ export function shareFormats(file: Shareable): ShareFormat[] {
       value: isImage
         ? `<a href="${view}" target="_blank"><img src="${direct}" alt="${filename}" /></a>`
         : `<a href="${view}" target="_blank">${filename}</a>`,
-      copied: 'HTML kopiert',
+      copied: t('HTML kopiert'),
     },
   ];
 }

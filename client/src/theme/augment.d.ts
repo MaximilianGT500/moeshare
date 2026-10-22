@@ -4,6 +4,7 @@ interface FileTypePalette {
   image: string;
   video: string;
   audio: string;
+  text: string;
   other: string;
 }
 

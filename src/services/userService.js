@@ -15,7 +15,10 @@ const ROLES = ['admin', 'mitglied'];
 
 const findById = (id) => db.get('SELECT * FROM users WHERE id = ?', [id]);
 const findByName = (username) =>
-  db.get('SELECT * FROM users WHERE username = ? COLLATE NOCASE ORDER BY username = ? DESC LIMIT 1', [username, username]);
+  db.get('SELECT * FROM users WHERE lower(username) = lower(?) ORDER BY CASE WHEN username = ? THEN 0 ELSE 1 END LIMIT 1', [
+    username,
+    username,
+  ]);
 
 const count = () => db.count('SELECT COUNT(*) FROM users');
 const countActiveAdmins = () => db.count("SELECT COUNT(*) FROM users WHERE role = 'admin' AND status = 'active'");
@@ -97,24 +100,21 @@ async function create({
   if (identity) await identities.assertFree(identity.provider, identity.subject, null, identity.label);
 
   const now = Date.now();
-  const { lastID } = await db.run(
-    `INSERT INTO users (username, password, role, status, quota_bytes, max_file_bytes, created_at, password_changed_at, must_change_password)
-     VALUES (?, ?, ?, 'active', ?, ?, ?, ?, ?)`,
-    [
-      name,
-      password ? await hashPassword(password) : '',
-      role === 'admin' ? 'admin' : 'mitglied',
-      validateLimit(quotaBytes, 'Speicherlimit', 'quotaBytes'),
-      validateLimit(maxFileBytes, 'Maximale Dateigröße', 'maxFileBytes'),
-      now,
-      password ? now : null,
-      mustChangePassword && password ? 1 : 0,
-    ]
-  );
-  if (identity) await identities.link(lastID, identity.provider, identity, identity.label);
+  const userId = await db.insertRow('users', {
+    username: name,
+    password: password ? await hashPassword(password) : '',
+    role: role === 'admin' ? 'admin' : 'mitglied',
+    status: 'active',
+    quota_bytes: validateLimit(quotaBytes, 'Speicherlimit', 'quotaBytes'),
+    max_file_bytes: validateLimit(maxFileBytes, 'Maximale Dateigröße', 'maxFileBytes'),
+    created_at: now,
+    password_changed_at: password ? now : null,
+    must_change_password: mustChangePassword && password ? 1 : 0,
+  });
+  if (identity) await identities.link(userId, identity.provider, identity, identity.label);
   ensureUserDirs(name);
   cache.clear();
-  return findById(lastID);
+  return findById(userId);
 }
 
 async function setPassword(userId, password, { mustChange = false } = {}) {
@@ -190,9 +190,12 @@ function toAdminUser(row, linked = []) {
     suspendedReason: row.suspended_reason || '',
     createdAt: row.created_at,
     lastLoginAt: row.last_login_at,
-    storageBytes: row.storage_bytes || 0,
-    files: row.files || 0,
-    views: row.views || 0,
+    storageBytes: Number(row.storage_bytes) || 0,
+    files: Number(row.files) || 0,
+    views: Number(row.views) || 0,
+    email: row.email || null,
+    emailVerified: Boolean(row.email_verified_at),
+    domains: Number(row.domains) || 0,
     quotaBytes: row.quota_bytes,
     maxFileBytes: row.max_file_bytes,
     effectiveQuotaBytes: limits.quotaBytes,
@@ -207,19 +210,19 @@ function toAdminUser(row, linked = []) {
 
 const ADMIN_LIST = `
   SELECT u.*, COALESCE(f.bytes, 0) AS storage_bytes, COALESCE(f.files, 0) AS files, COALESCE(f.views, 0) AS views,
-         (SELECT COUNT(*) FROM passkeys p WHERE p.user_id = u.id) AS passkeys
+         (SELECT COUNT(*) FROM passkeys p WHERE p.user_id = u.id) AS passkeys,
+         (SELECT COUNT(*) FROM user_domains d WHERE d.user_id = u.id AND d.status = 'verified') AS domains
   FROM users u
   LEFT JOIN (
-    SELECT username, SUM(size_bytes) AS bytes, COUNT(*) AS files, SUM(views) AS views FROM file_data GROUP BY username
+    SELECT username, SUM(size_bytes) AS bytes, SUM(CASE WHEN deleted_at IS NULL THEN 1 ELSE 0 END) AS files, SUM(views) AS views
+    FROM file_data GROUP BY username
   ) f ON f.username = u.username
 `;
 
 async function listForAdmin(search = '') {
   const term = typeof search === 'string' ? search.trim() : '';
   const rows = term
-    ? await db.all(`${ADMIN_LIST} WHERE u.username LIKE ? ESCAPE '\\' ORDER BY u.id`, [
-        `%${term.replace(/[\\%_]/g, (char) => `\\${char}`)}%`,
-      ])
+    ? await db.all(`${ADMIN_LIST} WHERE lower(u.username) LIKE ? ESCAPE '!' ORDER BY u.id`, [`%${db.escapeLike(term.toLowerCase())}%`])
     : await db.all(`${ADMIN_LIST} ORDER BY u.id`);
   const linked = await identities.listByUser();
   return rows.map((row) => toAdminUser(row, linked.get(row.id)));
@@ -233,7 +236,18 @@ async function getForAdmin(userId) {
 async function remove(userId) {
   const user = await findOrFail(userId);
   await files.removeAllForUser(user.username);
-  for (const table of ['sessions', 'api_tokens', 'passkeys', 'recovery_codes', 'identities']) {
+  for (const [kind, table] of [
+    ['l', 'links'],
+    ['a', 'albums'],
+  ]) {
+    const own = `SELECT id FROM ${table} WHERE user_id = ?`;
+    await db.run(`DELETE FROM stats_daily WHERE kind = '${kind}' AND ref_id IN (${own})`, [user.id]);
+    await db.run(`DELETE FROM stats_sources WHERE kind = '${kind}' AND ref_id IN (${own})`, [user.id]);
+  }
+  await db.run("DELETE FROM stats_daily WHERE kind = 'p' AND ref_id = ?", [user.id]);
+  await db.run("DELETE FROM stats_sources WHERE kind = 'p' AND ref_id = ?", [user.id]);
+  await db.run('DELETE FROM album_files WHERE album_id IN (SELECT id FROM albums WHERE user_id = ?)', [user.id]);
+  for (const table of ['sessions', 'api_tokens', 'passkeys', 'recovery_codes', 'identities', 'links', 'albums', 'user_domains']) {
     await db.run(`DELETE FROM ${table} WHERE user_id = ?`, [user.id]);
   }
   await db.run('DELETE FROM users WHERE id = ?', [user.id]);
@@ -248,6 +262,7 @@ module.exports = {
   count,
   countActiveAdmins,
   validateNewAccount,
+  validatePassword,
   verifyPassword,
   generatePassword,
   create,

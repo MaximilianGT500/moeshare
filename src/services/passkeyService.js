@@ -13,6 +13,7 @@ const settings = require('./settingsService');
 const { loadKey, randomToken } = require('../lib/secrets');
 const { deviceLabel } = require('../lib/request');
 const { HttpError } = require('../lib/errors');
+const { translate } = require('../lib/i18n');
 
 const FLOW_TTL_MS = 5 * 60 * 1000;
 const MAX_PASSKEYS = 20;
@@ -89,7 +90,7 @@ async function registrationOptions(user) {
   return { flowId: await startFlow(options.challenge, 'register', user.id), options };
 }
 
-async function register(user, { flowId, response, name, userAgent }) {
+async function register(user, { flowId, response, name, userAgent, language }) {
   const flow = await takeFlow(flowId, 'register');
   if (flow.userId !== user.id) throw new HttpError(403, 'Die Anfrage gehört zu einem anderen Konto.');
   const { rpID, origin } = relyingParty();
@@ -110,7 +111,8 @@ async function register(user, { flowId, response, name, userAgent }) {
 
   const info = verification.registrationInfo;
   const { credential } = info;
-  const label = (typeof name === 'string' && name.trim().slice(0, 60)) || PROVIDERS[info.aaguid] || deviceLabel(userAgent);
+  const label =
+    (typeof name === 'string' && name.trim().slice(0, 60)) || translate(language, PROVIDERS[info.aaguid] || deviceLabel(userAgent));
 
   await db.run(
     `INSERT INTO passkeys (id, user_id, name, public_key, counter, transports, device_type, backed_up, aaguid, created_at)

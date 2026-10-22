@@ -2,12 +2,11 @@
 
 const db = require('../lib/db');
 const cache = require('../lib/cache');
-const { berlinDay } = require('../lib/format');
+const { berlinDay, parseBerlinDate } = require('../lib/format');
 const settings = require('./settingsService');
 const files = require('./fileService');
 
 const ACTIVITY_DAYS = 14;
-const DAY_SQL = "substr(creation_date, 7, 4) || '-' || substr(creation_date, 4, 2) || '-' || substr(creation_date, 1, 2)";
 
 function lastDays(count) {
   const today = new Date(`${berlinDay()}T00:00:00Z`);
@@ -20,11 +19,15 @@ function lastDays(count) {
 
 async function activity() {
   const days = lastDays(ACTIVITY_DAYS);
-  const rows = await db.all(`SELECT day, COUNT(*) AS uploads FROM (SELECT ${DAY_SQL} AS day FROM file_data) WHERE day >= ? GROUP BY day`, [
-    days[0],
-  ]);
-  const uploads = Object.fromEntries(rows.map((row) => [row.day, row.uploads]));
-  return days.map((day) => ({ day, uploads: uploads[day] || 0 }));
+  const [year, month, day] = days[0].split('-');
+  const since = parseBerlinDate(`${day}.${month}.${year}, 00:00:00`);
+  const rows = await db.all('SELECT created_at FROM file_data WHERE created_at >= ?', [since]);
+  const uploads = {};
+  for (const row of rows) {
+    const key = berlinDay(new Date(Number(row.created_at)));
+    uploads[key] = (uploads[key] || 0) + 1;
+  }
+  return days.map((entry) => ({ day: entry, uploads: uploads[entry] || 0 }));
 }
 
 const collect = () =>

@@ -1,4 +1,4 @@
-import { memo, useRef, useState, type MouseEvent, type PointerEvent } from 'react';
+import { memo, useRef, useState, type MouseEvent, type PointerEvent, type ReactElement } from 'react';
 import Box from '@mui/material/Box';
 import ButtonBase from '@mui/material/ButtonBase';
 import IconButton from '@mui/material/IconButton';
@@ -9,8 +9,16 @@ import PauseRounded from '@mui/icons-material/PauseRounded';
 import MoreVertRounded from '@mui/icons-material/MoreVertRounded';
 import CheckRounded from '@mui/icons-material/CheckRounded';
 import VisibilityOutlined from '@mui/icons-material/VisibilityOutlined';
+import LockRounded from '@mui/icons-material/LockRounded';
+import TimerOutlined from '@mui/icons-material/TimerOutlined';
+import LooksOneRounded from '@mui/icons-material/LooksOneRounded';
+import CloudOutlined from '@mui/icons-material/CloudOutlined';
+import BlockRounded from '@mui/icons-material/BlockRounded';
+import AccountBoxOutlined from '@mui/icons-material/AccountBoxOutlined';
 import type { FileItem } from '../../lib/types';
-import { extensionOf, formatBytes, formatNumber, relativeFromServer } from '../../lib/format';
+import { t } from '../../lib/i18n';
+import { syntaxLabel } from '../../lib/syntax';
+import { extensionOf, formatBytes, formatNumber, relativeFromServer, relativeMs } from '../../lib/format';
 import { meaningfulColor, mix } from '../../lib/color';
 import { CopyIconButton } from '../../components/CopyButton';
 import { fileIcon } from '../../components/FileIcons';
@@ -108,7 +116,7 @@ function AudioArt({ file, compact }: { file: FileItem; compact: boolean }) {
           sx={{ fontWeight: 700, color: c.onSurface, display: 'flex', alignItems: 'center', gap: 0.5, '& svg': { fontSize: 14 } }}
         >
           {fileIcon(file.filename, 'audio')}
-          {extensionOf(file.filename).toUpperCase() || 'Audio'}
+          {extensionOf(file.filename).toUpperCase() || t('Audio')}
         </Typography>
         <Typography variant="caption" component="p" noWrap sx={{ color: c.onSurfaceVariant }}>
           {formatBytes(file.sizeBytes)}
@@ -124,7 +132,7 @@ function AudioPlayButton({ file, compact }: { file: FileItem; compact: boolean }
   const playing = active && audio.playing;
   return (
     <IconButton
-      aria-label={playing ? `${file.filename} pausieren` : `${file.filename} abspielen`}
+      aria-label={playing ? t('{filename} pausieren', { filename: file.filename }) : t('{filename} abspielen', { filename: file.filename })}
       onClick={(event) => {
         event.stopPropagation();
         toggleAudio(file.urls.direct);
@@ -145,6 +153,91 @@ function AudioPlayButton({ file, compact }: { file: FileItem; compact: boolean }
     >
       {playing ? <PauseRounded /> : <PlayArrowRounded />}
     </IconButton>
+  );
+}
+
+export const displayName = (file: FileItem) => file.title || file.originalName || file.filename;
+
+function TextArt({ file, compact }: { file: FileItem; compact: boolean }) {
+  const syntax = file.syntax && !['auto', 'plaintext'].includes(file.syntax) ? syntaxLabel(file.syntax) : '';
+  return (
+    <Box
+      sx={{
+        position: 'absolute',
+        inset: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        p: compact ? 1.25 : 1.75,
+        background: `linear-gradient(160deg, ${mix(fileTypeColor.text, 22)}, ${c.surfaceContainerHigh} 65%)`,
+        color: c.onSurface,
+      }}
+    >
+      <Box aria-hidden sx={{ display: 'grid', gap: compact ? 0.6 : 0.8, mt: compact ? 3 : 4, opacity: 0.5 }}>
+        {[86, 64, 92, 48].map((width, index) => (
+          <Box key={index} sx={{ height: compact ? 4 : 6, width: `${width}%`, borderRadius: 3, bgcolor: c.onSurfaceVariant }} />
+        ))}
+      </Box>
+      <Box sx={{ flex: 1 }} />
+      <Typography
+        component="p"
+        noWrap
+        sx={{ fontSize: compact ? '0.9375rem' : '1.125rem', fontWeight: 800, lineHeight: 1.2, letterSpacing: '-0.01em', mb: 0.5 }}
+      >
+        {file.title || t('Text')}
+      </Typography>
+      <Typography variant="caption" component="p" sx={{ color: c.onSurfaceVariant }} noWrap>
+        {[syntax, formatBytes(file.sizeBytes)].filter(Boolean).join(' · ')}
+      </Typography>
+    </Box>
+  );
+}
+
+function StatusBadges({ file, compact, onMedia }: { file: FileItem; compact: boolean; onMedia: boolean }) {
+  const items = [
+    file.blocked ? { key: 'blocked', icon: <BlockRounded />, label: t('Von der Moderation gesperrt'), alert: true } : null,
+    file.listed && !compact ? { key: 'listed', icon: <AccountBoxOutlined />, label: t('Im Profil sichtbar') } : null,
+    file.password ? { key: 'lock', icon: <LockRounded />, label: t('Mit Passwort geschützt') } : null,
+    file.maxViews ? { key: 'once', icon: <LooksOneRounded />, label: t('Nur einmal abrufbar') } : null,
+    file.expiresAt ? { key: 'timer', icon: <TimerOutlined />, label: t('Läuft ab: {when}', { when: relativeMs(file.expiresAt) }) } : null,
+    file.storage === 's3' && !compact ? { key: 's3', icon: <CloudOutlined />, label: t('Liegt in S3') } : null,
+  ].filter(Boolean) as Array<{ key: string; icon: ReactElement; label: string; alert?: boolean }>;
+  if (!items.length) return null;
+  return (
+    <Box
+      sx={{
+        position: 'absolute',
+        right: compact ? 4 : 8,
+        bottom: compact ? 4 : 8,
+        zIndex: 1,
+        display: 'flex',
+        gap: 0.5,
+        pointerEvents: 'auto',
+      }}
+    >
+      {items.map((item) => (
+        <Tooltip key={item.key} title={item.label}>
+          <Box
+            role="img"
+            aria-label={item.label}
+            sx={{
+              width: compact ? 22 : 26,
+              height: compact ? 22 : 26,
+              borderRadius: '50%',
+              display: 'grid',
+              placeItems: 'center',
+              '& svg': { fontSize: compact ? 13 : 15 },
+              ...(item.alert
+                ? { bgcolor: c.error, color: c.onError }
+                : onMedia
+                  ? glass
+                  : { bgcolor: c.secondaryContainer, color: c.onSecondaryContainer }),
+            }}
+          >
+            {item.icon}
+          </Box>
+        </Tooltip>
+      ))}
+    </Box>
   );
 }
 
@@ -224,12 +317,16 @@ function MediaTileImpl({ file, selected, selecting, hidden, fresh, compact, onOp
     else onOpen(file, frameRef.current);
   };
 
-  const name = file.filename;
+  const name = displayName(file);
   const meta = (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, opacity: 0.88 }}>
       <span>{formatBytes(file.sizeBytes)}</span>
       <span>{relativeFromServer(file.date)}</span>
-      <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.4 }} aria-label={`${file.views} Aufrufe`}>
+      <Box
+        component="span"
+        sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.4 }}
+        aria-label={t('{count} Aufrufe', { count: file.views })}
+      >
         <VisibilityOutlined sx={{ fontSize: 13 }} />
         {formatNumber(file.views)}
       </Box>
@@ -259,7 +356,9 @@ function MediaTileImpl({ file, selected, selecting, hidden, fresh, compact, onOp
       }}
     >
       <ButtonBase
-        aria-label={selecting ? `${name} ${selected ? 'abwählen' : 'auswählen'}` : `${name} öffnen`}
+        aria-label={
+          selecting ? (selected ? t('{name} abwählen', { name }) : t('{name} auswählen', { name })) : t('{name} öffnen', { name })
+        }
         aria-pressed={selecting ? selected : undefined}
         onClick={onClick}
         onContextMenu={(event) => {
@@ -299,8 +398,11 @@ function MediaTileImpl({ file, selected, selecting, hidden, fresh, compact, onOp
           {visual && <MediaImage file={file} />}
           {file.type === 'audio' && <AudioArt file={file} compact={compact} />}
           {file.type === 'file' && <FileArt file={file} compact={compact} />}
+          {file.type === 'text' && <TextArt file={file} compact={compact} />}
         </Box>
       </ButtonBase>
+
+      {!selecting && <StatusBadges file={file} compact={compact} onMedia={visual} />}
 
       {file.type === 'audio' && !selecting && <AudioPlayButton file={file} compact={compact} />}
 
@@ -375,11 +477,11 @@ function MediaTileImpl({ file, selected, selecting, hidden, fresh, compact, onOp
         className={selecting || selected ? undefined : 'tile-ui'}
         sx={{ position: 'absolute', top: compact ? 4 : 6, left: compact ? 4 : 6, zIndex: 2 }}
       >
-        <Tooltip title={selected ? 'Abwählen' : 'Auswählen'}>
+        <Tooltip title={selected ? t('Abwählen') : t('Auswählen')}>
           <IconButton
             role="checkbox"
             aria-checked={selected}
-            aria-label={selected ? `${name} abwählen` : `${name} auswählen`}
+            aria-label={selected ? t('{name} abwählen', { name }) : t('{name} auswählen', { name })}
             size="small"
             onClick={(event) => {
               event.stopPropagation();
@@ -416,14 +518,14 @@ function MediaTileImpl({ file, selected, selecting, hidden, fresh, compact, onOp
         >
           <CopyIconButton
             value={file.urls.view}
-            label="Link kopieren"
-            message="Link kopiert"
+            label={t('Link kopieren')}
+            message={t('Link kopiert')}
             size="small"
             sx={{ width: 32, height: 32, fontSize: 18, ...(visual ? glass : surfaceButton) }}
           />
-          <Tooltip title="Mehr">
+          <Tooltip title={t('Mehr')}>
             <IconButton
-              aria-label={`Aktionen für ${name}`}
+              aria-label={t('Aktionen für {name}', { name })}
               aria-haspopup="menu"
               size="small"
               onClick={(event) => {

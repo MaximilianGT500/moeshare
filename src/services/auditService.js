@@ -4,6 +4,7 @@ const db = require('../lib/db');
 const logger = require('../lib/logger');
 const settings = require('./settingsService');
 const { storedIp, deviceLabel } = require('../lib/request');
+const { translate } = require('../lib/i18n');
 
 const events = logger.scope('audit');
 
@@ -41,6 +42,16 @@ const EVENTS = {
   settings_updated: 'Einstellungen geändert',
   file_deleted: 'Datei eines anderen Kontos gelöscht',
   embed_updated: 'Embed geändert',
+  design_updated: 'Design der Vorschauseite geändert',
+  email_changed: 'E-Mail-Adresse bestätigt',
+  email_removed: 'E-Mail-Adresse entfernt',
+  domain_added: 'Domain eingetragen',
+  domain_verified: 'Domain bestätigt',
+  domain_removed: 'Domain entfernt',
+  domain_revoked: 'Domain eines Kontos entfernt',
+  report_resolved: 'Meldung bearbeitet',
+  content_blocked: 'Inhalt gesperrt',
+  content_unblocked: 'Inhalt freigegeben',
 };
 
 const WARNINGS = new Set(['login_failed', 'account_locked', 'reauth_failed', 'recovery_code_used']);
@@ -80,11 +91,13 @@ function log(action, { userId = null, actorId, req = null, details = {} } = {}) 
     .catch((error) => events.error('Aktivität konnte nicht protokolliert werden', { action, error }));
 }
 
-const parse = (row) => {
+const parse = (row, language) => {
   let details = {};
   try {
     details = row.details ? JSON.parse(row.details) : {};
   } catch {}
+  if (language && typeof details.device === 'string') details.device = translate(language, details.device);
+  if (language && row.action.startsWith('passkey_') && typeof details.name === 'string') details.name = translate(language, details.name);
   return {
     id: row.id,
     at: row.at,
@@ -96,7 +109,7 @@ const parse = (row) => {
   };
 };
 
-async function list({ userId = null, limit = 50, before = null, actions = null } = {}) {
+async function list({ userId = null, limit = 50, before = null, actions = null, language = null } = {}) {
   const where = [];
   const params = [];
   if (userId) {
@@ -121,7 +134,7 @@ async function list({ userId = null, limit = 50, before = null, actions = null }
      LIMIT ?`,
     [...params, Math.min(Math.max(parseInt(limit, 10) || 50, 1), 200)]
   );
-  return rows.map(parse);
+  return rows.map((row) => parse(row, language));
 }
 
 async function prune() {

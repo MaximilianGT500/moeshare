@@ -1,1 +1,0 @@
-import{Cn as e,En as t,bn as n,sr as r}from"./chunk-DRNXrId1.js";function i(e){return r(e)&&`ownerSVGElement`in e}function a(r,i,a){let o=n(r)?r:t(r);return o.start(e(``,o,i,a)),o.animation}export{i as n,a as t};

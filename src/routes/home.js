@@ -1,8 +1,11 @@
 'use strict';
 
 const express = require('express');
+const { tr } = require('../lib/i18n');
 const config = require('../config');
-const { notFound } = require('../lib/errors');
+const { badRequest, notFound } = require('../lib/errors');
+const { sameOriginOnly } = require('../middleware/auth');
+const preferences = require('../services/preferenceService');
 const { escapeHtml } = require('../lib/format');
 const { renderPage, LEGAL_PAGES } = require('../lib/render');
 const settings = require('../services/settingsService');
@@ -17,20 +20,20 @@ router.get('/', async (req, res) => {
     return res.redirect(settings.get('site.redirectUrl') || (req.user ? '/dashboard' : '/login'));
   }
   const meta = (key, value) => `<meta ${key} content="${escapeHtml(value)}" />`;
-  const text = settings.get('home.text');
+  const text = tr(req, settings.get('home.text'));
   const head = [
     meta('property="og:title"', settings.get('home.headline') || settings.get('site.title')),
     text && meta('property="og:description"', text),
     text && meta('name="description"', text),
     meta('property="og:type"', 'website'),
-    meta('property="og:locale"', 'de_DE'),
+    meta('property="og:locale"', req.language === 'en' ? 'en_GB' : 'de_DE'),
     meta('name="theme-color"', settings.get('site.uiColor')),
   ].filter(Boolean);
   return renderPage(res, {
     page: 'home',
     head: head.join('\n  '),
     data: {
-      home: home.options(),
+      home: { ...home.options(), text },
       stats: await home.publicStats(),
       user: req.user ? { username: req.user.username } : null,
       registration: settings.get('auth.registration') === 'open',
@@ -44,7 +47,7 @@ for (const { key, label, path } of LEGAL_PAGES) {
     const url = settings.get(`legal.${key}Url`);
     if (url && url !== path) return res.redirect(url);
     if (!text) return next();
-    return renderPage(res, { page: 'legal', title: label, data: { legal: { title: label, text } } });
+    return renderPage(res, { page: 'legal', title: label, data: { legal: { title: tr(req, label), text } } });
   });
 }
 
@@ -68,6 +71,14 @@ router.get('/favicon.svg', (req, res) => {
       `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="32" fill="${color}"/>` +
         `<text x="32" y="43" font-family="system-ui, sans-serif" font-size="32" font-weight="800" text-anchor="middle" fill="${readableOn(color)}">${letter}</text></svg>`
     );
+});
+
+router.post('/api/language', sameOriginOnly, async (req, res) => {
+  const language = req.body && req.body.language;
+  if (!['de', 'en'].includes(language)) throw badRequest('Diese Sprache gibt es nicht.');
+  res.cookie('ms_lang', language, { path: '/', sameSite: 'lax', maxAge: 365 * 24 * 60 * 60 * 1000 });
+  if (req.user) await preferences.update(req.user.id, { language });
+  res.json({ ok: true, language });
 });
 
 router.get('/healthz', (req, res) => res.json({ status: 'ok', version: config.version, uptime: Math.round(process.uptime()) }));

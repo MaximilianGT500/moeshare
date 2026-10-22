@@ -3,6 +3,7 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import { formatBytes } from '../lib/format';
 import { c, ease, radius } from '../theme/tokens';
+import { t } from '../lib/i18n';
 
 export function QuotaMeter({
   usedBytes,
@@ -16,7 +17,7 @@ export function QuotaMeter({
   if (!quotaBytes) {
     return (
       <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-        {formatBytes(usedBytes)} belegt, kein Speicherlimit
+        {t('{usedBytes} belegt, kein Speicherlimit', { usedBytes: formatBytes(usedBytes) })}
       </Typography>
     );
   }
@@ -31,18 +32,18 @@ export function QuotaMeter({
             {formatBytes(usedBytes)}
           </Box>{' '}
           <Box component="span" sx={{ color: 'text.secondary' }}>
-            von {formatBytes(quotaBytes)}
+            {t('von {quotaBytes}', { quotaBytes: formatBytes(quotaBytes) })}
           </Box>
         </Typography>
         {!compact && (
           <Typography variant="caption" sx={{ color: share >= 0.8 ? color : 'text.secondary', fontWeight: share >= 0.8 ? 700 : 400 }}>
-            {share >= 0.95 ? 'Fast voll' : usedBytes > 0 && percent === 0 ? 'unter 1 %' : `${percent} %`}
+            {share >= 0.95 ? t('Fast voll') : usedBytes > 0 && percent === 0 ? t('unter 1 %') : `${percent} %`}
           </Typography>
         )}
       </Box>
       <Box
         role="meter"
-        aria-label="Speicher belegt"
+        aria-label={t('Speicher belegt')}
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={percent}

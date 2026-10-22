@@ -24,9 +24,14 @@ import { CopyTextButton } from '../../components/CopyButton';
 import { GrowTransition, SlideUpTransition } from '../../components/transitions';
 import { isCancelled, useSudo } from '../../components/Sudo';
 import { c, ease, fonts, radius } from '../../theme/tokens';
+import { t } from '../../lib/i18n';
 
 function RecoveryCodes({ codes, siteTitle, username }: { codes: string[]; siteTitle: string; username: string }) {
-  const text = `${siteTitle} – Wiederherstellungscodes für ${username}\n\n${codes.join('\n')}\n\nJeder Code funktioniert genau einmal.\n`;
+  const text = t('{siteTitle} – Wiederherstellungscodes für {username}\n\n{codes}\n\nJeder Code funktioniert genau einmal.\n', {
+    siteTitle,
+    username,
+    codes: codes.join('\n'),
+  });
   return (
     <Box>
       <Box
@@ -55,12 +60,12 @@ function RecoveryCodes({ codes, siteTitle, username }: { codes: string[]; siteTi
       <Box sx={{ display: 'flex', gap: 1, mt: 1.5, flexWrap: 'wrap' }}>
         <CopyTextButton
           value={codes.join('\n')}
-          message="Codes kopiert"
+          message={t('Codes kopiert')}
           icon={<ContentCopyRounded fontSize="inherit" />}
           variant="tonal"
           size="small"
         >
-          Kopieren
+          {t('Kopieren')}
         </CopyTextButton>
         <Button
           variant="tonal"
@@ -68,7 +73,7 @@ function RecoveryCodes({ codes, siteTitle, username }: { codes: string[]; siteTi
           startIcon={<DownloadRounded />}
           onClick={() => downloadText(`${siteTitle}-wiederherstellungscodes.txt`.replace(/\s+/g, '-'), text, 'text/plain')}
         >
-          Als Datei speichern
+          {t('Als Datei speichern')}
         </Button>
       </Box>
     </Box>
@@ -138,9 +143,9 @@ export function TotpSetupDialog({
 
   const closable = step !== 'codes' || saved;
   const titles: Record<Step, string> = {
-    scan: 'Authenticator-App verbinden',
-    verify: 'Code bestätigen',
-    codes: 'Wiederherstellungscodes sichern',
+    scan: t('Authenticator-App verbinden'),
+    verify: t('Code bestätigen'),
+    codes: t('Wiederherstellungscodes sichern'),
   };
 
   return (
@@ -156,7 +161,7 @@ export function TotpSetupDialog({
       <DialogTitle id="totp-title">{titles[step]}</DialogTitle>
       <DialogContent>
         <Typography variant="caption" component="p" sx={{ color: 'text.secondary', mb: 2 }}>
-          Schritt {step === 'scan' ? 1 : step === 'verify' ? 2 : 3} von 3
+          {t('Schritt {step} von {total}', { step: step === 'scan' ? 1 : step === 'verify' ? 2 : 3, total: 3 })}
         </Typography>
         <AnimatePresence mode="wait" initial={false}>
           <m.div
@@ -169,13 +174,15 @@ export function TotpSetupDialog({
             {step === 'scan' && (
               <Stack spacing={2}>
                 <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                  Scanne den Code mit einer Authenticator-App, zum Beispiel Aegis, 2FAS, Google Authenticator oder deinem Passwortmanager.
+                  {t(
+                    'Scanne den Code mit einer Authenticator-App, zum Beispiel Aegis, 2FAS, Google Authenticator oder deinem Passwortmanager.'
+                  )}
                 </Typography>
                 <Box sx={{ display: 'grid', placeItems: 'center', py: 1 }}>
                   {setup ? (
                     <Box
                       role="img"
-                      aria-label="QR-Code für die Authenticator-App"
+                      aria-label={t('QR-Code für die Authenticator-App')}
                       sx={{
                         width: 208,
                         height: 208,
@@ -196,11 +203,11 @@ export function TotpSetupDialog({
                   <Box sx={{ textAlign: 'center' }}>
                     {phone && (
                       <Button variant="tonal" href={setup.uri} sx={{ mb: 1.5 }} fullWidth>
-                        In der App auf diesem Gerät öffnen
+                        {t('In der App auf diesem Gerät öffnen')}
                       </Button>
                     )}
                     <Link component="button" type="button" variant="body2" underline="hover" onClick={() => setShowKey((v) => !v)}>
-                      {showKey ? 'Schlüssel ausblenden' : 'Kein Scanner? Schlüssel anzeigen'}
+                      {showKey ? t('Schlüssel ausblenden') : t('Kein Scanner? Schlüssel anzeigen')}
                     </Link>
                     <Collapse in={showKey}>
                       <Box
@@ -219,12 +226,12 @@ export function TotpSetupDialog({
                       </Box>
                       <CopyTextButton
                         value={setup.secret.replace(/\s/g, '')}
-                        message="Schlüssel kopiert"
+                        message={t('Schlüssel kopiert')}
                         icon={<ContentCopyRounded fontSize="inherit" />}
                         size="small"
                         sx={{ mt: 1 }}
                       >
-                        Schlüssel kopieren
+                        {t('Schlüssel kopieren')}
                       </CopyTextButton>
                     </Collapse>
                   </Box>
@@ -234,7 +241,7 @@ export function TotpSetupDialog({
             {step === 'verify' && (
               <Stack spacing={2}>
                 <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                  Gib den 6-stelligen Code ein, den die App jetzt für {siteTitle} anzeigt.
+                  {t('Gib den 6-stelligen Code ein, den die App jetzt für {siteTitle} anzeigt.', { siteTitle })}
                 </Typography>
                 <OtpInput value={code} onChange={setCode} onComplete={verify} disabled={busy} error={!!error} autoFocus />
               </Stack>
@@ -242,13 +249,14 @@ export function TotpSetupDialog({
             {step === 'codes' && (
               <Stack spacing={2}>
                 <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                  Fertig, die Zwei-Faktor-Anmeldung ist aktiv. Mit diesen Codes kommst du in dein Konto, falls du dein Handy verlierst.
-                  Jeder Code funktioniert einmal.
+                  {t(
+                    'Fertig, die Zwei-Faktor-Anmeldung ist aktiv. Mit diesen Codes kommst du in dein Konto, falls du dein Handy verlierst. Jeder Code funktioniert einmal.'
+                  )}
                 </Typography>
                 <RecoveryCodes codes={codes} siteTitle={siteTitle} username={username} />
                 <FormControlLabel
                   control={<Checkbox checked={saved} onChange={(event) => setSaved(event.target.checked)} />}
-                  label="Ich habe die Codes sicher gespeichert"
+                  label={t('Ich habe die Codes sicher gespeichert')}
                 />
               </Stack>
             )}
@@ -263,16 +271,16 @@ export function TotpSetupDialog({
       <DialogActions>
         {step === 'scan' && (
           <>
-            <Button onClick={onClose}>Abbrechen</Button>
+            <Button onClick={onClose}>{t('Abbrechen')}</Button>
             <Button variant="contained" disabled={!setup} onClick={() => setStep('verify')}>
-              Weiter
+              {t('Weiter')}
             </Button>
           </>
         )}
         {step === 'verify' && (
           <>
             <Button onClick={() => setStep('scan')} disabled={busy}>
-              Zurück
+              {t('Zurück')}
             </Button>
             <Button
               variant="contained"
@@ -280,13 +288,13 @@ export function TotpSetupDialog({
               onClick={() => verify(code)}
               startIcon={busy ? <CircularProgress size={16} color="inherit" /> : null}
             >
-              Aktivieren
+              {t('Aktivieren')}
             </Button>
           </>
         )}
         {step === 'codes' && (
           <Button variant="contained" disabled={!saved} onClick={onClose}>
-            Fertig
+            {t('Fertig')}
           </Button>
         )}
       </DialogActions>
@@ -316,21 +324,21 @@ export function RecoveryCodesDialog({
       slots={{ transition: GrowTransition }}
       aria-labelledby="codes-title"
     >
-      <DialogTitle id="codes-title">Neue Wiederherstellungscodes</DialogTitle>
+      <DialogTitle id="codes-title">{t('Neue Wiederherstellungscodes')}</DialogTitle>
       <DialogContent>
         <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
-          Die alten Codes gelten nicht mehr. Speichere die neuen an einem sicheren Ort.
+          {t('Die alten Codes gelten nicht mehr. Speichere die neuen an einem sicheren Ort.')}
         </Typography>
         {codes && <RecoveryCodes codes={codes} siteTitle={siteTitle} username={username} />}
         <FormControlLabel
           sx={{ mt: 1 }}
           control={<Checkbox checked={saved} onChange={(event) => setSaved(event.target.checked)} />}
-          label="Ich habe die Codes sicher gespeichert"
+          label={t('Ich habe die Codes sicher gespeichert')}
         />
       </DialogContent>
       <DialogActions>
         <Button variant="contained" disabled={!saved} onClick={onClose}>
-          Fertig
+          {t('Fertig')}
         </Button>
       </DialogActions>
     </Dialog>

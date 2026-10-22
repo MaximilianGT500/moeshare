@@ -7,6 +7,7 @@ import Switch from '@mui/material/Switch';
 import Typography from '@mui/material/Typography';
 import { RAIL_WIDTH } from './AppShell';
 import { c, ease, elevation, radius } from '../theme/tokens';
+import { t } from '../lib/i18n';
 
 export function SettingsSection({
   id,
@@ -158,7 +159,7 @@ export function SaveBar({
   busy,
   onSave,
   onReset,
-  label = 'Speichern',
+  label = t('Speichern'),
   bottomNav = true,
 }: {
   count: number;
@@ -192,7 +193,7 @@ export function SaveBar({
           >
             <Box
               role="region"
-              aria-label="Ungespeicherte Änderungen"
+              aria-label={t('Ungespeicherte Änderungen')}
               sx={{
                 display: 'flex',
                 alignItems: 'center',
@@ -207,10 +208,10 @@ export function SaveBar({
               }}
             >
               <Typography variant="body2" sx={{ flex: 1, color: 'inherit', fontWeight: 500 }}>
-                {count === 1 ? '1 ungespeicherte Änderung' : `${count} ungespeicherte Änderungen`}
+                {count === 1 ? t('1 ungespeicherte Änderung') : t('{count} ungespeicherte Änderungen', { count })}
               </Typography>
               <Button onClick={onReset} disabled={busy} sx={{ color: 'inherit', opacity: 0.85 }}>
-                Verwerfen
+                {t('Verwerfen')}
               </Button>
               <Button
                 variant="contained"

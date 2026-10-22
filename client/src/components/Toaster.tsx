@@ -9,6 +9,7 @@ import ErrorRounded from '@mui/icons-material/ErrorRounded';
 import InfoRounded from '@mui/icons-material/InfoRounded';
 import CloseRounded from '@mui/icons-material/CloseRounded';
 import { c, ease, elevation, radius } from '../theme/tokens';
+import { t } from '../lib/i18n';
 
 type ToastVariant = 'success' | 'error' | 'info';
 
@@ -42,7 +43,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const timers = useRef(new Map<number, number>());
 
   const dismiss = useCallback((id: number) => {
-    setToasts((list) => list.filter((t) => t.id !== id));
+    setToasts((list) => list.filter((entry) => entry.id !== id));
     const timer = timers.current.get(id);
     if (timer) window.clearTimeout(timer);
     timers.current.delete(id);
@@ -59,7 +60,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         action: options.action,
       };
       setToasts((list) => {
-        const filtered = list.filter((t) => t.message !== message);
+        const filtered = list.filter((entry) => entry.message !== message);
         return [...filtered, entry].slice(-3);
       });
       timers.current.set(
@@ -91,9 +92,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         }}
       >
         <AnimatePresence initial={false}>
-          {toasts.map((t) => (
+          {toasts.map((item) => (
             <m.div
-              key={t.id}
+              key={item.id}
               layout
               initial={{ opacity: 0, y: 24, scale: 0.96 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -102,7 +103,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               style={{ pointerEvents: 'auto' }}
             >
               <Box
-                role={t.variant === 'error' ? 'alert' : 'status'}
+                role={item.variant === 'error' ? 'alert' : 'status'}
                 sx={{
                   display: 'flex',
                   alignItems: 'center',
@@ -118,26 +119,26 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                   boxShadow: elevation[3],
                 }}
               >
-                {ICONS[t.variant]}
+                {ICONS[item.variant]}
                 <Typography variant="body2" sx={{ flex: 1, py: 0.5, color: 'inherit' }}>
-                  {t.message}
+                  {item.message}
                 </Typography>
-                {t.action && (
+                {item.action && (
                   <Button
                     size="small"
                     onClick={() => {
-                      t.action?.onClick();
-                      dismiss(t.id);
+                      item.action?.onClick();
+                      dismiss(item.id);
                     }}
                     sx={{ color: c.inversePrimary, fontWeight: 700 }}
                   >
-                    {t.action.label}
+                    {item.action.label}
                   </Button>
                 )}
                 <IconButton
                   size="small"
-                  aria-label="Meldung schließen"
-                  onClick={() => dismiss(t.id)}
+                  aria-label={t('Meldung schließen')}
+                  onClick={() => dismiss(item.id)}
                   sx={{ color: 'inherit', opacity: 0.8 }}
                 >
                   <CloseRounded fontSize="small" />

@@ -5,6 +5,7 @@ const config = require('../config');
 const errorReports = require('../lib/errorReports');
 const logger = require('../lib/logger');
 const { badRequest, conflict, notFound } = require('../lib/errors');
+const { tr } = require('../lib/i18n');
 const { greeting } = require('../lib/format');
 const { integer, text } = require('../lib/input');
 const { renderPage } = require('../lib/render');
@@ -25,6 +26,15 @@ const identities = require('../services/identityService');
 const home = require('../services/homeService');
 const viewer = require('../services/viewerService');
 const webhook = require('../services/webhookService');
+const storage = require('../services/storageService');
+const backups = require('../services/backupService');
+const domains = require('../services/domainService');
+const reports = require('../services/reportService');
+const emails = require('../services/emailService');
+const mail = require('../services/mailService');
+const db = require('../lib/db');
+const media = require('../lib/media');
+const { counts: tableCounts } = require('../lib/db/transfer');
 
 const router = express.Router();
 const admin = requireApi({ admin: true });
@@ -48,6 +58,11 @@ const AUDIT_CATEGORIES = {
     'discord_unlinked',
     'identity_linked',
     'identity_unlinked',
+    'email_changed',
+    'email_removed',
+    'domain_added',
+    'domain_verified',
+    'domain_removed',
   ],
   admin: [
     'user_created',
@@ -62,14 +77,49 @@ const AUDIT_CATEGORIES = {
     'settings_updated',
     'file_deleted',
     'embed_updated',
+    'design_updated',
+    'report_resolved',
+    'content_blocked',
+    'content_unblocked',
+    'domain_revoked',
   ],
 };
 
-const settingsPayload = () => ({
+const LOCALIZED_DEFAULTS = ['home.text'];
+
+const settingsPayload = (req) => ({
   ...settings.forAdmin(),
+  localizedDefaults: Object.fromEntries(
+    LOCALIZED_DEFAULTS.map((key) => {
+      const value = settings.defaultFor(key);
+      return [key, { value, localized: tr(req, value) }];
+    })
+  ),
   redirectUris: oauth.redirectUris(),
   environment: { port: config.port, logLevel: logger.level, logFormat: logger.format, errorReports: errorReports.destination() },
 });
+
+async function databaseInfo() {
+  const info = await db.info();
+  return { ...info, tables: await tableCounts(db) };
+}
+
+let migration = null;
+
+async function storageInfo() {
+  return {
+    driver: storage.activeDriver(),
+    configured: storage.configured(),
+    counts: await storage.counts(),
+    migration: migration ? { ...migration } : null,
+    ffmpeg: media.ffmpegVersion,
+  };
+}
+
+async function backupInfo() {
+  const [items, status] = await Promise.all([backups.list().catch((error) => ({ error: error.message })), backups.status()]);
+  return Array.isArray(items) ? { items, ...status } : { items: [], listError: items.error, ...status };
+}
 
 async function targetUser(req) {
   const row = await users.findById(integer(req.params.id));
@@ -77,35 +127,145 @@ async function targetUser(req) {
   return row;
 }
 
+const domainList = async (req) => (await domains.listAll()).map((item) => ({ ...item, error: item.error ? tr(req, item.error) : null }));
+
 router.get('/admin', requirePage({ admin: true }), async (req, res) => {
-  const [stats, userStats, userList, fileList, inviteList, events, sudo, homeStats] = await Promise.all([
+  const [
+    stats,
+    userStats,
+    userList,
+    fileList,
+    inviteList,
+    events,
+    sudo,
+    homeStats,
+    database,
+    storageState,
+    backupState,
+    openReports,
+    domainItems,
+  ] = await Promise.all([
     files.globalStats(),
     files.userStats(req.user.username),
     users.listForAdmin(),
     files.listAll({ page: 1, limit: 25 }),
     invites.list(),
-    audit.list({ limit: 40 }),
+    audit.list({ limit: 40, language: req.language }),
     viewer.confirmMethods(req.user),
     home.allStats(),
+    databaseInfo(),
+    storageInfo(),
+    backupInfo(),
+    reports.openCount(),
+    domainList(req),
   ]);
   renderPage(res, {
     page: 'admin',
     title: 'Admin',
     data: {
       user: viewer.summary(req.user),
-      greeting: greeting(),
+      greeting: tr(req, greeting()),
       stats,
       userStats,
       system: systemInfo(),
       users: userList,
       files: fileList,
       invites: inviteList,
-      settings: settingsPayload(),
+      settings: settingsPayload(req),
       audit: events,
       sudo,
       homeStats,
+      database,
+      storage: storageState,
+      backups: backupState,
+      moderation: { open: openReports, enabled: reports.enabled() },
+      domains: domainItems,
+      mail: { ready: mail.ready() },
     },
   });
+});
+
+router.get('/api/admin/database', admin, async (req, res) => {
+  res.json(await databaseInfo());
+});
+
+router.get('/api/admin/storage', admin, async (req, res) => {
+  res.json(await storageInfo());
+});
+
+router.post('/api/admin/storage/test', admin, async (req, res) => {
+  const body = req.body || {};
+  const overrides = {};
+  const patch = {};
+  for (const [field, key] of [
+    ['endpoint', 'storage.s3.endpoint'],
+    ['region', 'storage.s3.region'],
+    ['bucket', 'storage.s3.bucket'],
+    ['accessKeyId', 'storage.s3.accessKeyId'],
+    ['secretAccessKey', 'storage.s3.secretAccessKey'],
+    ['prefix', 'storage.s3.prefix'],
+    ['pathStyle', 'storage.s3.pathStyle'],
+  ]) {
+    if (body[field] !== undefined && body[field] !== '') patch[key] = body[field];
+  }
+  const valid = settings.validatePatch(patch);
+  const map = {
+    'storage.s3.endpoint': 'endpoint',
+    'storage.s3.region': 'region',
+    'storage.s3.bucket': 'bucket',
+    'storage.s3.accessKeyId': 'accessKeyId',
+    'storage.s3.secretAccessKey': 'secretAccessKey',
+    'storage.s3.prefix': 'prefix',
+    'storage.s3.pathStyle': 'forcePathStyle',
+  };
+  for (const [key, value] of Object.entries(valid)) overrides[map[key]] = value === '' ? undefined : value;
+  try {
+    res.json(await storage.testConnection(overrides));
+  } catch (error) {
+    throw badRequest(error.message || 'Die Verbindung zu S3 ist fehlgeschlagen.');
+  }
+});
+
+router.post('/api/admin/storage/migrate', adminSudo, async (req, res) => {
+  const to = req.body && req.body.to;
+  if (!['local', 's3'].includes(to)) throw badRequest('Unbekannter Speicherort.');
+  if (!storage.configured()) throw badRequest('Richte zuerst S3 ein und speichere die Einstellungen.');
+  if (migration && !migration.finishedAt) throw conflict('Es werden gerade schon Dateien verschoben.');
+  migration = { to, startedAt: Date.now(), total: null, done: 0, moved: 0, failed: 0, missing: 0, finishedAt: null, error: null };
+  audit.log('settings_updated', { userId: null, actorId: req.user.id, req, details: { keys: [`storage.migrate:${to}`] } });
+  storage
+    .migrate(to, { onProgress: (progress) => Object.assign(migration, progress) })
+    .then((result) => Object.assign(migration, result, { finishedAt: Date.now() }))
+    .catch((error) => Object.assign(migration, { error: error.message, finishedAt: Date.now() }));
+  res.status(202).json({ ok: true, migration });
+});
+
+router.get('/api/admin/backups', admin, async (req, res) => {
+  res.json(await backupInfo());
+});
+
+router.post('/api/admin/backups', adminSudo, async (req, res) => {
+  if (backups.isRunning()) throw conflict('Es läuft schon eine Sicherung.');
+  const includeUploads =
+    req.body && typeof req.body.includeUploads === 'boolean' ? req.body.includeUploads : settings.get('backup.includeUploads');
+  backups.create({ includeUploads, reason: 'manual', actor: req.user.username }).catch(() => {});
+  res.status(202).json({ ok: true, ...(await backups.status()) });
+});
+
+router.get('/api/admin/backups/:name/download', adminSudo, async (req, res) => {
+  const location = req.query.location === 's3' ? 's3' : 'local';
+  if (req.query.probe) {
+    const items = await backups.list();
+    if (!items.some((item) => item.name === req.params.name && item.location === location))
+      throw notFound('Diese Sicherung gibt es nicht mehr.');
+    return res.json({ ok: true });
+  }
+  return backups.send(res, req.params.name, location);
+});
+
+router.delete('/api/admin/backups/:name', adminSudo, async (req, res) => {
+  await backups.remove(req.params.name, req.query.location === 's3' ? 's3' : 'local');
+  res.json({ ok: true, ...(await backupInfo()) });
 });
 
 router.get('/api/admin/stats', admin, async (req, res) => {
@@ -117,22 +277,60 @@ router.get('/api/admin/system', admin, (req, res) => {
 });
 
 router.get('/api/admin/files', admin, async (req, res) => {
-  res.json(await files.listAll({ search: text(req.query.search, 200), page: req.query.page, limit: req.query.limit }));
+  res.json(
+    await files.listAll({
+      search: text(req.query.search, 200),
+      page: req.query.page,
+      limit: req.query.limit,
+      trash: req.query.trash === '1',
+    })
+  );
 });
 
 router.delete('/api/admin/files/:username/:filename', admin, async (req, res) => {
   const { username, filename } = req.params;
   if (!isValidUsername(username)) throw badRequest('Ungültiger Benutzername.');
-  await files.remove(username, filename);
+  const permanent = req.query.permanent === '1';
+  const { trashed } = await files.remove(username, filename, { actorId: req.user.id, permanent });
   if (username !== req.user.username) {
-    audit.log('file_deleted', { userId: null, actorId: req.user.id, req, details: { owner: username, filename } });
+    audit.log('file_deleted', { userId: null, actorId: req.user.id, req, details: { owner: username, filename, trash: trashed } });
   }
   webhook.notify(
     'delete',
-    'Eine Datei wurde gelöscht',
+    trashed ? 'Eine Datei wurde in den Papierkorb gelegt' : 'Eine Datei wurde gelöscht',
     `Nutzername: **${username}**\nDatei: **${filename}**\nGelöscht von: **${req.user.username}**`
   );
+  res.json({ ok: true, trashed });
+});
+
+async function trashedRecord(req) {
+  const record = await files.findById(integer(req.params.id));
+  if (!record || !record.deleted_at) throw notFound('Diese Datei liegt nicht (mehr) im Papierkorb.');
+  return record;
+}
+
+router.post('/api/admin/trash/:id/restore', admin, async (req, res) => {
+  const record = await files.restore(await trashedRecord(req));
+  res.json({ ok: true, file: files.toFile(record) });
+});
+
+router.delete('/api/admin/trash/:id', admin, async (req, res) => {
+  const record = await trashedRecord(req);
+  await files.removeRecord(record, 'trash');
+  if (record.username !== req.user.username) {
+    audit.log('file_deleted', { userId: null, actorId: req.user.id, req, details: { owner: record.username, filename: record.filename } });
+  }
   res.json({ ok: true });
+});
+
+router.get('/api/admin/domains', admin, async (req, res) => {
+  res.json({ domains: await domainList(req) });
+});
+
+router.delete('/api/admin/domains/:id', admin, async (req, res) => {
+  const removed = await domains.removeAny(req.params.id);
+  audit.log('domain_revoked', { userId: removed.userId, actorId: req.user.id, req, details: { domain: removed.domain } });
+  res.json({ ok: true, domains: await domainList(req) });
 });
 
 router.get('/api/admin/users', admin, async (req, res) => {
@@ -166,9 +364,15 @@ router.get('/api/admin/users/:id', admin, async (req, res) => {
     sessions.listForUser(row.id, req.session.id),
     tokens.listForUser(row.id),
     passkeys.listForUser(row.id),
-    audit.list({ userId: row.id, limit: 30 }),
+    audit.list({ userId: row.id, limit: 30, language: req.language }),
   ]);
-  res.json({ user, sessions: sessionList, tokens: tokenList, passkeys: passkeyList, activity });
+  res.json({
+    user,
+    sessions: sessionList.map((session) => ({ ...session, device: tr(req, session.device) })),
+    tokens: tokenList,
+    passkeys: passkeyList.map((passkey) => ({ ...passkey, name: tr(req, passkey.name) })),
+    activity,
+  });
 });
 
 function auditActionFor(changes) {
@@ -269,9 +473,20 @@ router.delete('/api/admin/users/:id', adminSudo, async (req, res) => {
 
 router.post('/api/admin/invites', admin, async (req, res) => {
   if (req.body.role === 'admin') assertRecentAuth(req);
+  const address = text(req.body.email, 191).trim();
+  if (address) emails.normalizeEmail(address);
   const invite = await invites.create(req.user.id, req.body);
   audit.log('invite_created', { userId: null, actorId: req.user.id, req, details: { role: invite.role, code: invite.code.slice(0, 4) } });
-  res.json({ ok: true, invite });
+  let sent = null;
+  let mailError = null;
+  if (address) {
+    try {
+      sent = await emails.sendInvite(address, invite, req.user.username, req.language);
+    } catch (error) {
+      mailError = tr(req, error.message);
+    }
+  }
+  res.json({ ok: true, invite, sent, mailError });
 });
 
 router.delete('/api/admin/invites/:code', admin, async (req, res) => {
@@ -286,7 +501,7 @@ router.patch('/api/admin/settings', adminSudo, async (req, res) => {
     audit.log('settings_updated', { userId: null, actorId: req.user.id, req, details: { keys: changed } });
     webhook.notify('security', 'Einstellungen geändert', `**${req.user.username}** hat geändert: ${changed.join(', ')}`);
   }
-  res.json({ ok: true, changed, ...settingsPayload() });
+  res.json({ ok: true, changed, ...settingsPayload(req) });
 });
 
 router.post('/api/admin/settings/webhook-test', admin, async (req, res) => {
@@ -297,12 +512,25 @@ router.post('/api/admin/settings/webhook-test', admin, async (req, res) => {
   res.json({ ok: true });
 });
 
+router.post('/api/admin/settings/mail-test', admin, async (req, res) => {
+  const row = await users.findById(req.user.id);
+  const to = text(req.body.to, 191).trim() || (row && row.email_verified_at ? row.email : '');
+  if (!to) throw badRequest('Gib eine Adresse für die Testnachricht ein.', { field: 'to' });
+  emails.normalizeEmail(to);
+  try {
+    res.json({ ok: true, to, ...(await mail.test(to, req.language)) });
+  } catch (error) {
+    throw badRequest(tr(req, 'Der Versand ist fehlgeschlagen: {reason}', { reason: tr(req, error.message) }));
+  }
+});
+
 router.get('/api/admin/audit', admin, async (req, res) => {
   const events = await audit.list({
     userId: integer(req.query.userId),
     before: integer(req.query.before),
     limit: 40,
     actions: AUDIT_CATEGORIES[text(req.query.category, 20)] || null,
+    language: req.language,
   });
   res.json({ events });
 });

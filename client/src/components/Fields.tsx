@@ -7,6 +7,7 @@ import MenuItem from '@mui/material/MenuItem';
 import Switch from '@mui/material/Switch';
 import TextField from '@mui/material/TextField';
 import { c, fonts, radius } from '../theme/tokens';
+import { t } from '../lib/i18n';
 
 const UNITS = [
   { key: 'MB', factor: 1024 ** 2 },
@@ -28,7 +29,7 @@ export function BytesField({
   label,
   value,
   onChange,
-  nullLabel = 'Unbegrenzt',
+  nullLabel = t('Unbegrenzt'),
   error,
   helperText,
   disabled,
@@ -94,7 +95,7 @@ export function BytesField({
             setUnit(next);
             emit(amount, next);
           }}
-          slotProps={{ htmlInput: { 'aria-label': `${label}: Einheit` } }}
+          slotProps={{ htmlInput: { 'aria-label': t('{label}: Einheit', { label }) } }}
           sx={{ width: 88 }}
         >
           {UNITS.map((u) => (
@@ -159,7 +160,7 @@ export function ColorField({
       value={text}
       disabled={disabled}
       error={error || (!valid && text.length > 0)}
-      helperText={!valid && text.length > 0 ? 'Format: #8b5cf6' : helperText}
+      helperText={!valid && text.length > 0 ? t('Format: #8b5cf6') : helperText}
       onChange={(event) => {
         let next = event.target.value.trim();
         if (next && !next.startsWith('#')) next = `#${next}`;
@@ -174,7 +175,7 @@ export function ColorField({
           startAdornment: (
             <InputAdornment position="start" sx={{ mr: 1 }}>
               <ButtonBase
-                aria-label={`${label}: Farbe auswählen`}
+                aria-label={t('{label}: Farbe auswählen', { label })}
                 disabled={disabled}
                 onClick={() => picker.current?.click()}
                 sx={{

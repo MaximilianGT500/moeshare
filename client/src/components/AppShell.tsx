@@ -22,14 +22,16 @@ import ManageAccountsRounded from '@mui/icons-material/ManageAccountsRounded';
 import { BrandMark } from './BrandMark';
 import { SiteFooter } from './SiteFooter';
 import { ThemeModeSelector, ThemeToggleButton } from './ThemeToggle';
+import { LanguageSelector } from './LanguageSwitch';
 import { UserAvatar } from './UserAvatar';
 import type { SessionUser, SiteInfo } from '../lib/types';
 import { mix } from '../lib/color';
 import { c, css, elevation, radius } from '../theme/tokens';
+import { t } from '../lib/i18n';
 
 export const RAIL_WIDTH = 88;
 
-type Destination = 'dashboard' | 'embed' | 'account' | 'admin';
+type Destination = 'dashboard' | 'design' | 'account' | 'admin';
 
 interface NavItem {
   key: Destination;
@@ -40,17 +42,17 @@ interface NavItem {
 }
 
 const navItems = (user: SessionUser): NavItem[] => [
-  { key: 'dashboard', href: '/dashboard', label: 'Übersicht', icon: <PhotoLibraryOutlined />, activeIcon: <PhotoLibraryRounded /> },
-  ...(user.canCustomizeEmbed
-    ? [{ key: 'embed' as const, href: '/embed', label: 'Embeds', icon: <BrushOutlined />, activeIcon: <BrushRounded /> }]
+  { key: 'dashboard', href: '/dashboard', label: t('Übersicht'), icon: <PhotoLibraryOutlined />, activeIcon: <PhotoLibraryRounded /> },
+  ...(user.canDesign || user.canCustomizeEmbed
+    ? [{ key: 'design' as const, href: '/design', label: t('Gestalten'), icon: <BrushOutlined />, activeIcon: <BrushRounded /> }]
     : []),
-  { key: 'account', href: '/account', label: 'Konto', icon: <AccountCircleOutlined />, activeIcon: <AccountCircleRounded /> },
+  { key: 'account', href: '/account', label: t('Konto'), icon: <AccountCircleOutlined />, activeIcon: <AccountCircleRounded /> },
   ...(user.isAdmin
     ? [
         {
           key: 'admin' as const,
           href: '/admin',
-          label: 'Admin',
+          label: t('Admin'),
           icon: <AdminPanelSettingsOutlined />,
           activeIcon: <AdminPanelSettingsRounded />,
         },
@@ -129,7 +131,7 @@ function AccountMenu({
             {user.username}
           </Typography>
           <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-            {user.isAdmin ? 'Administrator' : 'Mitglied'}
+            {user.isAdmin ? t('Administrator') : t('Mitglied')}
           </Typography>
         </Box>
       </Box>
@@ -141,22 +143,26 @@ function AccountMenu({
       <Divider sx={{ my: 0.5 }} />
       <Box sx={{ px: 1.5, py: 1.25 }}>
         <Typography variant="caption" component="p" sx={{ color: 'text.secondary', mb: 1 }}>
-          Darstellung
+          {t('Darstellung')}
         </Typography>
         <ThemeModeSelector />
+        <Typography variant="caption" component="p" sx={{ color: 'text.secondary', mt: 1.5, mb: 1 }}>
+          {t('Sprache')}
+        </Typography>
+        <LanguageSelector />
       </Box>
       <Divider sx={{ my: 0.5 }} />
       <MenuItem component="a" href="/account">
         <ListItemIcon>
           <ManageAccountsRounded />
         </ListItemIcon>
-        Konto und Sicherheit
+        {t('Konto und Sicherheit')}
       </MenuItem>
       <MenuItem component="a" href="/logout">
         <ListItemIcon>
           <LogoutRounded />
         </ListItemIcon>
-        Abmelden
+        {t('Abmelden')}
       </MenuItem>
     </Menu>
   );
@@ -166,9 +172,9 @@ function AccountButton({ user, summary, size = 40 }: { user: SessionUser; summar
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   return (
     <>
-      <Tooltip title="Konto" placement="right">
+      <Tooltip title={t('Konto')} placement="right">
         <IconButton
-          aria-label={`Konto von ${user.username}`}
+          aria-label={t('Konto von {username}', { username: user.username })}
           aria-haspopup="menu"
           onClick={(event) => setAnchor(event.currentTarget)}
           sx={{ p: 0.5 }}
@@ -212,7 +218,7 @@ export function AppShell({
     <Box sx={{ minHeight: '100dvh' }}>
       <Box
         component="nav"
-        aria-label="Hauptnavigation"
+        aria-label={t('Hauptnavigation')}
         sx={{
           position: 'fixed',
           insetBlock: 0,
@@ -232,7 +238,7 @@ export function AppShell({
           component="a"
           href="/dashboard"
           nativeButton={false}
-          aria-label={`${site.title} – Übersicht`}
+          aria-label={t('{title} – Übersicht', { title: site.title })}
           sx={{ borderRadius: '50%', mb: 1.5 }}
         >
           <BrandMark src={site.favicon} title={site.title} size={44} />
@@ -310,7 +316,7 @@ export function AppShell({
       {bottomNav && (
         <Box
           component="nav"
-          aria-label="Hauptnavigation"
+          aria-label={t('Hauptnavigation')}
           sx={{
             position: 'fixed',
             insetInline: 0,

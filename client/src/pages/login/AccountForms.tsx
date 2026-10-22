@@ -19,8 +19,9 @@ import { ProviderButtons } from './ProviderButtons';
 import { providerIcon } from '../../lib/providers';
 import { OrDivider, postAuth, Shake } from './AuthLayout';
 import { c, radius } from '../../theme/tokens';
+import { t } from '../../lib/i18n';
 
-const USERNAME_HINT = 'Buchstaben, Ziffern, Punkt, Unterstrich oder Bindestrich. Erscheint in deinen Datei-Links.';
+const USERNAME_HINT = t('Buchstaben, Ziffern, Punkt, Unterstrich oder Bindestrich. Erscheint in deinen Datei-Links.');
 
 function useAccountForm(url: string, extra: () => Record<string, unknown>, onSuccess: (redirect: string) => void, initialUsername = '') {
   const [username, setUsername] = useState(initialUsername);
@@ -41,7 +42,7 @@ function useAccountForm(url: string, extra: () => Record<string, unknown>, onSuc
       return;
     }
     setBusy(false);
-    setError(result.data.error || 'Das Konto konnte nicht angelegt werden.');
+    setError(result.data.error || t('Das Konto konnte nicht angelegt werden.'));
     setField(result.data.field || '');
     setAttempt((n) => n + 1);
   };
@@ -104,11 +105,11 @@ export function RegisterForm({ boot, onSuccess }: { boot: LoginBoot; onSuccess: 
         <Header
           site={boot.site}
           icon={<MailRounded />}
-          title="Registrierung"
-          text={boot.error || 'Neue Konten gibt es auf diesem Server nur mit einer Einladung. Frag den Admin nach einem Link.'}
+          title={t('Registrierung')}
+          text={boot.error || t('Neue Konten gibt es auf diesem Server nur mit einer Einladung. Frag den Admin nach einem Link.')}
         />
         <Button variant="contained" size="large" href="/login" fullWidth>
-          Zur Anmeldung
+          {t('Zur Anmeldung')}
         </Button>
       </Stack>
     );
@@ -118,8 +119,12 @@ export function RegisterForm({ boot, onSuccess }: { boot: LoginBoot; onSuccess: 
     <Stack spacing={3}>
       <Header
         site={boot.site}
-        title={pending ? 'Fast geschafft' : 'Konto erstellen'}
-        text={pending ? 'Wähle noch deinen Benutzernamen. Er erscheint in deinen Datei-Links.' : `Willkommen bei ${boot.site.title}.`}
+        title={pending ? t('Fast geschafft') : t('Konto erstellen')}
+        text={
+          pending
+            ? t('Wähle noch deinen Benutzernamen. Er erscheint in deinen Datei-Links.')
+            : t('Willkommen bei {title}.', { title: boot.site.title })
+        }
       />
 
       {(invite || pending) && (
@@ -131,11 +136,18 @@ export function RegisterForm({ boot, onSuccess }: { boot: LoginBoot; onSuccess: 
               sx={{ bgcolor: c.secondaryContainer, color: c.onSecondaryContainer, '& .MuiChip-icon': { color: 'inherit' } }}
             />
           )}
-          {invite && <Chip label={invite.createdBy ? `Eingeladen von ${invite.createdBy}` : 'Mit Einladung'} variant="outlined" />}
-          {invite && invite.role === 'admin' && (
-            <Chip label="Admin-Rechte" sx={{ bgcolor: c.tertiaryContainer, color: c.onTertiaryContainer }} />
+          {invite && (
+            <Chip
+              label={invite.createdBy ? t('Eingeladen von {createdBy}', { createdBy: invite.createdBy }) : t('Mit Einladung')}
+              variant="outlined"
+            />
           )}
-          {invite && invite.expiresAt && <Chip label={`Gültig bis ${formatDate(new Date(invite.expiresAt))}`} variant="outlined" />}
+          {invite && invite.role === 'admin' && (
+            <Chip label={t('Admin-Rechte')} sx={{ bgcolor: c.tertiaryContainer, color: c.onTertiaryContainer }} />
+          )}
+          {invite && invite.expiresAt && (
+            <Chip label={t('Gültig bis {date}', { date: formatDate(new Date(invite.expiresAt)) })} variant="outlined" />
+          )}
         </Box>
       )}
 
@@ -144,7 +156,7 @@ export function RegisterForm({ boot, onSuccess }: { boot: LoginBoot; onSuccess: 
           <Shake attempt={form.attempt}>
             <Stack spacing={2}>
               <TextField
-                label="Benutzername"
+                label={t('Benutzername')}
                 autoFocus
                 fullWidth
                 value={form.username}
@@ -154,12 +166,12 @@ export function RegisterForm({ boot, onSuccess }: { boot: LoginBoot; onSuccess: 
                 slotProps={{ htmlInput: { autoComplete: 'username', autoCapitalize: 'off', spellCheck: false } }}
               />
               <PasswordField
-                label={pending ? 'Passwort (optional)' : 'Passwort'}
+                label={pending ? t('Passwort (optional)') : t('Passwort')}
                 value={form.password}
                 onChange={form.setPassword}
                 autoComplete="new-password"
                 error={form.field === 'password'}
-                helperText={pending ? `Damit kannst du dich auch ohne ${pending.label} anmelden.` : undefined}
+                helperText={pending ? t('Damit kannst du dich auch ohne {label} anmelden.', { label: pending.label }) : undefined}
                 strength={{ minLength: registration.passwordMinLength, username: form.username }}
               />
             </Stack>
@@ -177,7 +189,7 @@ export function RegisterForm({ boot, onSuccess }: { boot: LoginBoot; onSuccess: 
             disabled={form.busy}
             startIcon={form.busy ? <CircularProgress size={18} color="inherit" /> : null}
           >
-            Konto erstellen
+            {t('Konto erstellen')}
           </Button>
         </Stack>
       </Box>
@@ -187,16 +199,16 @@ export function RegisterForm({ boot, onSuccess }: { boot: LoginBoot; onSuccess: 
           <OrDivider />
           <ProviderButtons
             providers={registration.providers}
-            verb="Mit {name} registrieren"
+            verb={t('Mit {name} registrieren')}
             params={{ intent: 'signup', invite: invite ? invite.code : undefined }}
           />
         </Stack>
       )}
 
       <Typography variant="body2" sx={{ color: 'text.secondary', textAlign: 'center' }}>
-        Schon ein Konto?{' '}
+        {t('Schon ein Konto?')}{' '}
         <Link href="/login" underline="hover">
-          Anmelden
+          {t('Anmelden')}
         </Link>
       </Typography>
     </Stack>

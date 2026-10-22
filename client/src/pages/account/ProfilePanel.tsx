@@ -24,6 +24,7 @@ import { GrowTransition } from '../../components/transitions';
 import { isCancelled, useSudo } from '../../components/Sudo';
 import { useToast } from '../../components/Toaster';
 import { c } from '../../theme/tokens';
+import { t } from '../../lib/i18n';
 
 function DeleteAccountDialog({ open, onClose, username }: { open: boolean; onClose: () => void; username: string }) {
   const sudo = useSudo();
@@ -59,14 +60,16 @@ function DeleteAccountDialog({ open, onClose, username }: { open: boolean; onClo
           <DeleteForeverRounded />
         </Box>
         <DialogTitle id="delete-account-title" sx={{ textAlign: 'center' }}>
-          Konto endgültig löschen?
+          {t('Konto endgültig löschen?')}
         </DialogTitle>
         <DialogContent>
           <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2.5, textAlign: 'center' }}>
-            Alle deine Dateien werden gelöscht, geteilte Links funktionieren danach nicht mehr. Das lässt sich nicht rückgängig machen.
+            {t(
+              'Alle deine Dateien werden gelöscht, geteilte Links funktionieren danach nicht mehr. Das lässt sich nicht rückgängig machen.'
+            )}
           </Typography>
           <TextField
-            label={`Tippe „${username}“ zur Bestätigung`}
+            label={t('Tippe „{username}“ zur Bestätigung', { username })}
             value={confirmText}
             onChange={(event) => setConfirmText(event.target.value)}
             fullWidth
@@ -81,7 +84,7 @@ function DeleteAccountDialog({ open, onClose, username }: { open: boolean; onClo
         </DialogContent>
         <DialogActions>
           <Button onClick={onClose} disabled={busy}>
-            Abbrechen
+            {t('Abbrechen')}
           </Button>
           <Button
             type="submit"
@@ -90,7 +93,7 @@ function DeleteAccountDialog({ open, onClose, username }: { open: boolean; onClo
             disabled={busy || confirmText !== username}
             startIcon={busy ? <CircularProgress size={16} color="inherit" /> : null}
           >
-            Konto löschen
+            {t('Konto löschen')}
           </Button>
         </DialogActions>
       </Box>
@@ -122,9 +125,9 @@ export function ProfilePanel({ account }: { account: AccountOverview }) {
 
   return (
     <Stack spacing={4}>
-      <SettingsSection id="speicher" title="Speicher und Limits">
+      <SettingsSection id="speicher" title={t('Speicher und Limits')}>
         {limits.quotaBytes ? (
-          <SettingRow icon={<StorageRounded />} label="Speicher" stacked>
+          <SettingRow icon={<StorageRounded />} label={t('Speicher')} stacked>
             <Box sx={{ maxWidth: 480 }}>
               <QuotaMeter usedBytes={limits.usedBytes} quotaBytes={limits.quotaBytes} />
             </Box>
@@ -132,50 +135,50 @@ export function ProfilePanel({ account }: { account: AccountOverview }) {
         ) : (
           <SettingRow
             icon={<StorageRounded />}
-            label="Speicher"
-            description={`${formatBytes(limits.usedBytes)} belegt. Für dein Konto gibt es kein Speicherlimit.`}
+            label={t('Speicher')}
+            description={t('{usedBytes} belegt. Für dein Konto gibt es kein Speicherlimit.', { usedBytes: formatBytes(limits.usedBytes) })}
           />
         )}
         <SettingRow
           icon={<InsertDriveFileRounded />}
-          label="Größte erlaubte Datei"
+          label={t('Größte erlaubte Datei')}
           description={
             limits.maxFileBytes
-              ? `Einzelne Dateien dürfen bis zu ${formatBytes(limits.maxFileBytes)} groß sein.`
-              : 'Für einzelne Dateien gibt es keine Größenbeschränkung.'
+              ? t('Einzelne Dateien dürfen bis zu {maxFileBytes} groß sein.', { maxFileBytes: formatBytes(limits.maxFileBytes) })
+              : t('Für einzelne Dateien gibt es keine Größenbeschränkung.')
           }
         />
       </SettingsSection>
 
       <SettingsSection
         id="aktivitaet"
-        title="Letzte Aktivität"
-        description="Anmeldungen und Änderungen an deinem Konto der letzten Wochen."
+        title={t('Letzte Aktivität')}
+        description={t('Anmeldungen und Änderungen an deinem Konto der letzten Wochen.')}
       >
         <Box sx={{ px: { xs: 2, sm: 3 }, py: 1 }}>
           <ActivityList events={events} />
           {more && (
             <Box sx={{ display: 'flex', justifyContent: 'center', py: 1.5 }}>
               <Button onClick={loadMore} disabled={loading} startIcon={loading ? <CircularProgress size={16} color="inherit" /> : null}>
-                Ältere anzeigen
+                {t('Ältere anzeigen')}
               </Button>
             </Box>
           )}
         </Box>
       </SettingsSection>
 
-      <SettingsSection id="loeschen" title="Konto löschen">
+      <SettingsSection id="loeschen" title={t('Konto löschen')}>
         <SettingRow
           icon={<DeleteForeverRounded />}
-          label="Konto und alle Dateien löschen"
+          label={t('Konto und alle Dateien löschen')}
           description={
             account.user.isAdmin
-              ? 'Deine Uploads und Links verschwinden sofort. Bist du der letzte Admin, ernenne vorher einen anderen.'
-              : 'Deine Uploads und Links verschwinden sofort und endgültig.'
+              ? t('Deine Uploads und Links verschwinden sofort. Bist du der letzte Admin, ernenne vorher einen anderen.')
+              : t('Deine Uploads und Links verschwinden sofort und endgültig.')
           }
         >
           <Button variant="outlined" color="error" onClick={() => setDeleting(true)}>
-            Konto löschen
+            {t('Konto löschen')}
           </Button>
         </SettingRow>
       </SettingsSection>

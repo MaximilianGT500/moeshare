@@ -1,0 +1,31 @@
+services:
+  moeshare:
+    environment:
+      DATABASE_URL: postgres://moeshare:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD fehlt in der .env}@postgres:5432/moeshare
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:18-alpine
+    container_name: moeshare-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: moeshare
+      POSTGRES_USER: moeshare
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD fehlt in der .env}
+      TZ: ${TZ:-Europe/Berlin}
+    volumes:
+      - ./postgres:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U moeshare -d moeshare"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"

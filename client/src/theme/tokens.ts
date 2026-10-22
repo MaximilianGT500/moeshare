@@ -10,6 +10,7 @@ export const fileTypeColor = {
   image: 'var(--mui-palette-fileTypes-image)',
   video: 'var(--mui-palette-fileTypes-video)',
   audio: 'var(--mui-palette-fileTypes-audio)',
+  text: 'var(--mui-palette-fileTypes-text)',
   other: 'var(--mui-palette-fileTypes-other)',
 } as const;
 

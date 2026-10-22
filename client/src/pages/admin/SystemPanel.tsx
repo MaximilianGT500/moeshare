@@ -7,9 +7,11 @@ import DeveloperBoardRounded from '@mui/icons-material/DeveloperBoardRounded';
 import ScheduleRounded from '@mui/icons-material/ScheduleRounded';
 import DnsRounded from '@mui/icons-material/DnsRounded';
 import WarningAmberRounded from '@mui/icons-material/WarningAmberRounded';
-import type { SystemInfo } from '../../lib/types';
+import StorageRounded from '@mui/icons-material/StorageRounded';
+import type { DatabaseInfo, SystemInfo } from '../../lib/types';
 import { fetchSystem } from '../../lib/api';
-import { formatBytes, formatDuration } from '../../lib/format';
+import { formatBytes, formatDuration, formatNumber } from '../../lib/format';
+import { t, tn } from '../../lib/i18n';
 import { c, ease, fonts, radius } from '../../theme/tokens';
 
 function Card({ icon, title, children, wide = false }: { icon: ReactNode; title: string; children: ReactNode; wide?: boolean }) {
@@ -73,7 +75,7 @@ function Meter({ value, label }: { value: number; label: string }) {
           sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 1, color: level === 'critical' ? c.error : c.onSurfaceVariant }}
         >
           <WarningAmberRounded sx={{ fontSize: 16 }} />
-          {level === 'critical' ? 'Kritisch: kaum noch Arbeitsspeicher frei' : 'Hohe Auslastung'}
+          {level === 'critical' ? t('Kritisch: kaum noch Arbeitsspeicher frei') : t('Hohe Auslastung')}
         </Typography>
       )}
     </Box>
@@ -112,7 +114,23 @@ function Row({ label, value, mono = false }: { label: string; value: ReactNode; 
   );
 }
 
-export function SystemPanel({ initial }: { initial: SystemInfo }) {
+const SOURCES: Record<DatabaseInfo['source'], string> = {
+  env: t('Umgebungsvariable DATABASE_URL'),
+  file: t('Einrichtung (db/database.json)'),
+  default: t('Standard'),
+  cli: t('Kommandozeile'),
+};
+
+const TABLES: Array<[string, string]> = [
+  ['users', t('Benutzer')],
+  ['file_data', t('Dateien')],
+  ['links', t('Kurzlinks')],
+  ['albums', t('Alben')],
+  ['sessions', t('Sitzungen')],
+  ['audit_log', t('Aktivität')],
+];
+
+export function SystemPanel({ initial, database, ffmpeg }: { initial: SystemInfo; database: DatabaseInfo; ffmpeg: string | null }) {
   const [info, setInfo] = useState(initial);
   const [updatedAt, setUpdatedAt] = useState(() => Date.now());
   const [now, setNow] = useState(() => Date.now());
@@ -159,35 +177,39 @@ export function SystemPanel({ initial }: { initial: SystemInfo }) {
           />
         </Box>
         <Typography variant="body2" sx={{ color: 'text.secondary' }} aria-live="off">
-          Live, aktualisiert {ago < 2 ? 'gerade eben' : `vor ${ago} s`}
+          {t('Live, aktualisiert')} {ago < 2 ? t('gerade eben') : t('vor {ago} s', { ago })}
         </Typography>
       </Box>
 
       <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: '1fr 1fr', xl: 'repeat(3, 1fr)' } }}>
-        <Card icon={<MemoryRounded />} title="Arbeitsspeicher">
+        <Card icon={<MemoryRounded />} title={t('Arbeitsspeicher')}>
           <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mb: 1.5 }}>
             <Typography sx={{ fontSize: '2.25rem', fontWeight: 800, lineHeight: 1 }}>{memPercent} %</Typography>
             <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-              belegt
+              {t('belegt')}
             </Typography>
           </Box>
-          <Meter value={memPercent} label="Arbeitsspeicher belegt" />
+          <Meter value={memPercent} label={t('Arbeitsspeicher belegt')} />
           <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1.5 }}>
-            {formatBytes(info.memory.used)} von {formatBytes(info.memory.total)}, frei {formatBytes(info.memory.free)}
+            {t('{used} von {total}, frei {free}', {
+              used: formatBytes(info.memory.used),
+              total: formatBytes(info.memory.total),
+              free: formatBytes(info.memory.free),
+            })}
           </Typography>
         </Card>
 
-        <Card icon={<DeveloperBoardRounded />} title="Prozessor">
+        <Card icon={<DeveloperBoardRounded />} title={t('Prozessor')}>
           <Typography variant="body2" sx={{ mb: 2 }}>
-            {info.cpuModel}, {info.cpuCores} {info.cpuCores === 1 ? 'Kern' : 'Kerne'}
+            {info.cpuModel}, {tn(info.cpuCores, '1 Kern', '{count} Kerne')}
           </Typography>
           <Typography variant="caption" component="p" sx={{ color: 'text.secondary', mb: 1 }}>
-            Auslastung im Mittel (Load je Kern)
+            {t('Auslastung im Mittel (Load je Kern)')}
           </Typography>
           {[
-            ['1 Min.', loads[0]],
-            ['5 Min.', loads[1]],
-            ['15 Min.', loads[2]],
+            [t('1 Min.'), loads[0]],
+            [t('5 Min.'), loads[1]],
+            [t('15 Min.'), loads[2]],
           ].map(([label, load]) => {
             const pct = Math.min(100, ((load as number) / Math.max(1, info.cpuCores)) * 100);
             return (
@@ -218,23 +240,41 @@ export function SystemPanel({ initial }: { initial: SystemInfo }) {
           })}
         </Card>
 
-        <Card icon={<ScheduleRounded />} title="Laufzeit">
+        <Card icon={<ScheduleRounded />} title={t('Laufzeit')}>
           <Typography sx={{ fontSize: '2.25rem', fontWeight: 800, lineHeight: 1.1 }}>{formatDuration(uptime)}</Typography>
           <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1 }}>
-            seit dem letzten Neustart des Servers
+            {t('seit dem letzten Neustart des Servers')}
           </Typography>
           <Typography variant="body2" sx={{ color: 'text.secondary', mt: 2 }}>
-            MoeShare-Prozess belegt {formatBytes(info.processMemoryBytes)}
+            {t('MoeShare-Prozess belegt {processMemoryBytes}', { processMemoryBytes: formatBytes(info.processMemoryBytes) })}
           </Typography>
         </Card>
 
-        <Card icon={<DnsRounded />} title="Server" wide>
+        <Card icon={<DnsRounded />} title={t('Server')} wide>
           <Box>
-            <Row label="Hostname" value={info.hostname} mono />
-            <Row label="Betriebssystem" value={`${info.platform} ${info.release} (${info.arch})`} />
+            <Row label={t('Hostname')} value={info.hostname} mono />
+            <Row label={t('Betriebssystem')} value={`${info.platform} ${info.release} (${info.arch})`} />
             <Row label="Node.js" value={info.nodeVersion} mono />
             <Row label="MoeShare" value={`v${info.appVersion}`} mono />
+            <Row label={t('FFmpeg')} value={ffmpeg || t('nicht gefunden, Videos bekommen keine Vorschau')} mono={!!ffmpeg} />
           </Box>
+        </Card>
+
+        <Card icon={<StorageRounded />} title={t('Datenbank')}>
+          <Box>
+            <Row label={t('Verbindung')} value={database.label} />
+            <Row label={t('Version')} value={database.version} mono />
+            <Row label={t('Eingestellt über')} value={SOURCES[database.source] || database.source} />
+            {TABLES.filter(([key]) => key in database.tables).map(([key, label]) => (
+              <Row key={key} label={label} value={formatNumber(database.tables[key])} />
+            ))}
+          </Box>
+          <Typography variant="caption" component="p" sx={{ color: 'text.secondary', mt: 1.5 }}>
+            {t('Umziehen in eine andere Datenbank:')}{' '}
+            <Box component="span" sx={{ fontFamily: fonts.mono }}>
+              {`node cli.js copy-db <${t('Adresse')}> --use`}
+            </Box>
+          </Typography>
         </Card>
       </Box>
     </Box>

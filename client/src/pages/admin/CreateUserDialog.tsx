@@ -25,25 +25,34 @@ import { CopyTextButton } from '../../components/CopyButton';
 import { GrowTransition, SlideUpTransition } from '../../components/transitions';
 import { isCancelled, useSudo } from '../../components/Sudo';
 import { c, fonts, radius } from '../../theme/tokens';
+import { t } from '../../lib/i18n';
 
 export function CredentialsDialog({
   data,
   onClose,
   baseUrl,
-  title = 'Zugang erstellt',
+  title = t('Zugang erstellt'),
 }: {
   data: { username: string; password: string } | null;
   onClose: () => void;
   baseUrl: string;
   title?: string;
 }) {
-  const text = data ? `Adresse: ${baseUrl}/login\nBenutzername: ${data.username}\nVorläufiges Passwort: ${data.password}` : '';
+  const text = data
+    ? t('Adresse: {baseUrl}/login\nBenutzername: {username}\nVorläufiges Passwort: {password}', {
+        baseUrl,
+        username: data.username,
+        password: data.password,
+      })
+    : '';
   return (
     <Dialog open={!!data} onClose={onClose} maxWidth="xs" fullWidth slots={{ transition: GrowTransition }} aria-labelledby="cred-title">
       <DialogTitle id="cred-title">{title}</DialogTitle>
       <DialogContent>
         <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
-          Gib diese Daten auf sicherem Weg weiter. Beim ersten Anmelden legt {data?.username} ein eigenes Passwort fest.
+          {t('Gib diese Daten auf sicherem Weg weiter. Beim ersten Anmelden legt {username} ein eigenes Passwort fest.', {
+            username: data?.username,
+          })}
         </Typography>
         <Box
           sx={{
@@ -60,11 +69,11 @@ export function CredentialsDialog({
         </Box>
       </DialogContent>
       <DialogActions>
-        <CopyTextButton value={text} message="Zugangsdaten kopiert" icon={<ContentCopyRounded fontSize="inherit" />}>
-          Kopieren
+        <CopyTextButton value={text} message={t('Zugangsdaten kopiert')} icon={<ContentCopyRounded fontSize="inherit" />}>
+          {t('Kopieren')}
         </CopyTextButton>
         <Button variant="contained" onClick={onClose}>
-          Fertig
+          {t('Fertig')}
         </Button>
       </DialogActions>
     </Dialog>
@@ -135,7 +144,7 @@ export function CreateUserDialog({
     }
   };
 
-  const limitHint = (value: number | null) => (value ? '' : 'Leer: Standard des Servers');
+  const limitHint = (value: number | null) => (value ? '' : t('Leer: Standard des Servers'));
 
   return (
     <Dialog
@@ -148,71 +157,71 @@ export function CreateUserDialog({
       aria-labelledby="create-user-title"
     >
       <Box component="form" onSubmit={submit} noValidate sx={{ display: 'contents' }}>
-        <DialogTitle id="create-user-title">Benutzer anlegen</DialogTitle>
+        <DialogTitle id="create-user-title">{t('Benutzer anlegen')}</DialogTitle>
         <DialogContent>
           <Stack spacing={2.5} sx={{ pt: 1 }}>
             <TextField
-              label="Benutzername"
+              label={t('Benutzername')}
               value={username}
               onChange={(event) => setUsername(event.target.value)}
               autoFocus
               fullWidth
               error={field === 'username'}
-              helperText="2 bis 32 Zeichen: Buchstaben, Ziffern, Punkt, Unterstrich, Bindestrich"
+              helperText={t('2 bis 32 Zeichen: Buchstaben, Ziffern, Punkt, Unterstrich, Bindestrich')}
               slotProps={{ htmlInput: { autoComplete: 'off', autoCapitalize: 'off', spellCheck: false } }}
             />
             <PasswordField
-              label="Passwort (optional)"
+              label={t('Passwort (optional)')}
               value={password}
               onChange={setPassword}
               autoComplete="new-password"
               error={field === 'password'}
-              helperText={password ? undefined : 'Leer lassen, dann erzeugt MoeShare ein sicheres Passwort.'}
+              helperText={password ? undefined : t('Leer lassen, dann erzeugt MoeShare ein sicheres Passwort.')}
               strength={password ? { minLength: minPasswordLength, username } : undefined}
             />
             <Box>
               <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                Rolle
+                {t('Rolle')}
               </Typography>
-              <ToggleButtonGroup exclusive value={role} onChange={(_event, next) => next && setRole(next)} aria-label="Rolle">
-                <ToggleButton value="mitglied">Mitglied</ToggleButton>
-                <ToggleButton value="admin">Admin</ToggleButton>
+              <ToggleButtonGroup exclusive value={role} onChange={(_event, next) => next && setRole(next)} aria-label={t('Rolle')}>
+                <ToggleButton value="mitglied">{t('Mitglied')}</ToggleButton>
+                <ToggleButton value="admin">{t('Admin')}</ToggleButton>
               </ToggleButtonGroup>
               {role === 'admin' && (
                 <Typography variant="caption" component="p" sx={{ color: c.warning, mt: 1 }}>
-                  Admins sehen alle Dateien und können Einstellungen und Benutzer ändern.
+                  {t('Admins sehen alle Dateien und können Einstellungen und Benutzer ändern.')}
                 </Typography>
               )}
             </Box>
             <Box sx={{ display: 'grid', gap: 2 }}>
               <Box>
                 <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                  Speicherlimit
+                  {t('Speicherlimit')}
                 </Typography>
                 <BytesField
-                  label="Speicher"
+                  label={t('Speicher')}
                   value={quota}
                   onChange={setQuota}
-                  nullLabel={defaults.quotaBytes ? 'Standard' : 'Standard (unbegrenzt)'}
+                  nullLabel={defaults.quotaBytes ? t('Standard') : t('Standard (unbegrenzt)')}
                   helperText={limitHint(quota)}
                 />
               </Box>
               <Box>
                 <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                  Größte erlaubte Datei
+                  {t('Größte erlaubte Datei')}
                 </Typography>
                 <BytesField
-                  label="Dateigröße"
+                  label={t('Dateigröße')}
                   value={maxFile}
                   onChange={setMaxFile}
-                  nullLabel={defaults.maxFileBytes ? 'Standard' : 'Standard (unbegrenzt)'}
+                  nullLabel={defaults.maxFileBytes ? t('Standard') : t('Standard (unbegrenzt)')}
                   helperText={limitHint(maxFile)}
                 />
               </Box>
             </Box>
             <FormControlLabel
               control={<Switch checked={mustChange} onChange={(event) => setMustChange(event.target.checked)} />}
-              label="Beim ersten Anmelden eigenes Passwort festlegen"
+              label={t('Beim ersten Anmelden eigenes Passwort festlegen')}
             />
             <Collapse in={!!error} unmountOnExit>
               <Alert severity="error" role="alert">
@@ -223,7 +232,7 @@ export function CreateUserDialog({
         </DialogContent>
         <DialogActions>
           <Button onClick={onClose} disabled={busy}>
-            Abbrechen
+            {t('Abbrechen')}
           </Button>
           <Button
             type="submit"
@@ -231,7 +240,7 @@ export function CreateUserDialog({
             disabled={busy || username.trim().length < 2}
             startIcon={busy ? <CircularProgress size={16} color="inherit" /> : null}
           >
-            Anlegen
+            {t('Anlegen')}
           </Button>
         </DialogActions>
       </Box>

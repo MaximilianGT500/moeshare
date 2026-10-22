@@ -1,20 +1,21 @@
 import type { EmbedTemplate, FileItem } from './types';
 import { formatBytes } from './format';
+import { t } from './i18n';
 
 export const LIMITS = { siteName: 256, author: 256, title: 256, description: 350, url: 512 } as const;
 
 export const PLACEHOLDERS: Array<{ token: string; label: string }> = [
-  { token: '{dateiname}', label: 'Dateiname' },
-  { token: '{name}', label: 'Name ohne Endung' },
-  { token: '{endung}', label: 'Endung' },
-  { token: '{größe}', label: 'Größe' },
-  { token: '{datum}', label: 'Datum' },
-  { token: '{uhrzeit}', label: 'Uhrzeit' },
-  { token: '{nutzer}', label: 'Benutzer' },
-  { token: '{aufrufe}', label: 'Aufrufe' },
-  { token: '{auflösung}', label: 'Auflösung' },
-  { token: '{typ}', label: 'Dateityp' },
-  { token: '{seite}', label: 'Seitenname' },
+  { token: '{dateiname}', label: t('Dateiname') },
+  { token: '{name}', label: t('Name ohne Endung') },
+  { token: '{endung}', label: t('Endung') },
+  { token: '{größe}', label: t('Größe') },
+  { token: '{datum}', label: t('Datum') },
+  { token: '{uhrzeit}', label: t('Uhrzeit') },
+  { token: '{nutzer}', label: t('Benutzer') },
+  { token: '{aufrufe}', label: t('Aufrufe') },
+  { token: '{auflösung}', label: t('Auflösung') },
+  { token: '{typ}', label: t('Dateityp') },
+  { token: '{seite}', label: t('Seitenname') },
 ];
 
 const KEYS: Record<string, string> = {
@@ -48,7 +49,7 @@ const KEYS: Record<string, string> = {
   site: 'site',
 };
 
-const TYPE_LABELS: Record<string, string> = { image: 'Bild', video: 'Video', audio: 'Audio', file: 'Datei' };
+const TYPE_LABELS: Record<string, string> = { image: t('Bild'), video: t('Video'), audio: t('Audio'), text: t('Text'), file: t('Datei') };
 
 type PlaceholderValues = Record<string, string | number>;
 
@@ -71,7 +72,7 @@ export function valuesFor(
     resolution: hasResolution ? `${file.width}×${file.height}` : '',
     width: hasResolution ? file.width : '',
     height: hasResolution ? file.height : '',
-    type: TYPE_LABELS[file.type] || 'Datei',
+    type: TYPE_LABELS[file.type] || t('Datei'),
     site: siteTitle,
   };
 }

@@ -4,6 +4,7 @@ const db = require('../lib/db');
 const { randomToken, sha256 } = require('../lib/secrets');
 const { storedIp, deviceLabel, isSecure, safeNext } = require('../lib/request');
 const settings = require('./settingsService');
+const { languageOf } = require('./preferenceService');
 const audit = require('./auditService');
 
 const COOKIE = 'ms_session';
@@ -47,6 +48,7 @@ const toUser = (row) => ({
   totpEnabled: Boolean(row.totp_enabled_at),
   passkeyCount: row.passkey_count || 0,
   hasPassword: Boolean(row.password_hash),
+  language: languageOf(row.preferences),
 });
 
 async function resolve(token) {
@@ -54,7 +56,7 @@ async function resolve(token) {
   const id = sha256(token);
   const row = await db.get(
     `SELECT s.*, u.username, u.role, u.status, u.must_change_password, u.totp_enabled_at,
-            u.password AS password_hash,
+            u.password AS password_hash, u.preferences,
             (SELECT COUNT(*) FROM passkeys p WHERE p.user_id = u.id) AS passkey_count
      FROM sessions s JOIN users u ON u.id = s.user_id
      WHERE s.id = ?`,

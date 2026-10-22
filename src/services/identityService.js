@@ -28,10 +28,11 @@ async function assertFree(provider, subject, userId, label) {
 
 async function link(userId, provider, { subject, name }, label) {
   await assertFree(provider, subject, userId, label);
-  await db.run(
-    `INSERT INTO identities (user_id, provider, subject, name, created_at) VALUES (?, ?, ?, ?, ?)
-     ON CONFLICT(user_id, provider) DO UPDATE SET subject = excluded.subject, name = excluded.name`,
-    [userId, provider, subject, name || null, Date.now()]
+  await db.upsert(
+    'identities',
+    { user_id: userId, provider, subject, name: name || null, created_at: Date.now() },
+    ['user_id', 'provider'],
+    ['subject', 'name']
   );
 }
 

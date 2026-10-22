@@ -11,6 +11,7 @@ import { BrandMark } from '../../components/BrandMark';
 import { SiteFooter } from '../../components/SiteFooter';
 import { c, ease, elevation, fileTypeColor, fonts, radius } from '../../theme/tokens';
 import { mix } from '../../lib/color';
+import { rich, t } from '../../lib/i18n';
 
 function EmptyStack() {
   const back = [
@@ -92,14 +93,16 @@ export function NotFoundPage() {
             transition={{ delay: 0.25, duration: 0.6, ease: ease.emphasizedDecelerate }}
           >
             <Typography variant="h2" component="h1" sx={{ mt: 5, fontSize: { xs: '1.75rem', sm: '2.25rem' } }}>
-              {boot.message || 'Diese Seite gibt es nicht.'}
+              {boot.message || t('Diese Seite gibt es nicht.')}
             </Typography>
             <Typography variant="body1" sx={{ color: 'text.secondary', mt: 1.5, maxWidth: 460, mx: 'auto' }}>
               {missing
-                ? 'Vielleicht wurde die Datei gelöscht oder der Link ist unvollständig. Prüfe die Adresse oder frag nach einem neuen Link.'
+                ? t(
+                    'Vielleicht wurde die Datei gelöscht oder der Link ist unvollständig. Prüfe die Adresse oder frag nach einem neuen Link.'
+                  )
                 : boot.requestId
-                  ? 'Lade die Seite neu. Bleibt der Fehler, findest du die Ursache im Server-Log unter der Fehler-ID unten.'
-                  : 'Lade die Seite neu. Bleibt der Fehler, steht im Server-Log, was passiert ist.'}
+                  ? t('Lade die Seite neu. Bleibt der Fehler, findest du die Ursache im Server-Log unter der Fehler-ID unten.')
+                  : t('Lade die Seite neu. Bleibt der Fehler, steht im Server-Log, was passiert ist.')}
             </Typography>
             <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center', mt: 4, flexWrap: 'wrap' }}>
               <Button
@@ -107,22 +110,26 @@ export function NotFoundPage() {
                 startIcon={<ArrowBackRounded />}
                 onClick={() => (window.history.length > 1 ? window.history.back() : window.location.assign('/dashboard'))}
               >
-                Zurück
+                {t('Zurück')}
               </Button>
               <Button variant="tonal" href="/dashboard">
-                Zum Dashboard
+                {t('Zum Dashboard')}
               </Button>
             </Box>
             <Typography variant="caption" component="p" sx={{ color: 'text.secondary', mt: 4, opacity: 0.7 }}>
-              Fehler {status}
-              {boot.requestId && (
-                <>
-                  {', Fehler-ID '}
-                  <Box component="code" sx={{ fontFamily: fonts.mono, userSelect: 'all' }}>
-                    {boot.requestId}
-                  </Box>
-                </>
-              )}
+              {boot.requestId
+                ? rich(
+                    'Fehler {status}, Fehler-ID {id}',
+                    {
+                      id: (
+                        <Box component="code" sx={{ fontFamily: fonts.mono, userSelect: 'all' }}>
+                          {boot.requestId}
+                        </Box>
+                      ),
+                    },
+                    { status }
+                  )
+                : t('Fehler {status}', { status })}
             </Typography>
           </m.div>
         </Box>

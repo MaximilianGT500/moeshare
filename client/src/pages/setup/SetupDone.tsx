@@ -8,8 +8,9 @@ import TaskAltRounded from '@mui/icons-material/TaskAltRounded';
 import DownloadRounded from '@mui/icons-material/DownloadRounded';
 import ContentCopyRounded from '@mui/icons-material/ContentCopyRounded';
 import { CopyIconButton } from '../../components/CopyButton';
-import { downloadText, shareXConfig, shareXFilename } from '../../lib/sharex';
+import { downloadShareX, shareXKindLabel, shareXKinds, type ShareXFeatures } from '../../lib/sharex';
 import { c, ease, fonts, radius } from '../../theme/tokens';
+import { t } from '../../lib/i18n';
 
 export interface SetupResult {
   redirect: string;
@@ -18,8 +19,19 @@ export interface SetupResult {
   baseUrl: string;
 }
 
-export function SetupDone({ result, siteTitle, homeEnabled }: { result: SetupResult; siteTitle: string; homeEnabled: boolean }) {
+export function SetupDone({
+  result,
+  siteTitle,
+  homeEnabled,
+  features,
+}: {
+  result: SetupResult;
+  siteTitle: string;
+  homeEnabled: boolean;
+  features?: ShareXFeatures;
+}) {
   const needsMfa = result.redirect.startsWith('/account?setup=');
+  const kinds = shareXKinds(features);
   return (
     <Stack spacing={3.5}>
       <Box>
@@ -50,19 +62,23 @@ export function SetupDone({ result, siteTitle, homeEnabled }: { result: SetupRes
           transition={{ delay: 0.25, duration: 0.5, ease: ease.emphasizedDecelerate }}
         >
           <Typography variant="h4" component="h1" sx={{ mt: 2.5 }}>
-            {siteTitle} ist eingerichtet
+            {t('{siteTitle} ist eingerichtet', { siteTitle })}
           </Typography>
           <Typography sx={{ color: 'text.secondary', mt: 1 }}>
-            Du bist als {result.username} angemeldet. Alles, was du eben eingestellt hast, findest du unter Admin › Einstellungen.
+            {t('Du bist als {username} angemeldet. Alles, was du eben eingestellt hast, findest du unter Admin › Einstellungen.', {
+              username: result.username,
+            })}
           </Typography>
         </m.div>
       </Box>
 
       {result.token && (
         <Box sx={{ p: 2.5, borderRadius: `${radius.lg}px`, bgcolor: c.surfaceContainer }}>
-          <Typography sx={{ fontWeight: 700 }}>ShareX verbinden</Typography>
+          <Typography sx={{ fontWeight: 700 }}>{t('ShareX verbinden')}</Typography>
           <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
-            Lade die Konfiguration herunter und öffne sie, ShareX übernimmt sie mit einem Doppelklick.
+            {kinds.length > 1
+              ? t('Lade die Konfigurationen herunter und öffne sie, ShareX übernimmt sie mit einem Doppelklick.')
+              : t('Lade die Konfiguration herunter und öffne sie, ShareX übernimmt sie mit einem Doppelklick.')}
           </Typography>
           <Box
             sx={{
@@ -93,53 +109,67 @@ export function SetupDone({ result, siteTitle, homeEnabled }: { result: SetupRes
             </Box>
             <CopyIconButton
               value={result.token}
-              label="Token kopieren"
-              message="Token kopiert"
+              label={t('Token kopieren')}
+              message={t('Token kopiert')}
               icon={<ContentCopyRounded fontSize="inherit" />}
             />
           </Box>
-          <Button
-            sx={{ mt: 2 }}
-            variant="tonal"
-            startIcon={<DownloadRounded />}
-            onClick={() =>
-              downloadText(shareXFilename(siteTitle), shareXConfig({ siteTitle, baseUrl: result.baseUrl, token: result.token! }))
-            }
-          >
-            ShareX-Konfiguration herunterladen
-          </Button>
+          {kinds.length > 1 ? (
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 2 }}>
+              {kinds.map((kind) => (
+                <Button
+                  key={kind}
+                  variant="tonal"
+                  startIcon={<DownloadRounded />}
+                  onClick={() => downloadShareX({ siteTitle, baseUrl: result.baseUrl, token: result.token!, kind, features })}
+                >
+                  {shareXKindLabel(kind)}
+                </Button>
+              ))}
+            </Box>
+          ) : (
+            <Button
+              sx={{ mt: 2 }}
+              variant="tonal"
+              startIcon={<DownloadRounded />}
+              onClick={() => downloadShareX({ siteTitle, baseUrl: result.baseUrl, token: result.token!, features })}
+            >
+              {t('ShareX-Konfiguration herunterladen')}
+            </Button>
+          )}
           <Alert severity="info" sx={{ mt: 2 }}>
-            Das Token siehst du nur jetzt. Weitere erstellst du jederzeit unter Konto › ShareX und API.
+            {t('Das Token siehst du nur jetzt. Weitere erstellst du jederzeit unter Konto › ShareX und API.')}
           </Alert>
         </Box>
       )}
 
       <Box sx={{ p: 2.5, borderRadius: `${radius.lg}px`, bgcolor: c.surfaceContainer }}>
-        <Typography sx={{ fontWeight: 700 }}>Impressum und Datenschutz</Typography>
+        <Typography sx={{ fontWeight: 700 }}>{t('Impressum und Datenschutz')}</Typography>
         <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
-          Ist dein MoeShare öffentlich erreichbar, trägst du beides unter Admin › Einstellungen › Rechtliches und Links ein. Die Links
-          stehen dann im Fuß jeder Seite.
+          {t(
+            'Ist dein MoeShare öffentlich erreichbar, trägst du beides unter Admin › Einstellungen › Rechtliches und Links ein. Die Links stehen dann im Fuß jeder Seite.'
+          )}
         </Typography>
       </Box>
 
       <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
         {needsMfa ? (
           <Button variant="contained" size="large" href={result.redirect}>
-            Zwei-Faktor-Anmeldung einrichten
+            {t('Zwei-Faktor-Anmeldung einrichten')}
           </Button>
         ) : (
           <Button variant="contained" size="large" href="/dashboard">
-            Zum Dashboard
+            {t('Zum Dashboard')}
           </Button>
         )}
         {!needsMfa && (
           <Button variant="tonal" size="large" href="/admin#einstellungen">
-            Einstellungen öffnen
+            {t('Einstellungen öffnen')}
           </Button>
         )}
         {homeEnabled && !needsMfa && (
           <Button size="large" href="/">
-            Startseite ansehen
+            {t('Startseite ansehen')}
           </Button>
         )}
       </Box>

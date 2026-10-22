@@ -1,4 +1,7 @@
-export type FileType = 'image' | 'video' | 'audio' | 'file';
+export type FileType = 'image' | 'video' | 'audio' | 'text' | 'file';
+
+export type UrlStyle = 'uuid' | 'random' | 'words' | 'emoji' | 'invisible' | 'original';
+export type ExpiryChoice = 'never' | '10m' | '1h' | '6h' | '1d' | '3d' | '7d' | '30d' | '90d' | '365d';
 
 export interface FileUrls {
   view: string;
@@ -10,8 +13,18 @@ export interface FileUrls {
 
 export interface FileItem {
   id: number;
+  slug: string;
   filename: string;
+  title: string | null;
+  originalName: string | null;
   username: string;
+  createdAt: number | null;
+  storage: 'local' | 's3';
+  syntax: string | null;
+  tags: string[];
+  password: boolean;
+  maxViews: number | null;
+  expiresAt: number | null;
   sizeBytes: number;
   date: string;
   width: number;
@@ -20,6 +33,10 @@ export interface FileItem {
   views: number;
   type: FileType;
   isGif: boolean;
+  listed: boolean;
+  deletedAt: number | null;
+  purgeAt: number | null;
+  blocked: { at: number; reason: string } | null;
   urls: FileUrls;
 }
 
@@ -51,9 +68,18 @@ export interface UserStats {
   images: number;
   videos: number;
   audio: number;
+  texts?: number;
   latestUpload: string | null;
   storageBreakdown: StorageBreakdown;
   quota?: QuotaInfo;
+  trash?: TrashSummary;
+}
+
+export interface TrashSummary {
+  files: number;
+  bytes: number;
+  days: number;
+  enabled: boolean;
 }
 
 export interface GlobalStats {
@@ -85,6 +111,9 @@ export interface AdminUser {
   identities: LinkedIdentity[];
   hasPassword: boolean;
   mustChangePassword: boolean;
+  email: string | null;
+  emailVerified: boolean;
+  domains: number;
 }
 
 export interface Provider {
@@ -130,6 +159,98 @@ export interface SiteInfo {
   copyright: string;
   links: SiteLink[];
   legal: SiteLink[];
+  pwa?: boolean;
+  language?: 'de' | 'en';
+  report?: boolean;
+  custom?: boolean;
+}
+
+export interface UploadOptionsInfo {
+  urlStyle: UrlStyle;
+  expiry: ExpiryChoice;
+  maxExpiry: ExpiryChoice;
+  domain: string;
+  domains: string[];
+  texts: boolean;
+  textMaxBytes: number | null;
+  links: boolean;
+  albums: boolean;
+  trash: boolean;
+  trashDays: number;
+  zip: boolean;
+  stats: boolean;
+  profiles: boolean;
+  editable: string[];
+}
+
+export interface TagCount {
+  tag: string;
+  files: number;
+}
+
+export interface ShortLink {
+  id: number;
+  code: string;
+  url: string;
+  title: string | null;
+  createdAt: number;
+  expiresAt: number | null;
+  password: boolean;
+  maxClicks: number | null;
+  clicks: number;
+  lastClickedAt: number | null;
+  blocked: { at: number; reason: string } | null;
+  short: string;
+}
+
+export interface LinkListResponse {
+  links: ShortLink[];
+  total: number;
+  page: number;
+  pages: number;
+  limit: number;
+  hasNext: boolean;
+}
+
+export type AlbumVisibility = 'private' | 'link' | 'public';
+
+export interface Album {
+  id: number;
+  code: string;
+  title: string;
+  description: string;
+  visibility: AlbumVisibility;
+  password: boolean;
+  coverFileId: number | null;
+  createdAt: number;
+  updatedAt: number;
+  url: string;
+  files: number;
+  blocked?: { at: number; reason: string } | null;
+  cover?: { type: FileType; url: string | null; color: string } | null;
+  items?: FileItem[];
+}
+
+export type NotifyKey = 'security' | 'reports' | 'users';
+
+export interface Preferences {
+  language: 'de' | 'en' | null;
+  urlStyle: UrlStyle | null;
+  domain: string | null;
+  expiry: ExpiryChoice | null;
+  notify: Record<NotifyKey, boolean>;
+}
+
+export interface PreferenceChoices {
+  languages: Array<'de' | 'en'>;
+  urlStyles: UrlStyle[];
+  expiries: ExpiryChoice[];
+  maxExpiry: ExpiryChoice;
+  domains: string[];
+  defaults: { language: 'de' | 'en'; urlStyle: UrlStyle; expiry: ExpiryChoice };
+  texts: boolean;
+  links: boolean;
+  mail: boolean;
 }
 
 export interface SessionUser {
@@ -137,6 +258,7 @@ export interface SessionUser {
   role: Role;
   isAdmin: boolean;
   canCustomizeEmbed: boolean;
+  canDesign: boolean;
 }
 
 export interface SessionInfo {
@@ -211,6 +333,46 @@ export interface AccountOverview {
   tokens: ApiTokenInfo[];
   activity: AuditEvent[];
   setup: SetupStep;
+  preferences: Preferences;
+  choices: PreferenceChoices;
+  email: EmailState;
+  domains: DomainState;
+}
+
+export interface EmailState {
+  available: boolean;
+  email: string | null;
+  verifiedAt: number | null;
+  pending: { email: string; sentAt: number } | null;
+}
+
+export interface UserDomain {
+  id: number;
+  domain: string;
+  origin: string;
+  status: 'pending' | 'verified';
+  createdAt: number;
+  verifiedAt: number | null;
+  checkedAt: number | null;
+  error: string | null;
+  autoCheckUntil: number | null;
+  record: { type: 'TXT'; name: string; value: string };
+  target: string;
+  username?: string | null;
+  userId?: number;
+}
+
+export interface DomainCheck extends UserDomain {
+  verified: boolean;
+  points: boolean | null;
+  reachable: boolean | null;
+}
+
+export interface DomainState {
+  enabled: boolean;
+  max: number;
+  https: boolean;
+  items: UserDomain[];
 }
 
 export interface Invite {
@@ -257,20 +419,176 @@ export interface SiteLink {
   url: string;
 }
 
-export type SettingValue = string | number | boolean | null | string[] | EmbedTemplate | SiteLink[];
+export type DesignLayout = 'standard' | 'minimal' | 'stage' | 'split' | 'polaroid' | 'magazine';
+export type DesignScheme = 'visitor' | 'dark' | 'light';
+export type DesignBackground = 'ambient' | 'gradient' | 'plain' | 'dots';
+export type DesignFont = 'rounded' | 'system' | 'serif' | 'mono';
+export type DesignCorners = 'round' | 'soft' | 'sharp';
+export type DesignElement =
+  'header' | 'title' | 'owner' | 'date' | 'size' | 'resolution' | 'views' | 'download' | 'copy' | 'share' | 'original' | 'footer';
+
+export interface ViewDesign {
+  layout: DesignLayout;
+  accent: string;
+  scheme: DesignScheme;
+  background: DesignBackground;
+  font: DesignFont;
+  corners: DesignCorners;
+  show: Record<DesignElement, boolean>;
+  note: string;
+  button: { label: string; url: string };
+  css?: string;
+}
+
+export interface ViewDesignData {
+  own: ViewDesign | null;
+  defaultDesign: ViewDesign;
+  builtinDesign: ViewDesign;
+  allowCustom: boolean;
+  cssMode: 'off' | 'admins' | 'all';
+  cssAllowed: boolean;
+  sampleFileId: number | null;
+  choices: {
+    layouts: DesignLayout[];
+    backgrounds: DesignBackground[];
+    fonts: DesignFont[];
+    corners: DesignCorners[];
+    schemes: DesignScheme[];
+    elements: DesignElement[];
+  };
+  maxCss: number;
+}
+
+export interface ProfileSettings {
+  enabled: boolean;
+  name: string;
+  bio: string;
+  links: SiteLink[];
+  showAlbums: boolean;
+  showFiles: boolean;
+  blocked: { at: number; reason: string } | null;
+  available: boolean;
+  urls: { profile: string; domains: string[] };
+  counts: { albums: number; files: number };
+}
+
+export interface DesignBoot extends BootBase {
+  page: 'design';
+  user: SessionUser;
+  view: ViewDesignData;
+  profile: ProfileSettings;
+  embed: EmbedPageData;
+  userStats: UserStats;
+  sudo: SudoMethods;
+}
+
+export interface StatsCounts {
+  views: number;
+  downloads: number;
+  direct: number;
+  previews: number;
+}
+
+export interface StatsDay extends StatsCounts {
+  day: string;
+}
+
+export interface StatsSeries {
+  enabled: boolean;
+  retentionDays: number;
+  days: StatsDay[];
+  totals: StatsCounts;
+  sources: Array<{ source: string; hits: number; lastAt: number | null }>;
+}
+
+export interface StatsOverview {
+  enabled: boolean;
+  days: StatsDay[];
+  top: Array<StatsCounts & { id: number; total: number; file: FileItem }>;
+  sources: Array<{ source: string; hits: number }>;
+}
+
+export type ReportReason = 'illegal' | 'copyright' | 'privacy' | 'spam' | 'abuse' | 'other';
+export type ReportKind = 'file' | 'album' | 'link' | 'profile';
+
+export interface ReportTarget {
+  kind: ReportKind;
+  target: string;
+}
+
+export interface ReportDetails {
+  exists: boolean;
+  label?: string;
+  url?: string;
+  preview?: string | null;
+  type?: FileType;
+  destination?: string;
+  owner?: string | null;
+  blocked?: boolean;
+  deleted?: boolean;
+}
+
+export interface ReportEntry {
+  id: number;
+  kind: ReportKind;
+  target: string;
+  targetId: number | null;
+  reason: ReportReason;
+  message: string;
+  contact: string | null;
+  createdAt: number;
+  status: 'open' | 'resolved' | 'dismissed';
+  resolvedAt: number | null;
+  action: string | null;
+  note: string;
+  similar: number;
+  details: ReportDetails;
+}
+
+export interface ReportList {
+  reports: ReportEntry[];
+  total: number;
+  page: number;
+  pages: number;
+  hasNext: boolean;
+  open: number;
+}
+
+export interface ReportBoot extends BootBase {
+  page: 'report';
+  report: { url: string; reasons: ReportReason[] };
+}
+
+export type SettingValue = string | number | boolean | null | string[] | EmbedTemplate | SiteLink[] | ViewDesign;
 
 export interface SettingsPayload {
   values: Record<string, SettingValue>;
   secrets: Record<string, boolean>;
+  localizedDefaults?: Record<string, { value: string; localized: string }>;
   redirectUris: Record<string, string>;
   environment: { port: number; logLevel: string; logFormat: string; errorReports: 'project' | 'custom' | 'off' };
 }
 
-type PageName = 'home' | 'setup' | 'login' | 'dashboard' | 'admin' | 'account' | 'embed' | 'view' | 'notfound' | 'legal';
+type PageName =
+  | 'home'
+  | 'setup'
+  | 'login'
+  | 'dashboard'
+  | 'admin'
+  | 'account'
+  | 'design'
+  | 'view'
+  | 'notfound'
+  | 'legal'
+  | 'album'
+  | 'profile'
+  | 'report';
 
 interface BootBase {
   page: PageName;
   site: SiteInfo;
+  language?: 'de' | 'en';
+  messages?: Record<string, string> | null;
 }
 
 export interface LoginMethods {
@@ -278,6 +596,7 @@ export interface LoginMethods {
   providers: Provider[];
   token: boolean;
   register: boolean;
+  reset: boolean;
   passkeyOrigin: string;
 }
 
@@ -296,11 +615,13 @@ export interface InviteInfo {
 
 export interface LoginBoot extends BootBase {
   page: 'login';
-  mode: 'login' | 'register';
+  mode: 'login' | 'register' | 'reset';
   error: string;
+  notice?: string;
   next: string;
   methods: LoginMethods;
   mfa?: MfaChallenge | null;
+  reset?: { valid: boolean; username: string; passwordMinLength: number };
   registration?: {
     mode: 'closed' | 'invite' | 'open';
     allowed: boolean;
@@ -320,6 +641,8 @@ export interface DashboardBoot extends BootBase {
   maxUploadBytes: number | null;
   quota: QuotaInfo;
   urlFetch: boolean;
+  options: UploadOptionsInfo;
+  tags: TagCount[];
 }
 
 export interface SudoMethods {
@@ -344,6 +667,55 @@ export interface AdminBoot extends BootBase {
   audit: AuditEvent[];
   sudo: SudoMethods;
   homeStats: HomeStatsFull;
+  database: DatabaseInfo;
+  storage: StorageInfo;
+  backups: BackupInfo;
+  moderation: { open: number; enabled: boolean };
+  domains: UserDomain[];
+  mail: { ready: boolean };
+}
+
+export interface DatabaseInfo {
+  client: 'sqlite' | 'postgres' | 'mysql';
+  label: string;
+  version: string;
+  source: 'env' | 'file' | 'default' | 'cli';
+  tables: Record<string, number>;
+}
+
+export interface StorageMigration {
+  to: 'local' | 's3';
+  startedAt: number;
+  total: number | null;
+  done: number;
+  moved: number;
+  failed: number;
+  missing: number;
+  finishedAt: number | null;
+  error: string | null;
+}
+
+export interface StorageInfo {
+  driver: 'local' | 's3';
+  configured: boolean;
+  counts: { local: { files: number; bytes: number }; s3: { files: number; bytes: number } };
+  migration: StorageMigration | null;
+  ffmpeg: string | null;
+}
+
+export interface BackupItem {
+  name: string;
+  size: number;
+  at: number;
+  location: 'local' | 's3';
+  auto: boolean;
+}
+
+export interface BackupInfo {
+  items: BackupItem[];
+  listError?: string;
+  running: { name: string; startedAt: number; phase: string; includeUploads: boolean; reason: string } | null;
+  last: { name: string; at: number; ok: boolean; error?: string; size?: number; location?: string; ms?: number } | null;
 }
 
 export interface AccountBoot extends BootBase {
@@ -353,37 +725,144 @@ export interface AccountBoot extends BootBase {
   userStats: UserStats;
 }
 
-export interface EmbedBoot extends BootBase {
-  page: 'embed';
-  user: SessionUser;
-  embed: EmbedPageData;
-  userStats: UserStats;
-  sudo: SudoMethods;
+export interface LockedInfo {
+  kind?: 'file' | 'link' | 'album';
+  state: 'locked' | 'once';
+  slug: string;
+  password: boolean;
+  once?: boolean;
+  expiresAt?: number | null;
 }
 
-export interface ViewBoot extends BootBase {
+export interface ViewFile {
+  id: number;
+  slug: string;
+  filename: string;
+  title: string | null;
+  originalName: string | null;
+  type: FileType;
+  isGif: boolean;
+  syntax: string | null;
+  textBytes: number | null;
+  textPreview: boolean;
+  width: number;
+  height: number;
+  sizeBytes: number;
+  views: number;
+  date: string;
+  createdAt: number | null;
+  expiresAt: number | null;
+  once: boolean;
+  protected: boolean;
+  username: string;
+  owner: boolean;
+  blocked?: { reason: string } | null;
+}
+
+export interface ViewUrls {
+  view: string;
+  direct: string;
+  raw: string;
+  download: string;
+  display: string;
+  poster: string | null;
+  hls: string | null;
+}
+
+export interface OwnerStyle {
+  design?: ViewDesign;
+  css?: string;
+  report?: ReportTarget | null;
+}
+
+export interface ViewBoot extends BootBase, OwnerStyle {
   page: 'view';
-  file: {
-    filename: string;
-    type: FileType;
-    isGif: boolean;
-    width: number;
-    height: number;
-    sizeBytes: number;
-    views: number;
-    date: string;
-    username: string;
-  };
-  urls: {
-    view: string;
-    direct: string;
-    download: string;
-    display: string;
-    poster: string | null;
-    hls: string | null;
-  };
+  locked?: LockedInfo;
+  file: ViewFile;
+  urls: ViewUrls;
   accent: string | null;
   hlsConverting: boolean;
+  profile?: { name: string; url: string } | null;
+  preview?: boolean;
+  sample?: boolean;
+  sampleUser?: string;
+}
+
+export interface AlbumItem {
+  id: number;
+  slug: string;
+  title: string | null;
+  name: string | null;
+  filename: string | null;
+  type: FileType;
+  isGif: boolean;
+  width: number;
+  height: number;
+  color: string;
+  sizeBytes: number;
+  locked: boolean;
+  once: boolean;
+  view: string;
+  preview: string | null;
+  direct: string | null;
+  download: string | null;
+}
+
+export interface AlbumBoot extends BootBase, OwnerStyle {
+  page: 'album';
+  locked?: LockedInfo;
+  album?: {
+    id: number;
+    code: string;
+    title: string;
+    description: string;
+    owner: string | null;
+    updatedAt: number;
+    url: string;
+    zip: boolean;
+  };
+  items?: AlbumItem[];
+  owner?: boolean;
+}
+
+export interface PublicAlbum {
+  code: string;
+  title: string;
+  description: string;
+  files: number;
+  locked: boolean;
+  url: string;
+  cover: { type: FileType; url: string | null; color: string } | null;
+  updatedAt: number;
+}
+
+export interface PublicFilePage {
+  items: AlbumItem[];
+  page: number;
+  hasNext: boolean;
+  total: number;
+}
+
+export interface ProfileBoot extends BootBase, OwnerStyle {
+  page: 'profile';
+  profile: { id: number; username: string; name: string; bio: string; links: SiteLink[]; since: number | null; url: string };
+  albums: PublicAlbum[];
+  files: PublicFilePage | null;
+  owner: boolean;
+  custom: boolean;
+}
+
+export interface DatabaseChoice {
+  client: 'sqlite' | 'postgres' | 'mysql';
+  label: string;
+  source: 'env' | 'file' | 'default' | 'cli';
+  locked: boolean;
+  host: string | null;
+  port: number | null;
+  database: string | null;
+  user: string | null;
+  ssl: boolean;
+  sqliteDefault: boolean;
 }
 
 export interface NotFoundBoot extends BootBase {
@@ -443,6 +922,7 @@ export interface SetupBoot extends BootBase {
     settings: { values: Record<string, SettingValue>; secrets: Record<string, boolean> } | null;
     suggestedBaseUrl: string;
     checks: SetupCheck[] | null;
+    database: DatabaseChoice | null;
     passwordMinLength: number;
   };
 }
@@ -453,4 +933,16 @@ export interface LegalBoot extends BootBase {
 }
 
 export type AnyBoot =
-  HomeBoot | SetupBoot | LoginBoot | DashboardBoot | AdminBoot | AccountBoot | EmbedBoot | ViewBoot | NotFoundBoot | LegalBoot;
+  | HomeBoot
+  | SetupBoot
+  | LoginBoot
+  | DashboardBoot
+  | AdminBoot
+  | AccountBoot
+  | DesignBoot
+  | ViewBoot
+  | NotFoundBoot
+  | LegalBoot
+  | AlbumBoot
+  | ProfileBoot
+  | ReportBoot;

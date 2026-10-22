@@ -5,6 +5,7 @@ import PlayArrowRounded from '@mui/icons-material/PlayArrowRounded';
 import type { RenderedEmbed } from '../../lib/embed';
 import { UserAvatar } from '../../components/UserAvatar';
 import { ease } from '../../theme/tokens';
+import { t } from '../../lib/i18n';
 
 const THEMES = {
   dark: {
@@ -34,7 +35,7 @@ export type ChatTheme = keyof typeof THEMES;
 const FONT = '"gg sans", "Noto Sans", "Helvetica Neue", Helvetica, Arial, sans-serif';
 
 export interface PreviewMedia {
-  type: 'image' | 'video' | 'audio' | 'file';
+  type: 'image' | 'video' | 'audio' | 'text' | 'file';
   src: string | null;
   width: number;
   height: number;
@@ -96,9 +97,9 @@ export function DiscordPreview({
   username: string;
   theme: ChatTheme;
 }) {
-  const t = THEMES[theme];
+  const palette = THEMES[theme];
   const now = new Date();
-  const time = `Heute um ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  const time = t('Heute um {time}', { time: `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}` });
   const hasText = embed.enabled && Boolean(embed.siteName || embed.author || embed.title || embed.description);
   const visualMedia = media.src && (media.type === 'image' || media.type === 'video');
   const large = embed.largeImage || media.type === 'video';
@@ -106,13 +107,13 @@ export function DiscordPreview({
   return (
     <Box
       sx={{
-        bgcolor: t.chat,
-        color: t.text,
+        bgcolor: palette.chat,
+        color: palette.text,
         fontFamily: FONT,
         borderRadius: '12px',
         p: { xs: 2, sm: 2.5 },
         transition: 'background-color 240ms ease',
-        border: `1px solid ${t.border}`,
+        border: `1px solid ${palette.border}`,
       }}
     >
       <Box sx={{ display: 'flex', gap: 2 }}>
@@ -121,14 +122,14 @@ export function DiscordPreview({
         </Box>
         <Box sx={{ minWidth: 0, flex: 1 }}>
           <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
-            <Typography component="span" sx={{ fontFamily: FONT, fontWeight: 600, fontSize: '1rem', color: t.name }}>
+            <Typography component="span" sx={{ fontFamily: FONT, fontWeight: 600, fontSize: '1rem', color: palette.name }}>
               {username}
             </Typography>
-            <Typography component="span" sx={{ fontFamily: FONT, fontSize: '0.75rem', color: t.muted }}>
+            <Typography component="span" sx={{ fontFamily: FONT, fontSize: '0.75rem', color: palette.muted }}>
               {time}
             </Typography>
           </Box>
-          <Typography sx={{ fontFamily: FONT, fontSize: '0.9375rem', color: t.link, wordBreak: 'break-all', lineHeight: 1.375 }}>
+          <Typography sx={{ fontFamily: FONT, fontSize: '0.9375rem', color: palette.link, wordBreak: 'break-all', lineHeight: 1.375 }}>
             {link}
           </Typography>
 
@@ -145,7 +146,7 @@ export function DiscordPreview({
                   sx={{
                     mt: 0.75,
                     maxWidth: 432,
-                    bgcolor: t.embed,
+                    bgcolor: palette.embed,
                     borderRadius: '4px',
                     borderLeft: `4px solid ${color}`,
                     transition: 'border-color 220ms ease, background-color 240ms ease',
@@ -157,13 +158,13 @@ export function DiscordPreview({
                 >
                   <Box sx={{ minWidth: 0 }}>
                     {embed.siteName && (
-                      <Typography sx={{ fontFamily: FONT, fontSize: '0.75rem', mt: 1, ...linkSx(t.provider, embed.siteUrl) }}>
+                      <Typography sx={{ fontFamily: FONT, fontSize: '0.75rem', mt: 1, ...linkSx(palette.provider, embed.siteUrl) }}>
                         {embed.siteName}
                       </Typography>
                     )}
                     {embed.author && (
                       <Typography
-                        sx={{ fontFamily: FONT, fontSize: '0.875rem', fontWeight: 600, mt: 1, ...linkSx(t.name, embed.authorUrl) }}
+                        sx={{ fontFamily: FONT, fontSize: '0.875rem', fontWeight: 600, mt: 1, ...linkSx(palette.name, embed.authorUrl) }}
                       >
                         {embed.author}
                       </Typography>
@@ -175,7 +176,7 @@ export function DiscordPreview({
                           fontSize: '1rem',
                           fontWeight: 600,
                           mt: 1,
-                          color: t.link,
+                          color: palette.link,
                           wordBreak: 'break-word',
                           '&:hover': { textDecoration: 'underline' },
                           cursor: 'pointer',
@@ -190,7 +191,7 @@ export function DiscordPreview({
                           fontFamily: FONT,
                           fontSize: '0.875rem',
                           mt: 1,
-                          color: t.text,
+                          color: palette.text,
                           whiteSpace: 'pre-line',
                           wordBreak: 'break-word',
                           lineHeight: 1.375,
@@ -220,8 +221,8 @@ export function DiscordPreview({
                     <Media media={media} large radius={8} />
                   </Box>
                 ) : (
-                  <Typography sx={{ fontFamily: FONT, fontSize: '0.8125rem', color: t.muted, mt: 1 }}>
-                    Bei Audio und anderen Dateien zeigt Discord in diesem Modus nur den Link.
+                  <Typography sx={{ fontFamily: FONT, fontSize: '0.8125rem', color: palette.muted, mt: 1 }}>
+                    {t('Bei Audio und anderen Dateien zeigt Discord in diesem Modus nur den Link.')}
                   </Typography>
                 )}
               </m.div>

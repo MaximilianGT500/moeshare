@@ -34,6 +34,21 @@ function berlinDate(date = new Date()) {
   return `${p.day}.${p.month}.${p.year}, ${p.hour}:${p.minute}:${p.second}`;
 }
 
+function berlinOffsetMs(utcMs) {
+  const p = berlinParts(new Date(utcMs));
+  const local = Date.UTC(Number(p.year), Number(p.month) - 1, Number(p.day), Number(p.hour), Number(p.minute), Number(p.second));
+  return local - Math.floor(utcMs / 1000) * 1000;
+}
+
+function parseBerlinDate(value) {
+  const match = /^(\d{1,2})\.(\d{1,2})\.(\d{4}),?\s+(\d{1,2}):(\d{2})(?::(\d{2}))?/.exec(String(value || '').trim());
+  if (!match) return null;
+  const [, day, month, year, hour, minute, second] = match.map(Number);
+  const naive = Date.UTC(year, month - 1, day, hour, minute, second || 0);
+  const first = naive - berlinOffsetMs(naive);
+  return naive - berlinOffsetMs(first);
+}
+
 function berlinDay(date = new Date()) {
   const p = berlinParts(date);
   return `${p.year}-${p.month}-${p.day}`;
@@ -55,4 +70,4 @@ function greeting(date = new Date()) {
 const escapeHtml = (value) =>
   String(value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 
-module.exports = { formatBytes, berlinDate, berlinDay, splitBerlinDate, greeting, escapeHtml };
+module.exports = { formatBytes, berlinDate, berlinDay, parseBerlinDate, splitBerlinDate, greeting, escapeHtml };

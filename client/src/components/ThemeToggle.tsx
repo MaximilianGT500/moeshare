@@ -9,6 +9,7 @@ import DarkModeRounded from '@mui/icons-material/DarkModeRounded';
 import LightModeRounded from '@mui/icons-material/LightModeRounded';
 import BrightnessAutoRounded from '@mui/icons-material/BrightnessAutoRounded';
 import { m, AnimatePresence } from 'motion/react';
+import { t } from '../lib/i18n';
 
 type Mode = 'light' | 'dark' | 'system';
 
@@ -54,7 +55,7 @@ const originOf = (event: MouseEvent<HTMLElement>) => {
 export function ThemeToggleButton({ size = 'medium' }: { size?: 'small' | 'medium' }) {
   const { resolved, apply } = useModeSwitch();
   const next = resolved === 'dark' ? 'light' : 'dark';
-  const label = next === 'light' ? 'Helles Design' : 'Dunkles Design';
+  const label = next === 'light' ? t('Helles Design') : t('Dunkles Design');
   return (
     <Tooltip title={label} placement="right">
       <IconButton aria-label={label} size={size} onClick={(event) => apply(next, originOf(event))}>
@@ -85,17 +86,17 @@ export function ThemeModeSelector() {
       onChange={(event, value: Mode | null) => {
         if (value) apply(value, originOf(event as MouseEvent<HTMLElement>));
       }}
-      aria-label="Darstellung"
+      aria-label={t('Darstellung')}
       fullWidth
     >
-      <ToggleButton value="light" aria-label="Hell">
-        <LightModeRounded fontSize="small" /> Hell
+      <ToggleButton value="light" aria-label={t('Hell')}>
+        <LightModeRounded fontSize="small" /> {t('Hell')}
       </ToggleButton>
-      <ToggleButton value="dark" aria-label="Dunkel">
-        <DarkModeRounded fontSize="small" /> Dunkel
+      <ToggleButton value="dark" aria-label={t('Dunkel')}>
+        <DarkModeRounded fontSize="small" /> {t('Dunkel')}
       </ToggleButton>
-      <ToggleButton value="system" aria-label="Wie System">
-        <BrightnessAutoRounded fontSize="small" /> Auto
+      <ToggleButton value="system" aria-label={t('Wie System')}>
+        <BrightnessAutoRounded fontSize="small" /> {t('Auto')}
       </ToggleButton>
     </ToggleButtonGroup>
   );

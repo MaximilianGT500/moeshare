@@ -16,6 +16,7 @@ import type { EmbedColorMode, EmbedTemplate } from '../../lib/types';
 import { LIMITS, PLACEHOLDERS, unknownPlaceholders } from '../../lib/embed';
 import { ColorField } from '../../components/Fields';
 import { c, css, radius } from '../../theme/tokens';
+import { t } from '../../lib/i18n';
 
 type TextKey = 'siteName' | 'siteUrl' | 'author' | 'authorUrl' | 'title' | 'description';
 
@@ -116,7 +117,7 @@ export function EmbedForm({ value, onChange, errors, disabled }: Props) {
         placeholder={options.placeholder}
         fullWidth
         error={!!error}
-        helperText={error || (unknown.length ? `Unbekannter Platzhalter: ${unknown.join(', ')}` : count)}
+        helperText={error || (unknown.length ? t('Unbekannter Platzhalter: {names}', { names: unknown.join(', ') }) : count)}
         inputRef={(el: HTMLInputElement | HTMLTextAreaElement | null) => {
           refs.current[key] = el;
         }}
@@ -142,14 +143,14 @@ export function EmbedForm({ value, onChange, errors, disabled }: Props) {
     <Stack spacing={4}>
       <Box>
         <Typography variant="h6" component="h2" sx={{ mb: 1.5 }}>
-          Darstellung
+          {t('Darstellung')}
         </Typography>
-        <Box role="radiogroup" aria-label="Darstellung" sx={{ display: 'flex', gap: 1.5, flexDirection: { xs: 'column', sm: 'row' } }}>
+        <Box role="radiogroup" aria-label={t('Darstellung')} sx={{ display: 'flex', gap: 1.5, flexDirection: { xs: 'column', sm: 'row' } }}>
           <ModeCard
             selected={value.enabled}
             onClick={() => set({ enabled: true })}
-            title="Karte mit Text"
-            text="Seitenname, Autor, Titel und Beschreibung über dem Medium."
+            title={t('Karte mit Text')}
+            text={t('Seitenname, Autor, Titel und Beschreibung über dem Medium.')}
           >
             <Box sx={{ display: 'flex', gap: 1, width: '100%' }}>
               <Box sx={{ width: 4, borderRadius: 1, bgcolor: c.primary }} />
@@ -164,8 +165,8 @@ export function EmbedForm({ value, onChange, errors, disabled }: Props) {
           <ModeCard
             selected={!value.enabled}
             onClick={() => set({ enabled: false })}
-            title="Nur das Medium"
-            text="Discord zeigt Bild oder Video ohne Text, wie einen direkten Link."
+            title={t('Nur das Medium')}
+            text={t('Discord zeigt Bild oder Video ohne Text, wie einen direkten Link.')}
           >
             <Box
               sx={{
@@ -187,24 +188,24 @@ export function EmbedForm({ value, onChange, errors, disabled }: Props) {
         <>
           <Box>
             <Typography variant="h6" component="h2">
-              Inhalt
+              {t('Inhalt')}
             </Typography>
             <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
-              Leere Felder lässt Discord weg. Platzhalter füllt MoeShare beim Teilen mit den Daten der Datei.
+              {t('Leere Felder lässt Discord weg. Platzhalter füllt MoeShare beim Teilen mit den Daten der Datei.')}
             </Typography>
             <Stack spacing={2}>
               <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
-                {field('siteName', 'Seitenname', { max: LIMITS.siteName })}
-                {field('siteUrl', 'Link des Seitennamens', { url: true, placeholder: 'https://' })}
-                {field('author', 'Autor', { max: LIMITS.author })}
-                {field('authorUrl', 'Link des Autors', { url: true, placeholder: 'https://' })}
+                {field('siteName', t('Seitenname'), { max: LIMITS.siteName })}
+                {field('siteUrl', t('Link des Seitennamens'), { url: true, placeholder: 'https://' })}
+                {field('author', t('Autor'), { max: LIMITS.author })}
+                {field('authorUrl', t('Link des Autors'), { url: true, placeholder: 'https://' })}
               </Box>
-              {field('title', 'Titel', { max: LIMITS.title })}
-              {field('description', 'Beschreibung', { multiline: true, max: LIMITS.description })}
+              {field('title', t('Titel'), { max: LIMITS.title })}
+              {field('description', t('Beschreibung'), { multiline: true, max: LIMITS.description })}
             </Stack>
             <Box sx={{ mt: 2 }}>
               <Typography variant="caption" component="p" sx={{ color: 'text.secondary', mb: 1 }}>
-                Platzhalter einfügen (an der Cursorposition des zuletzt gewählten Felds)
+                {t('Platzhalter einfügen (an der Cursorposition des zuletzt gewählten Felds)')}
               </Typography>
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
                 {PLACEHOLDERS.map((placeholder) => (
@@ -225,33 +226,33 @@ export function EmbedForm({ value, onChange, errors, disabled }: Props) {
 
           <Box>
             <Typography variant="h6" component="h2" sx={{ mb: 1.5 }}>
-              Farbe
+              {t('Farbe')}
             </Typography>
             <ToggleButtonGroup
               exclusive
               value={value.color.mode}
               onChange={(_event, mode: EmbedColorMode | null) => chooseColor(mode)}
-              aria-label="Farbe des Rands"
+              aria-label={t('Farbe des Rands')}
               disabled={disabled}
               sx={{ flexWrap: 'wrap' }}
             >
               <ToggleButton value="dominant">
                 <ColorizeRounded fontSize="small" />
-                Aus der Datei
+                {t('Aus der Datei')}
               </ToggleButton>
               <ToggleButton value="fixed">
                 <FormatColorFillRounded fontSize="small" />
-                Feste Farbe
+                {t('Feste Farbe')}
               </ToggleButton>
               <ToggleButton value="random">
                 <ShuffleRounded fontSize="small" />
-                Zufällig
+                {t('Zufällig')}
               </ToggleButton>
             </ToggleButtonGroup>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mt: 2, flexWrap: 'wrap' }}>
               {value.color.mode !== 'random' && (
                 <ColorField
-                  label={value.color.mode === 'dominant' ? 'Ersatzfarbe' : 'Farbe'}
+                  label={value.color.mode === 'dominant' ? t('Ersatzfarbe') : t('Farbe')}
                   value={value.color.value}
                   disabled={disabled}
                   onChange={(hex) => set({ color: { ...value.color, value: hex } })}
@@ -259,10 +260,10 @@ export function EmbedForm({ value, onChange, errors, disabled }: Props) {
               )}
               <Typography variant="body2" sx={{ color: 'text.secondary', flex: '1 1 220px' }}>
                 {value.color.mode === 'dominant'
-                  ? 'Der Rand nimmt die Hauptfarbe des Bildes an. Für Videos, Audio und Dateien gilt die Ersatzfarbe.'
+                  ? t('Der Rand nimmt die Hauptfarbe des Bildes an. Für Videos, Audio und Dateien gilt die Ersatzfarbe.')
                   : value.color.mode === 'random'
-                    ? 'Jeder Aufruf bekommt eine neue, zufällige Farbe.'
-                    : 'Alle Links haben dieselbe Randfarbe.'}
+                    ? t('Jeder Aufruf bekommt eine neue, zufällige Farbe.')
+                    : t('Alle Links haben dieselbe Randfarbe.')}
               </Typography>
             </Box>
           </Box>
@@ -270,10 +271,10 @@ export function EmbedForm({ value, onChange, errors, disabled }: Props) {
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 2, borderRadius: `${radius.md}px`, bgcolor: c.surfaceContainerLow }}>
             <Box sx={{ flex: 1 }}>
               <Typography variant="subtitle2" component="label" htmlFor="embed-large">
-                Großes Bild
+                {t('Großes Bild')}
               </Typography>
               <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                Bilder erscheinen in voller Breite statt als kleines Vorschaubild rechts.
+                {t('Bilder erscheinen in voller Breite statt als kleines Vorschaubild rechts.')}
               </Typography>
             </Box>
             <Switch

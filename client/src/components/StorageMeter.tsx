@@ -4,35 +4,51 @@ import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import type { StorageBreakdown } from '../lib/types';
 import { formatBytes } from '../lib/format';
+import { mix } from '../lib/color';
 import { c, ease, fileTypeColor, radius } from '../theme/tokens';
+import { t } from '../lib/i18n';
+
+const trashFill = `repeating-linear-gradient(135deg, ${c.outline} 0 2px, ${mix(c.outline, 30)} 2px 5px)`;
 
 const SEGMENTS = [
-  { key: 'images', label: 'Bilder', color: fileTypeColor.image },
-  { key: 'videos', label: 'Videos', color: fileTypeColor.video },
-  { key: 'audio', label: 'Audio', color: fileTypeColor.audio },
-  { key: 'other', label: 'Sonstiges', color: fileTypeColor.other },
+  { key: 'images', label: t('Bilder'), color: fileTypeColor.image },
+  { key: 'videos', label: t('Videos'), color: fileTypeColor.video },
+  { key: 'audio', label: t('Audio'), color: fileTypeColor.audio },
+  { key: 'other', label: t('Sonstiges'), color: fileTypeColor.other },
 ] as const;
 
 export function StorageMeter({
   breakdown,
   animate = true,
   capacity = null,
+  trash = 0,
 }: {
   breakdown: StorageBreakdown;
   animate?: boolean;
   capacity?: number | null;
+  trash?: number;
 }) {
-  const used = SEGMENTS.reduce((sum, s) => sum + (breakdown[s.key] || 0), 0);
+  const used = SEGMENTS.reduce((sum, s) => sum + (breakdown[s.key] || 0), 0) + trash;
   const total = capacity && capacity > used ? capacity : used;
   const free = capacity ? Math.max(0, capacity - used) : 0;
   const freeLabel = capacity && free < capacity && formatBytes(free) === formatBytes(capacity) ? formatBytes(free, 2) : formatBytes(free);
-  const visible = SEGMENTS.filter((s) => (breakdown[s.key] || 0) > 0);
+  const visible = [
+    ...SEGMENTS.filter((s) => (breakdown[s.key] || 0) > 0).map((s) => ({
+      key: s.key,
+      label: s.label,
+      color: s.color,
+      bytes: breakdown[s.key],
+    })),
+    ...(trash > 0 ? [{ key: 'trash', label: t('Papierkorb'), color: trashFill, bytes: trash }] : []),
+  ];
 
   return (
     <Box>
       <Box
         role="img"
-        aria-label={`Speicherverteilung: ${visible.map((s) => `${s.label} ${formatBytes(breakdown[s.key])}`).join(', ') || 'leer'}`}
+        aria-label={t('Speicherverteilung: {value}', {
+          value: visible.map((s) => `${s.label} ${formatBytes(s.bytes)}`).join(', ') || t('leer'),
+        })}
         sx={{
           display: 'flex',
           gap: '2px',
@@ -44,9 +60,9 @@ export function StorageMeter({
       >
         {total > 0 &&
           visible.map((segment, index) => {
-            const share = (breakdown[segment.key] / total) * 100;
+            const share = (segment.bytes / total) * 100;
             return (
-              <Tooltip key={segment.key} title={`${segment.label}: ${formatBytes(breakdown[segment.key])} (${Math.round(share)} %)`}>
+              <Tooltip key={segment.key} title={`${segment.label}: ${formatBytes(segment.bytes)} (${Math.round(share)} %)`}>
                 <m.div
                   initial={animate ? { scaleX: 0 } : false}
                   animate={{ scaleX: 1 }}
@@ -77,6 +93,17 @@ export function StorageMeter({
             </Typography>
           </Box>
         ))}
+        {trash > 0 && (
+          <Box component="li" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Box sx={{ width: 10, height: 10, borderRadius: '3px', background: trashFill, flexShrink: 0 }} />
+            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+              {t('Papierkorb')}
+            </Typography>
+            <Typography variant="body2" sx={{ fontWeight: 700, color: 'text.primary' }}>
+              {formatBytes(trash)}
+            </Typography>
+          </Box>
+        )}
         {capacity ? (
           <Box component="li" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Box
@@ -90,10 +117,10 @@ export function StorageMeter({
               }}
             />
             <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-              Frei
+              {t('Frei')}
             </Typography>
             <Typography variant="body2" sx={{ fontWeight: 700, color: free / capacity < 0.1 ? c.error : 'text.primary' }}>
-              {freeLabel} von {formatBytes(capacity)}
+              {t('{freeLabel} von {capacity}', { freeLabel, capacity: formatBytes(capacity) })}
             </Typography>
           </Box>
         ) : null}

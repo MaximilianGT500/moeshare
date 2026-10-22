@@ -22,6 +22,7 @@ import { OtpInput } from './OtpInput';
 import { c } from '../theme/tokens';
 
 import type { SudoMethods } from '../lib/types';
+import { t } from '../lib/i18n';
 
 type Runner = <T>(action: () => Promise<T>) => Promise<T>;
 
@@ -135,11 +136,11 @@ function ReauthDialog({ open, methods, onDone }: { open: boolean; methods: SudoM
         <ShieldRounded />
       </Box>
       <DialogTitle id="reauth-title" sx={{ textAlign: 'center' }}>
-        Bestätige, dass du es bist
+        {t('Bestätige, dass du es bist')}
       </DialogTitle>
       <DialogContent>
         <Typography variant="body2" sx={{ color: 'text.secondary', textAlign: 'center', mb: 2.5 }}>
-          Für diese Änderung braucht es eine kurze Bestätigung. Danach hast du 10 Minuten Ruhe.
+          {t('Für diese Änderung braucht es eine kurze Bestätigung. Danach hast du 10 Minuten Ruhe.')}
         </Typography>
 
         <Stack spacing={2}>
@@ -147,7 +148,7 @@ function ReauthDialog({ open, methods, onDone }: { open: boolean; methods: SudoM
             <Box component="form" onSubmit={submit} noValidate>
               {mode === 'password' ? (
                 <PasswordField
-                  label="Passwort"
+                  label={t('Passwort')}
                   value={password}
                   onChange={setPassword}
                   autoComplete="current-password"
@@ -166,7 +167,7 @@ function ReauthDialog({ open, methods, onDone }: { open: boolean; methods: SudoM
               )}
               {methods.password && methods.totp && (
                 <Button size="small" sx={{ mt: 1 }} onClick={() => setMode(mode === 'password' ? 'code' : 'password')}>
-                  {mode === 'password' ? 'Stattdessen Code aus der App eingeben' : 'Stattdessen Passwort eingeben'}
+                  {mode === 'password' ? t('Stattdessen Code aus der App eingeben') : t('Stattdessen Passwort eingeben')}
                 </Button>
               )}
             </Box>
@@ -181,13 +182,13 @@ function ReauthDialog({ open, methods, onDone }: { open: boolean; methods: SudoM
           {(canPasskey || methods.providers.length > 0) && hasForm && (
             <Divider>
               <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                oder
+                {t('oder')}
               </Typography>
             </Divider>
           )}
           {canPasskey && (
             <Button variant="outlined" startIcon={<FingerprintRounded />} onClick={withPasskey} disabled={busy} fullWidth>
-              Mit Passkey bestätigen
+              {t('Mit Passkey bestätigen')}
             </Button>
           )}
           {methods.providers.map((provider) => (
@@ -199,14 +200,14 @@ function ReauthDialog({ open, methods, onDone }: { open: boolean; methods: SudoM
               disabled={busy}
               fullWidth
             >
-              Mit {provider.label} bestätigen
+              {t('Mit {label} bestätigen', { label: provider.label })}
             </Button>
           ))}
         </Stack>
       </DialogContent>
       <DialogActions>
         <Button onClick={() => onDone(false)} disabled={busy}>
-          Abbrechen
+          {t('Abbrechen')}
         </Button>
         {hasForm && (
           <Button
@@ -215,7 +216,7 @@ function ReauthDialog({ open, methods, onDone }: { open: boolean; methods: SudoM
             disabled={busy || (mode === 'password' ? !password : code.length !== 6)}
             startIcon={busy ? <CircularProgress size={16} color="inherit" /> : null}
           >
-            Bestätigen
+            {t('Bestätigen')}
           </Button>
         )}
       </DialogActions>

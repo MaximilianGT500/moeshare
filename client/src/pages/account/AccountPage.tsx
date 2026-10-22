@@ -21,29 +21,49 @@ import { SecurityPanel } from './SecurityPanel';
 import { SessionsPanel } from './SessionsPanel';
 import { ApiPanel } from './ApiPanel';
 import { ProfilePanel } from './ProfilePanel';
+import { PreferencesPanel } from './PreferencesPanel';
+import { DomainsPanel } from './DomainsPanel';
 import { c, ease, radius } from '../../theme/tokens';
+import { t } from '../../lib/i18n';
 
-type TabKey = 'sicherheit' | 'geraete' | 'sharex' | 'konto';
-const TABS: TabKey[] = ['sicherheit', 'geraete', 'sharex', 'konto'];
-const LABELS: Record<TabKey, string> = { sicherheit: 'Sicherheit', geraete: 'Geräte', sharex: 'ShareX und API', konto: 'Konto' };
+type TabKey = 'sicherheit' | 'einstellungen' | 'domains' | 'geraete' | 'sharex' | 'konto';
+const ALL_TABS: TabKey[] = ['sicherheit', 'einstellungen', 'domains', 'geraete', 'sharex', 'konto'];
+const LABELS: Record<TabKey, string> = {
+  sicherheit: t('Sicherheit'),
+  einstellungen: t('Einstellungen'),
+  domains: t('Domains'),
+  geraete: t('Geräte'),
+  sharex: t('ShareX und API'),
+  konto: t('Konto'),
+};
 
-const tabFromHash = (): TabKey => {
+const tabsFor = (account: AccountOverview) =>
+  ALL_TABS.filter((key) => key !== 'domains' || account.domains.enabled || account.domains.items.length > 0);
+
+const tabFromHash = (tabs: TabKey[]): TabKey => {
   const hash = window.location.hash.replace('#', '') as TabKey;
-  return TABS.includes(hash) ? hash : 'sicherheit';
+  return tabs.includes(hash) ? hash : 'sicherheit';
+};
+
+const EMAIL_NOTICES: Record<string, { text: () => string; variant: 'success' | 'error' }> = {
+  bestaetigt: { text: () => t('Deine E-Mail-Adresse ist bestätigt.'), variant: 'success' },
+  vergeben: { text: () => t('Diese E-Mail-Adresse gehört schon zu einem anderen Konto.'), variant: 'error' },
+  abgelaufen: { text: () => t('Der Bestätigungslink ist abgelaufen oder wurde schon benutzt.'), variant: 'error' },
 };
 
 const OAUTH_MESSAGES: Record<string, { text: (label: string) => string; variant: 'success' | 'error' }> = {
-  linked: { text: (label) => `${label} ist jetzt verknüpft`, variant: 'success' },
-  taken: { text: (label) => `Dieses ${label}-Konto ist schon mit einem anderen Benutzer verknüpft.`, variant: 'error' },
-  mismatch: { text: (label) => `Das war ein anderes ${label}-Konto als das verknüpfte.`, variant: 'error' },
-  disabled: { text: (label) => `Die Anmeldung mit ${label} ist auf diesem Server nicht aktiviert.`, variant: 'error' },
-  failed: { text: (label) => `${label} ist gerade nicht erreichbar. Versuche es später erneut.`, variant: 'error' },
+  linked: { text: (label) => t('{label} ist jetzt verknüpft', { label }), variant: 'success' },
+  taken: { text: (label) => t('Dieses {label}-Konto ist schon mit einem anderen Benutzer verknüpft.', { label }), variant: 'error' },
+  mismatch: { text: (label) => t('Das war ein anderes {label}-Konto als das verknüpfte.', { label }), variant: 'error' },
+  disabled: { text: (label) => t('Die Anmeldung mit {label} ist auf diesem Server nicht aktiviert.', { label }), variant: 'error' },
+  failed: { text: (label) => t('{label} ist gerade nicht erreichbar. Versuche es später erneut.', { label }), variant: 'error' },
 };
 
 function Account({ boot }: { boot: AccountBoot }) {
   const toast = useToast();
   const [account, setAccount] = useState<AccountOverview>(boot.account);
-  const [tab, setTab] = useState<TabKey>(account.setup ? 'sicherheit' : tabFromHash);
+  const TABS = tabsFor(account);
+  const [tab, setTab] = useState<TabKey>(() => (account.setup ? 'sicherheit' : tabFromHash(tabsFor(boot.account))));
   const [direction, setDirection] = useState(0);
   const setup = account.setup;
 
@@ -56,9 +76,16 @@ function Account({ boot }: { boot: AccountBoot }) {
   }, [toast]);
 
   useEffect(() => {
-    const onHash = () => setTab(tabFromHash());
+    const onHash = () => setTab(tabFromHash(tabsFor(boot.account)));
     window.addEventListener('hashchange', onHash);
     const params = new URLSearchParams(window.location.search);
+    const emailNotice = EMAIL_NOTICES[params.get('email') || ''];
+    if (emailNotice) {
+      toast(emailNotice.text(), { variant: emailNotice.variant, duration: 6000 });
+      params.delete('email');
+      const rest = params.toString();
+      window.history.replaceState(null, '', `${window.location.pathname}${rest ? `?${rest}` : ''}${window.location.hash}`);
+    }
     const notice = OAUTH_MESSAGES[params.get('oauth') || ''];
     if (notice) {
       const provider = params.get('provider') || '';
@@ -70,7 +97,7 @@ function Account({ boot }: { boot: AccountBoot }) {
       window.history.replaceState(null, '', `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`);
     }
     return () => window.removeEventListener('hashchange', onHash);
-  }, [toast, boot.account.security.providers]);
+  }, [toast, boot.account]);
 
   const select = (next: TabKey) => {
     setDirection(TABS.indexOf(next) > TABS.indexOf(tab) ? 1 : -1);
@@ -96,7 +123,7 @@ function Account({ boot }: { boot: AccountBoot }) {
         active="account"
         topBar={
           <Typography variant="h5" component="h1" sx={{ pl: { xs: 1, md: 0 } }}>
-            Konto
+            {t('Konto')}
           </Typography>
         }
         accountSummary={storageSummary(boot.userStats)}
@@ -110,8 +137,8 @@ function Account({ boot }: { boot: AccountBoot }) {
             >
               <Alert severity="warning" sx={{ mb: 3 }}>
                 {setup === 'password'
-                  ? 'Lege zuerst ein eigenes Passwort fest. Danach geht es direkt weiter.'
-                  : 'Auf diesem Server ist die Zwei-Faktor-Anmeldung Pflicht. Richte sie ein, danach geht es direkt weiter.'}
+                  ? t('Lege zuerst ein eigenes Passwort fest. Danach geht es direkt weiter.')
+                  : t('Auf diesem Server ist die Zwei-Faktor-Anmeldung Pflicht. Richte sie ein, danach geht es direkt weiter.')}
               </Alert>
             </m.div>
           )}
@@ -135,7 +162,7 @@ function Account({ boot }: { boot: AccountBoot }) {
                   {user.username}
                   <Chip
                     size="small"
-                    label={user.isAdmin ? 'Admin' : 'Mitglied'}
+                    label={user.isAdmin ? t('Admin') : t('Mitglied')}
                     sx={
                       user.isAdmin
                         ? { bgcolor: c.tertiaryContainer, color: c.onTertiaryContainer, fontWeight: 700 }
@@ -144,8 +171,10 @@ function Account({ boot }: { boot: AccountBoot }) {
                   />
                 </Typography>
                 <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                  {user.createdAt ? `Dabei seit ${formatDate(new Date(user.createdAt))}` : 'Dabei seit der ersten Version'}
-                  {user.lastLoginAt ? `, zuletzt angemeldet ${relativeMs(user.lastLoginAt)}` : ''}
+                  {user.createdAt
+                    ? t('Dabei seit {date}', { date: formatDate(new Date(user.createdAt)) })
+                    : t('Dabei seit der ersten Version')}
+                  {user.lastLoginAt ? t(', zuletzt angemeldet {lastLoginAt}', { lastLoginAt: relativeMs(user.lastLoginAt) }) : ''}
                 </Typography>
               </Box>
             </Box>
@@ -155,7 +184,7 @@ function Account({ boot }: { boot: AccountBoot }) {
           </Box>
 
           <Box sx={{ mt: 3, mb: 3, borderBottom: `1px solid ${c.outlineVariant}` }}>
-            <ScrollTabs value={tab} onChange={select} label="Bereiche">
+            <ScrollTabs value={tab} onChange={select} label={t('Bereiche')}>
               {TABS.map((key) => (
                 <Tab
                   key={key}
@@ -189,9 +218,25 @@ function Account({ boot }: { boot: AccountBoot }) {
                   autoOpen={setup}
                 />
               )}
+              {tab === 'einstellungen' && (
+                <PreferencesPanel account={account} onSaved={(preferences) => setAccount((current) => ({ ...current, preferences }))} />
+              )}
+              {tab === 'domains' && (
+                <DomainsPanel
+                  initial={account.domains}
+                  preferences={account.preferences}
+                  onPreferences={(preferences) => setAccount((current) => ({ ...current, preferences }))}
+                />
+              )}
               {tab === 'geraete' && <SessionsPanel sessions={account.sessions} reload={reload} />}
               {tab === 'sharex' && (
-                <ApiPanel tokens={account.tokens} reload={reload} siteTitle={boot.site.title} baseUrl={boot.site.baseUrl} />
+                <ApiPanel
+                  tokens={account.tokens}
+                  reload={reload}
+                  siteTitle={boot.site.title}
+                  baseUrl={boot.site.baseUrl}
+                  features={{ texts: account.choices.texts, links: account.choices.links }}
+                />
               )}
               {tab === 'konto' && <ProfilePanel account={account} />}
             </m.div>

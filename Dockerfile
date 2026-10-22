@@ -1,4 +1,7 @@
-ARG NODE_VERSION=22
+ARG NODE_VERSION=26
+ARG FFMPEG_VERSION=9.0.2-1
+
+FROM mwader/static-ffmpeg:${FFMPEG_VERSION} AS ffmpeg
 
 FROM --platform=$BUILDPLATFORM node:${NODE_VERSION}-slim AS ui
 WORKDIR /ui
@@ -22,16 +25,21 @@ LABEL org.opencontainers.image.title="MoeShare" \
   org.opencontainers.image.source="https://github.com/MaximilianGT500/moeshare" \
   org.opencontainers.image.licenses="MIT"
 ENV NODE_ENV=production \
-  PORT=3000
+  PORT=3000 \
+  FFMPEG_PATH=/usr/local/bin/ffmpeg
+RUN apt-get update \
+  && apt-get upgrade -y --no-install-recommends \
+  && rm -rf /var/lib/apt/lists/*
 WORKDIR /opt/moeshare
+COPY --from=ffmpeg /ffmpeg /usr/local/bin/ffmpeg
 COPY --from=deps /deps/node_modules ./node_modules
 COPY --from=ui /ui/dist ./public/app
+COPY public/icons ./public/icons
 COPY package.json index.js cli.js ./
 COPY src ./src
-COPY views ./views
 COPY docker/entrypoint.sh /usr/local/bin/moeshare-entrypoint
 COPY docker/moeshare /usr/local/bin/moeshare
-RUN chmod -R a+rX package.json index.js cli.js src views \
+RUN chmod -R a+rX package.json index.js cli.js src public/icons \
   && chmod 755 /usr/local/bin/moeshare-entrypoint /usr/local/bin/moeshare \
   && mkdir -p db uploads
 EXPOSE 3000

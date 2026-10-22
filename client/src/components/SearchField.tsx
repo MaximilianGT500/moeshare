@@ -7,6 +7,7 @@ import SearchRounded from '@mui/icons-material/SearchRounded';
 import CloseRounded from '@mui/icons-material/CloseRounded';
 import { mix } from '../lib/color';
 import { c, css, radius } from '../theme/tokens';
+import { t } from '../lib/i18n';
 
 interface SearchFieldProps {
   value: string;
@@ -61,7 +62,7 @@ export const SearchField = forwardRef<HTMLInputElement, SearchFieldProps>(functi
         slotProps={{ input: { 'aria-label': placeholder, type: 'search', enterKeyHint: 'search' } }}
       />
       {value ? (
-        <IconButton aria-label="Suche leeren" onClick={() => onChange('')} size="small">
+        <IconButton aria-label={t('Suche leeren')} onClick={() => onChange('')} size="small">
           <CloseRounded fontSize="small" />
         </IconButton>
       ) : (

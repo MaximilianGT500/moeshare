@@ -33,27 +33,44 @@ import { useConfirm } from '../../components/ConfirmDialog';
 import { useToast } from '../../components/Toaster';
 import { isCancelled, useSudo } from '../../components/Sudo';
 import { c, ease, fonts, radius } from '../../theme/tokens';
+import { t } from '../../lib/i18n';
 
 const REGISTRATION_TEXT: Record<string, string> = {
-  closed: 'Die Registrierung ist geschlossen. Einladungen funktionieren trotzdem.',
-  invite: 'Neue Konten gibt es nur mit Einladung.',
-  open: 'Die Registrierung ist offen. Einladungen legen zusätzlich Rolle und Limits fest.',
+  closed: t('Die Registrierung ist geschlossen. Einladungen funktionieren trotzdem.'),
+  invite: t('Neue Konten gibt es nur mit Einladung.'),
+  open: t('Die Registrierung ist offen. Einladungen legen zusätzlich Rolle und Limits fest.'),
 };
 
 const USES = [
-  { value: 1, label: 'Einmal' },
+  { value: 1, label: t('Einmal') },
   { value: 5, label: '5-mal' },
   { value: 25, label: '25-mal' },
-  { value: 0, label: 'Unbegrenzt' },
+  { value: 0, label: t('Unbegrenzt') },
 ];
 const EXPIRY = [
-  { value: 1, label: '1 Tag' },
-  { value: 7, label: '7 Tage' },
-  { value: 30, label: '30 Tage' },
-  { value: 0, label: 'Nie' },
+  { value: 1, label: t('1 Tag') },
+  { value: 7, label: t('7 Tage') },
+  { value: 30, label: t('30 Tage') },
+  { value: 0, label: t('Nie') },
 ];
 
-function CreateInviteDialog({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: (invite: Invite) => void }) {
+interface Created {
+  invite: Invite;
+  sent: string | null;
+  mailError: string | null;
+}
+
+function CreateInviteDialog({
+  open,
+  mailReady,
+  onClose,
+  onCreated,
+}: {
+  open: boolean;
+  mailReady: boolean;
+  onClose: () => void;
+  onCreated: (created: Created) => void;
+}) {
   const sudo = useSudo();
   const phone = useMediaQuery('(max-width:599.95px)', { noSsr: true });
   const [role, setRole] = useState<'mitglied' | 'admin'>('mitglied');
@@ -63,6 +80,7 @@ function CreateInviteDialog({ open, onClose, onCreated }: { open: boolean; onClo
   const [quota, setQuota] = useState<number | null>(null);
   const [maxFile, setMaxFile] = useState<number | null>(null);
   const [note, setNote] = useState('');
+  const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -75,6 +93,7 @@ function CreateInviteDialog({ open, onClose, onCreated }: { open: boolean; onClo
     setQuota(null);
     setMaxFile(null);
     setNote('');
+    setEmail('');
     setError('');
   }, [open]);
 
@@ -91,9 +110,10 @@ function CreateInviteDialog({ open, onClose, onCreated }: { open: boolean; onClo
           quotaBytes: limits ? quota : null,
           maxFileBytes: limits ? maxFile : null,
           note: note.trim(),
+          email: mailReady && email.trim() ? email.trim() : undefined,
         })
       );
-      onCreated(result.invite);
+      onCreated(result);
     } catch (failure) {
       if (!isCancelled(failure)) setError(failure instanceof ApiError ? failure.message : errorMessage(failure));
     } finally {
@@ -112,27 +132,27 @@ function CreateInviteDialog({ open, onClose, onCreated }: { open: boolean; onClo
       aria-labelledby="invite-title"
     >
       <Box component="form" onSubmit={submit} sx={{ display: 'contents' }}>
-        <DialogTitle id="invite-title">Einladung erstellen</DialogTitle>
+        <DialogTitle id="invite-title">{t('Einladung erstellen')}</DialogTitle>
         <DialogContent>
           <Stack spacing={2.5} sx={{ pt: 1 }}>
             <Box>
               <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                Rolle neuer Konten
+                {t('Rolle neuer Konten')}
               </Typography>
-              <ToggleButtonGroup exclusive value={role} onChange={(_e, next) => next && setRole(next)} aria-label="Rolle">
-                <ToggleButton value="mitglied">Mitglied</ToggleButton>
-                <ToggleButton value="admin">Admin</ToggleButton>
+              <ToggleButtonGroup exclusive value={role} onChange={(_e, next) => next && setRole(next)} aria-label={t('Rolle')}>
+                <ToggleButton value="mitglied">{t('Mitglied')}</ToggleButton>
+                <ToggleButton value="admin">{t('Admin')}</ToggleButton>
               </ToggleButtonGroup>
             </Box>
             <Box>
               <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                Wie oft nutzbar
+                {t('Wie oft nutzbar')}
               </Typography>
               <ToggleButtonGroup
                 exclusive
                 value={uses}
                 onChange={(_e, next) => next !== null && setUses(next)}
-                aria-label="Nutzungen"
+                aria-label={t('Nutzungen')}
                 sx={{ flexWrap: 'wrap' }}
               >
                 {USES.map((option) => (
@@ -144,13 +164,13 @@ function CreateInviteDialog({ open, onClose, onCreated }: { open: boolean; onClo
             </Box>
             <Box>
               <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                Gültig für
+                {t('Gültig für')}
               </Typography>
               <ToggleButtonGroup
                 exclusive
                 value={days}
                 onChange={(_e, next) => next !== null && setDays(next)}
-                aria-label="Gültigkeit"
+                aria-label={t('Gültigkeit')}
                 sx={{ flexWrap: 'wrap' }}
               >
                 {EXPIRY.map((option) => (
@@ -162,20 +182,31 @@ function CreateInviteDialog({ open, onClose, onCreated }: { open: boolean; onClo
             </Box>
             <Box>
               <Link component="button" type="button" variant="body2" onClick={() => setLimits((v) => !v)} underline="hover">
-                {limits ? 'Ohne eigene Limits (Standard verwenden)' : 'Eigene Limits für neue Konten festlegen'}
+                {limits ? t('Ohne eigene Limits (Standard verwenden)') : t('Eigene Limits für neue Konten festlegen')}
               </Link>
               <Collapse in={limits}>
                 <Stack spacing={2} sx={{ mt: 2 }}>
-                  <BytesField label="Speicherlimit" value={quota} onChange={setQuota} nullLabel="Standard" />
-                  <BytesField label="Größte Datei" value={maxFile} onChange={setMaxFile} nullLabel="Standard" />
+                  <BytesField label={t('Speicherlimit')} value={quota} onChange={setQuota} nullLabel={t('Standard')} />
+                  <BytesField label={t('Größte Datei')} value={maxFile} onChange={setMaxFile} nullLabel={t('Standard')} />
                 </Stack>
               </Collapse>
             </Box>
+            {mailReady && (
+              <TextField
+                label={t('Per E-Mail verschicken (optional)')}
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                helperText={t('Die Person bekommt den Link direkt zugeschickt.')}
+                autoComplete="off"
+                fullWidth
+              />
+            )}
             <TextField
-              label="Notiz (optional)"
+              label={t('Notiz (optional)')}
               value={note}
               onChange={(event) => setNote(event.target.value)}
-              helperText="Nur für dich, z. B. für wen die Einladung ist."
+              helperText={t('Nur für dich, z. B. für wen die Einladung ist.')}
               slotProps={{ htmlInput: { maxLength: 120 } }}
               fullWidth
             />
@@ -186,7 +217,7 @@ function CreateInviteDialog({ open, onClose, onCreated }: { open: boolean; onClo
         </DialogContent>
         <DialogActions>
           <Button onClick={onClose} disabled={busy}>
-            Abbrechen
+            {t('Abbrechen')}
           </Button>
           <Button
             type="submit"
@@ -194,7 +225,7 @@ function CreateInviteDialog({ open, onClose, onCreated }: { open: boolean; onClo
             disabled={busy}
             startIcon={busy ? <CircularProgress size={16} color="inherit" /> : null}
           >
-            Erstellen und Link kopieren
+            {mailReady && email.trim() ? t('Erstellen und senden') : t('Erstellen und Link kopieren')}
           </Button>
         </DialogActions>
       </Box>
@@ -202,17 +233,20 @@ function CreateInviteDialog({ open, onClose, onCreated }: { open: boolean; onClo
   );
 }
 
-const STATE_LABEL = { active: 'Aktiv', expired: 'Abgelaufen', used: 'Aufgebraucht' } as const;
+const STATE_LABEL = { active: t('Aktiv'), expired: t('Abgelaufen'), used: t('Aufgebraucht') } as const;
 
 function usageText(invite: Invite): string {
   const uses = invite.maxUses
-    ? `${invite.uses} von ${invite.maxUses} genutzt`
+    ? t('{uses} von {maxUses} genutzt', { uses: invite.uses, maxUses: invite.maxUses })
     : invite.uses === 0
-      ? 'Noch nicht genutzt'
-      : `${invite.uses}-mal genutzt`;
+      ? t('Noch nicht genutzt')
+      : t('{uses}-mal genutzt', { uses: invite.uses });
   if (invite.state === 'used') return uses;
-  if (invite.state === 'expired') return `${uses}, abgelaufen am ${formatDate(invite.expiresAt ? new Date(invite.expiresAt) : null)}`;
-  return invite.expiresAt ? `${uses}, gültig bis ${formatDate(new Date(invite.expiresAt))}` : `${uses}, ohne Ablaufdatum`;
+  if (invite.state === 'expired')
+    return t('{uses}, abgelaufen am {date}', { uses, date: formatDate(invite.expiresAt ? new Date(invite.expiresAt) : null) });
+  return invite.expiresAt
+    ? t('{uses}, gültig bis {date}', { uses, date: formatDate(new Date(invite.expiresAt)) })
+    : t('{uses}, ohne Ablaufdatum', { uses });
 }
 
 const byRelevance = (a: Invite, b: Invite) => Number(b.state === 'active') - Number(a.state === 'active') || b.createdAt - a.createdAt;
@@ -221,10 +255,12 @@ export function InvitesPanel({
   initial,
   registration,
   onCount,
+  mailReady = false,
 }: {
   initial: Invite[];
   registration: string;
   onCount: (active: number) => void;
+  mailReady?: boolean;
 }) {
   const toast = useToast();
   const confirm = useConfirm();
@@ -235,18 +271,18 @@ export function InvitesPanel({
 
   const remove = async (invite: Invite) => {
     const ok = await confirm({
-      title: 'Einladung löschen?',
+      title: t('Einladung löschen?'),
       message:
         invite.state === 'active'
-          ? 'Der Link funktioniert danach nicht mehr. Schon angelegte Konten bleiben bestehen.'
-          : 'Der Eintrag verschwindet aus der Liste.',
-      confirmLabel: 'Löschen',
+          ? t('Der Link funktioniert danach nicht mehr. Schon angelegte Konten bleiben bestehen.')
+          : t('Der Eintrag verschwindet aus der Liste.'),
+      confirmLabel: t('Löschen'),
     });
     if (!ok) return;
     try {
       await revokeInvite(invite.code);
       setInvites((list) => list.filter((i) => i.code !== invite.code));
-      toast('Einladung gelöscht', { variant: 'success' });
+      toast(t('Einladung gelöscht'), { variant: 'success' });
     } catch (failure) {
       toast(errorMessage(failure), { variant: 'error' });
     }
@@ -258,11 +294,11 @@ export function InvitesPanel({
         <Typography variant="body2" sx={{ color: 'text.secondary', flex: '1 1 300px' }}>
           {REGISTRATION_TEXT[registration] || ''}{' '}
           <Link href="#einstellungen" underline="hover">
-            Registrierung einstellen
+            {t('Registrierung einstellen')}
           </Link>
         </Typography>
         <Button variant="contained" startIcon={<GroupAddRounded />} onClick={() => setCreating(true)}>
-          Einladung erstellen
+          {t('Einladung erstellen')}
         </Button>
       </Box>
 
@@ -270,7 +306,7 @@ export function InvitesPanel({
         <Box sx={{ py: 7, textAlign: 'center', color: 'text.secondary' }}>
           <GroupAddRounded sx={{ fontSize: 40, opacity: 0.6 }} />
           <Typography sx={{ mt: 1 }}>
-            Noch keine Einladungen. Erstelle einen Link und schick ihn an die Person, die ein Konto bekommen soll.
+            {t('Noch keine Einladungen. Erstelle einen Link und schick ihn an die Person, die ein Konto bekommen soll.')}
           </Typography>
         </Box>
       ) : (
@@ -279,8 +315,8 @@ export function InvitesPanel({
             {[...invites].sort(byRelevance).map((invite, index) => {
               const active = invite.state === 'active';
               const limits = [
-                invite.quotaBytes && `${formatBytes(invite.quotaBytes)} Speicher`,
-                invite.maxFileBytes && `Dateien bis ${formatBytes(invite.maxFileBytes)}`,
+                invite.quotaBytes && t('{quotaBytes} Speicher', { quotaBytes: formatBytes(invite.quotaBytes) }),
+                invite.maxFileBytes && t('Dateien bis {maxFileBytes}', { maxFileBytes: formatBytes(invite.maxFileBytes) }),
               ]
                 .filter(Boolean)
                 .join(', ');
@@ -318,7 +354,7 @@ export function InvitesPanel({
                       {invite.role === 'admin' && (
                         <Chip
                           size="small"
-                          label="Admin"
+                          label={t('Admin')}
                           sx={{ bgcolor: c.tertiaryContainer, color: c.onTertiaryContainer, fontWeight: 700 }}
                         />
                       )}
@@ -326,20 +362,20 @@ export function InvitesPanel({
                       {active && (
                         <CopyIconButton
                           value={invite.url}
-                          label="Link kopieren"
-                          message="Einladungslink kopiert"
+                          label={t('Link kopieren')}
+                          message={t('Einladungslink kopiert')}
                           icon={<ContentCopyRounded fontSize="inherit" />}
                           size="small"
                         />
                       )}
-                      <Tooltip title="Löschen">
-                        <IconButton size="small" aria-label="Einladung löschen" onClick={() => remove(invite)}>
+                      <Tooltip title={t('Löschen')}>
+                        <IconButton size="small" aria-label={t('Einladung löschen')} onClick={() => remove(invite)}>
                           <DeleteOutlineRounded fontSize="small" />
                         </IconButton>
                       </Tooltip>
                     </Box>
                     <Typography variant="subtitle2" sx={{ wordBreak: 'break-word' }}>
-                      {invite.note || (invite.role === 'admin' ? 'Einladung als Admin' : 'Einladung')}
+                      {invite.note || (invite.role === 'admin' ? t('Einladung als Admin') : t('Einladung'))}
                     </Typography>
                     {active && (
                       <Typography
@@ -354,8 +390,8 @@ export function InvitesPanel({
                       {limits ? `. ${limits}` : ''}
                     </Typography>
                     <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                      Erstellt {relativeMs(invite.createdAt)}
-                      {invite.createdBy ? ` von ${invite.createdBy}` : ''}
+                      {t('Erstellt {createdAt}', { createdAt: relativeMs(invite.createdAt) })}
+                      {invite.createdBy ? t(' von {createdBy}', { createdBy: invite.createdBy }) : ''}
                     </Typography>
                   </Box>
                 </m.div>
@@ -367,12 +403,24 @@ export function InvitesPanel({
 
       <CreateInviteDialog
         open={creating}
+        mailReady={mailReady}
         onClose={() => setCreating(false)}
-        onCreated={async (invite) => {
+        onCreated={async ({ invite, sent, mailError }) => {
           setCreating(false);
           setInvites((list) => [invite, ...list]);
+          if (sent) {
+            toast(t('Einladung an {email} verschickt', { email: sent }), { variant: 'success' });
+            return;
+          }
           const copied = await copyText(invite.url);
-          toast(copied ? 'Einladung erstellt und Link kopiert' : 'Einladung erstellt', { variant: 'success' });
+          if (mailError) {
+            toast(`${mailError} ${copied ? t('Der Link ist kopiert.') : ''}`.trim(), {
+              variant: 'error',
+              duration: 9000,
+            });
+            return;
+          }
+          toast(copied ? t('Einladung erstellt und Link kopiert') : t('Einladung erstellt'), { variant: 'success' });
         }}
       />
     </Box>

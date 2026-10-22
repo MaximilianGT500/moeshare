@@ -14,18 +14,19 @@ import CloudUploadRounded from '@mui/icons-material/CloudUploadRounded';
 import type { ApiTokenInfo } from '../../lib/types';
 import { createToken, errorMessage, revokeToken } from '../../lib/api';
 import { formatDate, relativeMs } from '../../lib/format';
-import { downloadText, shareXConfig, shareXFilename } from '../../lib/sharex';
+import { downloadShareX, type ShareXFeatures } from '../../lib/sharex';
 import { SettingRow, SettingsSection } from '../../components/SettingsKit';
 import { TokenNameDialog, TokenRevealDialog } from '../../components/TokenReveal';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { useToast } from '../../components/Toaster';
 import { isCancelled, useSudo } from '../../components/Sudo';
 import { c, ease, fonts, radius } from '../../theme/tokens';
+import { t } from '../../lib/i18n';
 
 const STEPS = [
-  { title: 'Konfiguration holen', text: '„ShareX einrichten“ erstellt ein Token und lädt die passende .sxcu-Datei herunter.' },
-  { title: 'Doppelklick auf die Datei', text: 'ShareX fragt, ob es den Uploader übernehmen soll. Bestätige mit Ja.' },
-  { title: 'Als Ziel wählen', text: 'In ShareX unter Ziele › Benutzerdefinierter Uploader diesen Server auswählen.' },
+  { title: t('Konfiguration holen'), text: t('„ShareX einrichten“ erstellt ein Token und lädt die passende .sxcu-Datei herunter.') },
+  { title: t('Doppelklick auf die Datei'), text: t('ShareX fragt, ob es den Uploader übernehmen soll. Bestätige mit Ja.') },
+  { title: t('Als Ziel wählen'), text: t('In ShareX unter Ziele › Benutzerdefinierter Uploader diesen Server auswählen.') },
 ];
 
 export function ApiPanel({
@@ -33,11 +34,13 @@ export function ApiPanel({
   reload,
   siteTitle,
   baseUrl,
+  features,
 }: {
   tokens: ApiTokenInfo[];
   reload: () => Promise<void>;
   siteTitle: string;
   baseUrl: string;
+  features?: ShareXFeatures;
 }) {
   const toast = useToast();
   const confirm = useConfirm();
@@ -49,7 +52,7 @@ export function ApiPanel({
     try {
       const result = await sudo(() => createToken(name));
       setNaming(false);
-      if (download) downloadText(shareXFilename(siteTitle), shareXConfig({ siteTitle, baseUrl, token: result.token }));
+      if (download) downloadShareX({ siteTitle, baseUrl, token: result.token, features });
       setRevealed(result.token);
       reload();
     } catch (failure) {
@@ -59,15 +62,15 @@ export function ApiPanel({
 
   const revoke = async (token: ApiTokenInfo) => {
     const ok = await confirm({
-      title: `„${token.name}“ widerrufen?`,
-      message: 'Programme, die dieses Token benutzen, können danach nicht mehr hochladen. ShareX braucht dann ein neues Token.',
-      confirmLabel: 'Widerrufen',
+      title: t('„{name}“ widerrufen?', { name: token.name }),
+      message: t('Programme, die dieses Token benutzen, können danach nicht mehr hochladen. ShareX braucht dann ein neues Token.'),
+      confirmLabel: t('Widerrufen'),
       icon: <TokenRounded />,
     });
     if (!ok) return;
     try {
       await revokeToken(token.id);
-      toast('Token widerrufen', { variant: 'success' });
+      toast(t('Token widerrufen'), { variant: 'success' });
       reload();
     } catch (failure) {
       toast(errorMessage(failure), { variant: 'error' });
@@ -78,8 +81,8 @@ export function ApiPanel({
     <Stack spacing={4}>
       <SettingsSection
         id="sharex"
-        title="ShareX einrichten"
-        description="Mit ShareX lädst du Screenshots und Dateien direkt in dein Konto hoch und bekommst sofort den Link."
+        title={t('ShareX einrichten')}
+        description={t('Mit ShareX lädst du Screenshots und Dateien direkt in dein Konto hoch und bekommst sofort den Link.')}
       >
         <Box sx={{ px: { xs: 2, sm: 3 }, py: 3 }}>
           <Box
@@ -115,18 +118,20 @@ export function ApiPanel({
             ))}
           </Box>
           <Button variant="contained" size="large" startIcon={<CloudUploadRounded />} sx={{ mt: 3 }} onClick={() => create('ShareX', true)}>
-            ShareX einrichten
+            {t('ShareX einrichten')}
           </Button>
         </Box>
       </SettingsSection>
 
       <SettingsSection
         id="tokens"
-        title="API-Tokens"
-        description="Jedes Programm bekommt am besten ein eigenes Token. So kannst du eins widerrufen, ohne die anderen neu einzurichten."
+        title={t('API-Tokens')}
+        description={t(
+          'Jedes Programm bekommt am besten ein eigenes Token. So kannst du eins widerrufen, ohne die anderen neu einzurichten.'
+        )}
         action={
           <Button variant="tonal" startIcon={<AddRounded />} onClick={() => setNaming(true)}>
-            Neues Token
+            {t('Neues Token')}
           </Button>
         }
       >
@@ -144,7 +149,7 @@ export function ApiPanel({
                 label={
                   <>
                     {token.name}
-                    {token.legacy && <Chip size="small" label="Aus der alten Version" variant="outlined" />}
+                    {token.legacy && <Chip size="small" label={t('Aus der alten Version')} variant="outlined" />}
                   </>
                 }
                 description={
@@ -152,12 +157,19 @@ export function ApiPanel({
                     <Box component="span" sx={{ fontFamily: fonts.mono, fontSize: '0.8125rem' }}>
                       {token.hint}
                     </Box>
-                    {`, erstellt am ${formatDate(new Date(token.createdAt))}, zuletzt benutzt ${relativeMs(token.lastUsedAt)}`}
+                    {t(', erstellt am {date}, zuletzt benutzt {lastUsedAt}', {
+                      date: formatDate(new Date(token.createdAt)),
+                      lastUsedAt: relativeMs(token.lastUsedAt),
+                    })}
                   </>
                 }
               >
-                <Tooltip title="Widerrufen">
-                  <IconButton aria-label={`${token.name} widerrufen`} onClick={() => revoke(token)} sx={{ '&:hover': { color: c.error } }}>
+                <Tooltip title={t('Widerrufen')}>
+                  <IconButton
+                    aria-label={t('{name} widerrufen', { name: token.name })}
+                    onClick={() => revoke(token)}
+                    sx={{ '&:hover': { color: c.error } }}
+                  >
                     <DeleteOutlineRounded />
                   </IconButton>
                 </Tooltip>
@@ -168,13 +180,13 @@ export function ApiPanel({
         {tokens.length === 0 && (
           <Box sx={{ px: { xs: 2, sm: 3 }, py: 3, display: 'flex', alignItems: 'center', gap: 2, color: 'text.secondary' }}>
             <TokenRounded />
-            <Typography variant="body2">Noch kein Token. Für das Hochladen im Browser brauchst du keins.</Typography>
+            <Typography variant="body2">{t('Noch kein Token. Für das Hochladen im Browser brauchst du keins.')}</Typography>
           </Box>
         )}
       </SettingsSection>
 
       <TokenNameDialog open={naming} onClose={() => setNaming(false)} onCreate={(name) => create(name)} />
-      <TokenRevealDialog token={revealed} onClose={() => setRevealed(null)} siteTitle={siteTitle} baseUrl={baseUrl} />
+      <TokenRevealDialog token={revealed} onClose={() => setRevealed(null)} siteTitle={siteTitle} baseUrl={baseUrl} features={features} />
     </Stack>
   );
 }

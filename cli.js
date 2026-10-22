@@ -43,8 +43,12 @@ function input() {
 
 async function ask(question, { hidden = false } = {}) {
   const rl = input();
-  rl.setPrompt(question);
-  rl.prompt();
+  if (closed) {
+    process.stdout.write(question);
+  } else {
+    rl.setPrompt(question);
+    rl.prompt();
+  }
   muted = hidden;
   try {
     if (lines.length) return lines.shift();
@@ -131,23 +135,125 @@ async function reset() {
   return say(`\n${user.username}: ${done.join(', ')}. Alle Sitzungen wurden beendet.\n`);
 }
 
-const COMMANDS = { register, token, reset };
+const args = process.argv.slice(3);
+const option = (...names) => args.some((arg) => names.includes(arg));
+const positional = () => args.filter((arg) => !arg.startsWith('--'));
+const program = process.env.MOESHARE_COMMAND || 'node cli.js';
+
+async function databaseInfo() {
+  const info = await db.info();
+  const { counts } = require('./src/lib/db/transfer');
+  say(`\n${info.label}`);
+  say(`${info.version}, Quelle: ${{ env: 'DATABASE_URL', file: 'db/database.json', default: 'Standard' }[info.source] || info.source}\n`);
+  for (const [table, count] of Object.entries(await counts(db))) console.log(`  ${table.padEnd(16)} ${count}`);
+  console.log('');
+}
+
+async function copyDatabase() {
+  const [url] = positional();
+  if (!url)
+    throw new Error(
+      `Verwendung: ${program} copy-db <ziel-adresse> [--use]\nBeispiel: ${program} copy-db postgres://moeshare:passwort@localhost:5432/moeshare --use`
+    );
+  const config = require('./src/config');
+  const { parseDatabaseUrl, describe, maskUrl } = require('./src/lib/db/url');
+  const { Database } = require('./src/lib/db');
+  const { copyDatabase: copy } = require('./src/lib/db/transfer');
+  const target = parseDatabaseUrl(url, config.paths.root);
+  if (target.client === db.client && describe(target, config.paths.root) === db.describe())
+    throw new Error('Quelle und Ziel sind dieselbe Datenbank.');
+  say(`\nVon: ${db.describe()}\nNach: ${describe(target, config.paths.root)}`);
+  say('Beende MoeShare vorher, damit während des Kopierens nichts verloren geht.\n');
+  const destination = new Database({ ...target, source: 'cli' });
+  await destination.ready;
+  const started = Date.now();
+  try {
+    const written = await copy(db, destination, {
+      onTable: (table, count, skipped) =>
+        console.log(`  ${table.padEnd(16)} ${count}${skipped ? ` (${skipped} verwaiste Einträge übersprungen)` : ''}`),
+    });
+    const total = Object.values(written).reduce((sum, count) => sum + count, 0);
+    say(`\n${total} Einträge in ${Math.round((Date.now() - started) / 100) / 10} s kopiert.`);
+  } finally {
+    await destination.close();
+  }
+  if (option('--use')) {
+    const fs = require('fs');
+    fs.writeFileSync(config.databaseFile, `${JSON.stringify({ url: target.url }, null, 2)}\n`, { mode: 0o600 });
+    say(`MoeShare nutzt ab dem nächsten Start die neue Datenbank (gespeichert in db/database.json).`);
+    if (process.env.DATABASE_URL) say('Achtung: DATABASE_URL ist gesetzt und hat Vorrang. Passe die Variable an oder entferne sie.');
+  } else {
+    say(`Damit MoeShare die neue Datenbank nutzt, setze DATABASE_URL=${maskUrl(target.url)} oder starte den Befehl mit --use.`);
+  }
+  console.log('');
+}
+
+async function backup() {
+  const backups = require('./src/services/backupService');
+  say('\nSicherung wird erstellt …');
+  const result = await backups.create({ includeUploads: option('--uploads', '--dateien'), reason: 'manual', actor: 'Kommandozeile' });
+  say(
+    `Fertig: ${result.name} (${require('./src/lib/format').formatBytes(result.size)}, ${result.location === 's3' ? 'in S3' : 'in db/backups'}).\n`
+  );
+}
+
+async function restore() {
+  const [file] = positional();
+  if (!file) throw new Error(`Verwendung: ${program} restore <datei> [--force] [--ohne-dateien]`);
+  const path = require('path');
+  const backups = require('./src/services/backupService');
+  const resolved = path.isAbsolute(file) || require('fs').existsSync(file) ? path.resolve(file) : path.join(backups.directory(), file);
+  say(`\nSicherung wird eingespielt: ${resolved}`);
+  say('Beende MoeShare vorher und starte es danach neu.\n');
+  const result = await backups.restore(resolved, {
+    force: option('--force'),
+    uploads: !option('--ohne-dateien', '--without-files'),
+    onStep: (step) => console.log(`  ${step}`),
+  });
+  say(`\nWiederhergestellt: Sicherung vom ${result.manifest.createdAt} (MoeShare ${result.manifest.version}), ${result.files} Dateien.\n`);
+}
+
+async function moveStorage() {
+  const [to] = positional();
+  if (!['s3', 'local', 'lokal'].includes(to)) throw new Error(`Verwendung: ${program} storage <s3|lokal>`);
+  const storage = require('./src/services/storageService');
+  const target = to === 'lokal' ? 'local' : to;
+  say(`\nDateien werden ${target === 's3' ? 'nach S3' : 'in den lokalen Ordner uploads'} verschoben …`);
+  let last = 0;
+  const result = await storage.migrate(target, {
+    onProgress: (progress) => {
+      if (Date.now() - last > 1000 || progress.done === progress.total) {
+        last = Date.now();
+        console.log(`  ${progress.done}/${progress.total}`);
+      }
+    },
+  });
+  say(`\n${result.moved} verschoben, ${result.failed} fehlgeschlagen, ${result.missing} ohne lokale Datei.\n`);
+  if (result.failed) process.exitCode = 1;
+}
+
+const COMMANDS = { register, token, reset, db: databaseInfo, 'copy-db': copyDatabase, backup, restore, storage: moveStorage };
 
 async function main() {
   const command = COMMANDS[process.argv[2]];
   if (!command) {
-    say(`Verwendung: ${process.env.MOESHARE_COMMAND || 'node cli.js'} <register|token|reset>`);
-    say('  register  Konto anlegen');
-    say('  token     neues API-Token für ShareX erstellen');
-    say('  reset     Notfallzugang: Passwort, Rolle, 2FA, Passkeys oder Tokens zurücksetzen');
+    say(`Verwendung: ${program} <befehl>`);
+    say('  register             Konto anlegen');
+    say('  token                neues API-Token für ShareX erstellen');
+    say('  reset                Notfallzugang: Passwort, Rolle, 2FA, Passkeys oder Tokens zurücksetzen');
+    say('  db                   zeigt die genutzte Datenbank und ihre Einträge');
+    say('  copy-db <adresse>    kopiert alle Daten in eine andere Datenbank (--use stellt direkt um)');
+    say('  backup               erstellt eine Sicherung in db/backups (--uploads nimmt die Dateien mit)');
+    say('  restore <datei>      spielt eine Sicherung ein (--force überschreibt, --ohne-dateien nur die Datenbank)');
+    say('  storage <s3|lokal>   verschiebt vorhandene Dateien nach S3 oder zurück');
     process.exit(1);
   }
   await db.ready;
   await settings.load();
   await command();
-  if (prompt) prompt.close();
+  if (prompt && !closed) prompt.close();
   await db.close();
-  process.exit(0);
+  process.exit(process.exitCode || 0);
 }
 
 main().catch((error) => {

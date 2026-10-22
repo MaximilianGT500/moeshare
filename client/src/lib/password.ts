@@ -1,9 +1,10 @@
+import { t } from './i18n';
 interface Strength {
   score: 0 | 1 | 2 | 3 | 4;
   label: string;
 }
 
-const LABELS = ['Zu kurz', 'Schwach', 'Brauchbar', 'Gut', 'Stark'];
+const LABELS = [t('Zu kurz'), t('Schwach'), t('Brauchbar'), t('Gut'), t('Stark')];
 
 export function passwordStrength(password: string, minLength: number, username = ''): Strength {
   if (password.length < minLength) return { score: 0, label: LABELS[0] };

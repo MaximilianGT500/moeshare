@@ -47,12 +47,13 @@ import { isCancelled, useSudo } from '../../components/Sudo';
 import { RecoveryCodesDialog, TotpSetupDialog } from './TotpDialogs';
 import { authUrl, providerIcon } from '../../lib/providers';
 import { c, ease } from '../../theme/tokens';
+import { t, tn } from '../../lib/i18n';
 
 function StatusChip({ on, label }: { on: boolean; label?: string }) {
   return (
     <Chip
       size="small"
-      label={label || (on ? 'Aktiv' : 'Aus')}
+      label={label || (on ? t('Aktiv') : t('Aus'))}
       sx={
         on
           ? { bgcolor: c.successContainer, color: c.onSuccessContainer, fontWeight: 700 }
@@ -121,17 +122,17 @@ function PasswordDialog({
       aria-labelledby="pw-title"
     >
       <Box component="form" onSubmit={submit} noValidate>
-        <DialogTitle id="pw-title">{account.user.hasPassword ? 'Neues Passwort festlegen' : 'Passwort festlegen'}</DialogTitle>
+        <DialogTitle id="pw-title">{account.user.hasPassword ? t('Neues Passwort festlegen') : t('Passwort festlegen')}</DialogTitle>
         <DialogContent>
           <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2.5 }}>
             {forced
-              ? 'Ein Admin hat dir ein vorläufiges Passwort gegeben. Wähle jetzt dein eigenes.'
-              : 'Andere angemeldete Geräte werden danach abgemeldet.'}
+              ? t('Ein Admin hat dir ein vorläufiges Passwort gegeben. Wähle jetzt dein eigenes.')
+              : t('Andere angemeldete Geräte werden danach abgemeldet.')}
           </Typography>
           <Stack spacing={2}>
             {needsCurrent && (
               <PasswordField
-                label="Aktuelles Passwort"
+                label={t('Aktuelles Passwort')}
                 value={current}
                 onChange={setCurrent}
                 autoComplete="current-password"
@@ -140,7 +141,7 @@ function PasswordDialog({
               />
             )}
             <PasswordField
-              label="Neues Passwort"
+              label={t('Neues Passwort')}
               value={next}
               onChange={setNext}
               autoComplete="new-password"
@@ -158,7 +159,7 @@ function PasswordDialog({
         <DialogActions>
           {!forced && (
             <Button onClick={onClose} disabled={busy}>
-              Abbrechen
+              {t('Abbrechen')}
             </Button>
           )}
           <Button
@@ -167,7 +168,7 @@ function PasswordDialog({
             disabled={busy || next.length < minLength || (needsCurrent && !current)}
             startIcon={busy ? <CircularProgress size={16} color="inherit" /> : null}
           >
-            Passwort speichern
+            {t('Passwort speichern')}
           </Button>
         </DialogActions>
       </Box>
@@ -217,24 +218,24 @@ function RenameDialog({
       aria-labelledby="rename-title"
     >
       <Box component="form" onSubmit={submit}>
-        <DialogTitle id="rename-title">Passkey umbenennen</DialogTitle>
+        <DialogTitle id="rename-title">{t('Passkey umbenennen')}</DialogTitle>
         <DialogContent>
           <TextField
-            label="Name"
+            label={t('Name')}
             value={name}
             onChange={(event) => setName(event.target.value)}
             autoFocus
             fullWidth
             error={!!error}
-            helperText={error || 'Zum Beispiel „Handy“ oder „Laptop Arbeit“.'}
+            helperText={error || t('Zum Beispiel „Handy“ oder „Laptop Arbeit“.')}
             slotProps={{ htmlInput: { maxLength: 60 } }}
             sx={{ mt: 1 }}
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={onClose}>Abbrechen</Button>
+          <Button onClick={onClose}>{t('Abbrechen')}</Button>
           <Button type="submit" variant="contained" disabled={busy || !name.trim()}>
-            Speichern
+            {t('Speichern')}
           </Button>
         </DialogActions>
       </Box>
@@ -279,19 +280,19 @@ export function SecurityPanel({
 
   const turnOffTotp = async () => {
     const ok = await confirm({
-      title: 'Zwei-Faktor-Anmeldung abschalten?',
-      message: 'Dann reicht wieder dein Passwort allein. Deine Wiederherstellungscodes werden ungültig.',
-      confirmLabel: 'Abschalten',
+      title: t('Zwei-Faktor-Anmeldung abschalten?'),
+      message: t('Dann reicht wieder dein Passwort allein. Deine Wiederherstellungscodes werden ungültig.'),
+      confirmLabel: t('Abschalten'),
       icon: <PhonelinkLockRounded />,
     });
-    if (ok) guarded(() => disableTotp(), 'Zwei-Faktor-Anmeldung abgeschaltet');
+    if (ok) guarded(() => disableTotp(), t('Zwei-Faktor-Anmeldung abgeschaltet'));
   };
 
   const newCodes = async () => {
     const ok = await confirm({
-      title: 'Neue Wiederherstellungscodes?',
-      message: 'Deine bisherigen Codes gelten danach nicht mehr.',
-      confirmLabel: 'Neue Codes erstellen',
+      title: t('Neue Wiederherstellungscodes?'),
+      message: t('Deine bisherigen Codes gelten danach nicht mehr.'),
+      confirmLabel: t('Neue Codes erstellen'),
       destructive: false,
       icon: <KeyRounded />,
     });
@@ -311,7 +312,7 @@ export function SecurityPanel({
       const { flowId, options } = await sudo(() => passkeyRegistrationOptions());
       const response = await startRegistration({ optionsJSON: options });
       const result = await sudo(() => savePasskey(flowId, response));
-      toast(`Passkey „${result.passkey.name}“ hinzugefügt`, { variant: 'success' });
+      toast(t('Passkey „{name}“ hinzugefügt', { name: result.passkey.name }), { variant: 'success' });
       await reload();
       setRenaming(result.passkey);
     } catch (failure) {
@@ -325,22 +326,24 @@ export function SecurityPanel({
 
   const removePasskey = async (passkey: PasskeyInfo) => {
     const ok = await confirm({
-      title: `„${passkey.name}“ entfernen?`,
-      message: 'Mit diesem Passkey kannst du dich danach nicht mehr anmelden. Lösche ihn am besten auch im Passwortmanager deines Geräts.',
-      confirmLabel: 'Entfernen',
+      title: t('„{name}“ entfernen?', { name: passkey.name }),
+      message: t(
+        'Mit diesem Passkey kannst du dich danach nicht mehr anmelden. Lösche ihn am besten auch im Passwortmanager deines Geräts.'
+      ),
+      confirmLabel: t('Entfernen'),
       icon: <FingerprintRounded />,
     });
-    if (ok) guarded(() => deletePasskey(passkey.id), 'Passkey entfernt');
+    if (ok) guarded(() => deletePasskey(passkey.id), t('Passkey entfernt'));
   };
 
   const unlink = async (provider: string, label: string) => {
     const ok = await confirm({
-      title: `${label} trennen?`,
-      message: `Du meldest dich danach nicht mehr mit ${label} an. Du kannst es jederzeit wieder verknüpfen.`,
-      confirmLabel: 'Trennen',
+      title: t('{label} trennen?', { label }),
+      message: t('Du meldest dich danach nicht mehr mit {label} an. Du kannst es jederzeit wieder verknüpfen.', { label }),
+      confirmLabel: t('Trennen'),
       icon: providerIcon(provider),
     });
-    if (ok) guarded(() => unlinkIdentity(provider), `${label} getrennt`);
+    if (ok) guarded(() => unlinkIdentity(provider), t('{label} getrennt', { label }));
   };
 
   const linkable = security.providers.filter((provider) => !security.identities.some((identity) => identity.provider === provider.key));
@@ -349,63 +352,71 @@ export function SecurityPanel({
     <Stack spacing={4}>
       <SettingsSection
         id="anmeldung"
-        title="Passwort und Zwei-Faktor"
-        description="Mit der Zwei-Faktor-Anmeldung fragt MoeShare nach dem Passwort zusätzlich nach einem Code aus deiner Authenticator-App. Ein gestohlenes Passwort allein reicht dann nicht mehr."
+        title={t('Passwort und Zwei-Faktor')}
+        description={t(
+          'Mit der Zwei-Faktor-Anmeldung fragt MoeShare nach dem Passwort zusätzlich nach einem Code aus deiner Authenticator-App. Ein gestohlenes Passwort allein reicht dann nicht mehr.'
+        )}
       >
         <SettingRow
           icon={<PasswordRounded />}
-          label="Passwort"
+          label={t('Passwort')}
           description={
             user.hasPassword
               ? user.passwordChangedAt
-                ? `Zuletzt geändert ${relativeMs(user.passwordChangedAt)}.`
-                : 'Wurde vor dem Umstieg auf die neue Anmeldung festgelegt.'
-              : 'Du hast noch kein Passwort und meldest dich über einen verknüpften Dienst oder einen Passkey an.'
+                ? t('Zuletzt geändert {passwordChangedAt}.', { passwordChangedAt: relativeMs(user.passwordChangedAt) })
+                : t('Wurde vor dem Umstieg auf die neue Anmeldung festgelegt.')
+              : t('Du hast noch kein Passwort und meldest dich über einen verknüpften Dienst oder einen Passkey an.')
           }
         >
           <Button variant="tonal" onClick={() => setPasswordOpen(true)}>
-            {user.hasPassword ? 'Ändern' : 'Festlegen'}
+            {user.hasPassword ? t('Ändern') : t('Festlegen')}
           </Button>
         </SettingRow>
         <SettingRow
           icon={<PhonelinkLockRounded />}
           label={
             <>
-              Authenticator-App <StatusChip on={security.totp} />
+              {t('Authenticator-App')} <StatusChip on={security.totp} />
             </>
           }
           description={
             security.totp
-              ? `Eingerichtet ${relativeMs(security.totpEnabledAt)}.${security.mfaRequired ? ' Auf diesem Server Pflicht.' : ''}`
+              ? security.mfaRequired
+                ? t('Eingerichtet {when}. Auf diesem Server Pflicht.', { when: relativeMs(security.totpEnabledAt) })
+                : t('Eingerichtet {when}.', { when: relativeMs(security.totpEnabledAt) })
               : security.mfaRequired
-                ? 'Auf diesem Server Pflicht. Richte sie ein, um weiterzumachen.'
-                : 'Codes aus Apps wie Aegis, 2FAS oder Google Authenticator.'
+                ? t('Auf diesem Server Pflicht. Richte sie ein, um weiterzumachen.')
+                : t('Codes aus Apps wie Aegis, 2FAS oder Google Authenticator.')
           }
         >
           {security.totp ? (
             !security.mfaRequired && (
               <Button variant="outlined" onClick={turnOffTotp}>
-                Abschalten
+                {t('Abschalten')}
               </Button>
             )
           ) : (
             <Button variant="contained" onClick={() => setTotpOpen(true)}>
-              Einrichten
+              {t('Einrichten')}
             </Button>
           )}
         </SettingRow>
         {security.totp && (
           <SettingRow
             icon={<KeyRounded />}
-            label="Wiederherstellungscodes"
+            label={t('Wiederherstellungscodes')}
             description={
               security.recoveryCodesLeft <= 3
-                ? `Nur noch ${security.recoveryCodesLeft} Codes übrig. Erstelle neue, bevor sie ausgehen.`
-                : `${security.recoveryCodesLeft} von 10 Codes übrig. Damit kommst du ohne Handy in dein Konto.`
+                ? t('Nur noch {recoveryCodesLeft} Codes übrig. Erstelle neue, bevor sie ausgehen.', {
+                    recoveryCodesLeft: security.recoveryCodesLeft,
+                  })
+                : t('{recoveryCodesLeft} von 10 Codes übrig. Damit kommst du ohne Handy in dein Konto.', {
+                    recoveryCodesLeft: security.recoveryCodesLeft,
+                  })
             }
           >
             <Button variant={security.recoveryCodesLeft <= 3 ? 'contained' : 'tonal'} onClick={newCodes}>
-              Neue Codes
+              {t('Neue Codes')}
             </Button>
           </SettingRow>
         )}
@@ -414,8 +425,10 @@ export function SecurityPanel({
       {security.passkeysEnabled && (
         <SettingsSection
           id="passkeys"
-          title="Passkeys"
-          description="Melde dich mit Fingerabdruck, Gesicht oder der PIN deines Geräts an, ganz ohne Passwort. Passkeys lassen sich nicht abfangen oder auf fremden Seiten verwenden."
+          title={t('Passkeys')}
+          description={t(
+            'Melde dich mit Fingerabdruck, Gesicht oder der PIN deines Geräts an, ganz ohne Passwort. Passkeys lassen sich nicht abfangen oder auf fremden Seiten verwenden.'
+          )}
           action={
             <Tooltip title={support.ok ? '' : support.reason}>
               <span>
@@ -425,7 +438,7 @@ export function SecurityPanel({
                   onClick={addPasskey}
                   disabled={!support.ok || adding}
                 >
-                  Hinzufügen
+                  {t('Hinzufügen')}
                 </Button>
               </span>
             </Tooltip>
@@ -451,23 +464,26 @@ export function SecurityPanel({
                     <>
                       {passkey.name}
                       {passkey.backedUp && (
-                        <Tooltip title="Wird über deine Geräte synchronisiert">
+                        <Tooltip title={t('Wird über deine Geräte synchronisiert')}>
                           <CloudDoneRounded sx={{ fontSize: 18, color: c.onSurfaceVariant }} aria-label="synchronisiert" />
                         </Tooltip>
                       )}
                     </>
                   }
-                  description={`Hinzugefügt am ${formatDate(new Date(passkey.createdAt))}, zuletzt benutzt ${relativeMs(passkey.lastUsedAt)}.`}
+                  description={t('Hinzugefügt am {date}, zuletzt benutzt {lastUsedAt}.', {
+                    date: formatDate(new Date(passkey.createdAt)),
+                    lastUsedAt: relativeMs(passkey.lastUsedAt),
+                  })}
                 >
                   <Box sx={{ display: 'flex', gap: 0.5 }}>
-                    <Tooltip title="Umbenennen">
-                      <IconButton aria-label={`${passkey.name} umbenennen`} onClick={() => setRenaming(passkey)}>
+                    <Tooltip title={t('Umbenennen')}>
+                      <IconButton aria-label={t('{name} umbenennen', { name: passkey.name })} onClick={() => setRenaming(passkey)}>
                         <EditRounded />
                       </IconButton>
                     </Tooltip>
-                    <Tooltip title="Entfernen">
+                    <Tooltip title={t('Entfernen')}>
                       <IconButton
-                        aria-label={`${passkey.name} entfernen`}
+                        aria-label={t('{name} entfernen', { name: passkey.name })}
                         onClick={() => removePasskey(passkey)}
                         sx={{ '&:hover': { color: c.error } }}
                       >
@@ -482,7 +498,9 @@ export function SecurityPanel({
           {security.passkeys.length === 0 && support.ok && (
             <Box sx={{ px: { xs: 2, sm: 3 }, py: 3, display: 'flex', alignItems: 'center', gap: 2, color: 'text.secondary' }}>
               <FingerprintRounded />
-              <Typography variant="body2">Noch kein Passkey. Füge einen hinzu, dann ist die Anmeldung eine Sache von Sekunden.</Typography>
+              <Typography variant="body2">
+                {t('Noch kein Passkey. Füge einen hinzu, dann ist die Anmeldung eine Sache von Sekunden.')}
+              </Typography>
             </Box>
           )}
         </SettingsSection>
@@ -491,8 +509,10 @@ export function SecurityPanel({
       {(security.identities.length > 0 || security.providers.length > 0) && (
         <SettingsSection
           id="verbindungen"
-          title="Verbundene Konten"
-          description="Melde dich mit einem Klick über einen anderen Dienst an. Ein Dienst lässt sich nur mit einem MoeShare-Konto verknüpfen."
+          title={t('Verbundene Konten')}
+          description={t(
+            'Melde dich mit einem Klick über einen anderen Dienst an. Ein Dienst lässt sich nur mit einem MoeShare-Konto verknüpfen.'
+          )}
         >
           {security.identities.map((identity) => (
             <SettingRow
@@ -500,17 +520,25 @@ export function SecurityPanel({
               icon={providerIcon(identity.provider)}
               label={
                 <>
-                  {identity.label} <StatusChip on={identity.enabled} label={identity.enabled ? 'Verknüpft' : 'Abgeschaltet'} />
+                  {identity.label} <StatusChip on={identity.enabled} label={identity.enabled ? t('Verknüpft') : t('Abgeschaltet')} />
                 </>
               }
               description={
                 identity.enabled
-                  ? `Verknüpft als ${identity.name || 'unbekannt'}${identity.lastUsedAt ? `, zuletzt benutzt ${relativeMs(identity.lastUsedAt)}` : ''}.`
-                  : `Verknüpft als ${identity.name || 'unbekannt'}. Die Anmeldung mit ${identity.label} ist auf diesem Server gerade abgeschaltet.`
+                  ? identity.lastUsedAt
+                    ? t('Verknüpft als {name}, zuletzt benutzt {when}.', {
+                        name: identity.name || t('unbekannt'),
+                        when: relativeMs(identity.lastUsedAt),
+                      })
+                    : t('Verknüpft als {name}.', { name: identity.name || t('unbekannt') })
+                  : t('Verknüpft als {name}. Die Anmeldung mit {label} ist auf diesem Server gerade abgeschaltet.', {
+                      name: identity.name || t('unbekannt'),
+                      label: identity.label,
+                    })
               }
             >
               <Button variant="outlined" onClick={() => unlink(identity.provider, identity.label)}>
-                Trennen
+                {t('Trennen')}
               </Button>
             </SettingRow>
           ))}
@@ -519,10 +547,10 @@ export function SecurityPanel({
               key={provider.key}
               icon={providerIcon(provider.key)}
               label={provider.label}
-              description={`Verknüpfe dein ${provider.label}-Konto, um dich damit anzumelden.`}
+              description={t('Verknüpfe dein {label}-Konto, um dich damit anzumelden.', { label: provider.label })}
             >
               <Button variant="tonal" href={authUrl(provider.key, { intent: 'link' })}>
-                Verknüpfen
+                {t('Verknüpfen')}
               </Button>
             </SettingRow>
           ))}
@@ -537,8 +565,12 @@ export function SecurityPanel({
         onChanged={(ended) => {
           toast(
             ended > 0
-              ? `Passwort gespeichert. ${ended === 1 ? 'Ein anderes Gerät wurde' : `${ended} andere Geräte wurden`} abgemeldet.`
-              : 'Passwort gespeichert',
+              ? tn(
+                  ended,
+                  'Passwort gespeichert. Ein anderes Gerät wurde abgemeldet.',
+                  'Passwort gespeichert. {count} andere Geräte wurden abgemeldet.'
+                )
+              : t('Passwort gespeichert'),
             { variant: 'success' }
           );
           if (user.mustChangePassword) window.location.assign('/dashboard');

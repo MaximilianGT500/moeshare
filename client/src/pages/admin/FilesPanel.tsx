@@ -9,15 +9,19 @@ import TableCell from '@mui/material/TableCell';
 import TableHead from '@mui/material/TableHead';
 import TablePagination from '@mui/material/TablePagination';
 import TableRow from '@mui/material/TableRow';
+import ToggleButton from '@mui/material/ToggleButton';
+import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import OpenInNewRounded from '@mui/icons-material/OpenInNewRounded';
 import DeleteOutlineRounded from '@mui/icons-material/DeleteOutlineRounded';
+import DeleteForeverRounded from '@mui/icons-material/DeleteForeverRounded';
+import RestoreFromTrashRounded from '@mui/icons-material/RestoreFromTrashRounded';
 import type { FileItem, FileListResponse } from '../../lib/types';
-import { deleteAnyFile, listAllFiles } from '../../lib/api';
+import { deleteAnyFile, errorMessage, listAllFiles, purgeAnyFile, restoreAnyFile } from '../../lib/api';
 import { useDebouncedValue } from '../../lib/hooks';
-import { formatBytes, formatDateTime, formatNumber, parseServerDate, plural, relativeFromServer } from '../../lib/format';
+import { formatBytes, formatDateTime, formatNumber, parseServerDate, relativeFromServer, relativeMs } from '../../lib/format';
 import { meaningfulColor, mix } from '../../lib/color';
 import { SearchField } from '../../components/SearchField';
 import { UserAvatar } from '../../components/UserAvatar';
@@ -25,6 +29,7 @@ import { fileIcon, typeDescription } from '../../components/FileIcons';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { useToast } from '../../components/Toaster';
 import { c, ease, fonts, radius, srOnly } from '../../theme/tokens';
+import { t, tn } from '../../lib/i18n';
 
 function Thumb({ file, size = 44 }: { file: FileItem; size?: number }) {
   const [failed, setFailed] = useState(false);
@@ -65,10 +70,12 @@ export function FilesPanel({
   initial,
   onChanged,
   onTotal,
+  trashEnabled = false,
 }: {
   initial: FileListResponse;
   onChanged: () => void;
   onTotal?: (total: number) => void;
+  trashEnabled?: boolean;
 }) {
   const toast = useToast();
   const confirm = useConfirm();
@@ -79,23 +86,24 @@ export function FilesPanel({
   const [query, setQuery] = useState('');
   const search = useDebouncedValue(query.trim(), 280);
   const [busy, setBusy] = useState(false);
+  const [trash, setTrash] = useState(false);
   const first = useRef(true);
   const request = useRef(0);
 
   useEffect(() => {
-    if (!search) onTotal?.(data.total);
-  }, [data.total, search, onTotal]);
+    if (!search && !trash) onTotal?.(data.total);
+  }, [data.total, search, trash, onTotal]);
 
-  const load = async (nextPage = page, nextRows = rows, term = search) => {
+  const load = async (nextPage = page, nextRows = rows, term = search, inTrash = trash) => {
     const id = ++request.current;
     setBusy(true);
     try {
-      const res = await listAllFiles({ page: nextPage + 1, limit: nextRows, search: term });
+      const res = await listAllFiles({ page: nextPage + 1, limit: nextRows, search: term, trash: inTrash });
       if (id !== request.current) return;
       setData(res);
     } catch (error) {
       if (id === request.current)
-        toast(error instanceof Error ? error.message : 'Dateien konnten nicht geladen werden.', { variant: 'error' });
+        toast(error instanceof Error ? error.message : t('Dateien konnten nicht geladen werden.'), { variant: 'error' });
     } finally {
       if (id === request.current) setBusy(false);
     }
@@ -110,42 +118,104 @@ export function FilesPanel({
     load(0, rows, search);
   }, [search]);
 
+  const drop = (file: FileItem) =>
+    setData((d) => ({ ...d, files: d.files.filter((f) => f.id !== file.id), total: Math.max(0, d.total - 1) }));
+
   const remove = async (file: FileItem) => {
     const ok = await confirm({
-      title: 'Datei löschen?',
-      message: `„${file.filename}“ von ${file.username} wird endgültig gelöscht. Geteilte Links funktionieren danach nicht mehr.`,
-      confirmLabel: 'Löschen',
+      title: t('Datei löschen?'),
+      message: trashEnabled
+        ? t('„{filename}“ von {username} landet im Papierkorb des Kontos und lässt sich dort wiederherstellen.', {
+            filename: file.filename,
+            username: file.username,
+          })
+        : t('„{filename}“ von {username} wird endgültig gelöscht. Geteilte Links funktionieren danach nicht mehr.', {
+            filename: file.filename,
+            username: file.username,
+          }),
+      confirmLabel: t('Löschen'),
     });
     if (!ok) return;
     try {
-      await deleteAnyFile(file.username, file.filename);
-      setData((d) => ({ ...d, files: d.files.filter((f) => f.filename !== file.filename), total: Math.max(0, d.total - 1) }));
-      toast('Datei gelöscht', { variant: 'success' });
+      const result = await deleteAnyFile(file.username, file.filename);
+      drop(file);
+      toast(result.trashed ? t('Datei in den Papierkorb gelegt') : t('Datei gelöscht'), { variant: 'success' });
       onChanged();
       load();
     } catch (error) {
-      toast(error instanceof Error ? error.message : 'Löschen fehlgeschlagen.', { variant: 'error' });
+      toast(error instanceof Error ? error.message : t('Löschen fehlgeschlagen.'), { variant: 'error' });
     }
   };
 
-  const actions = (file: FileItem) => (
-    <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
-      <Tooltip title="Ansichtsseite öffnen">
-        <IconButton aria-label={`${file.filename} öffnen`} href={file.urls.view} target="_blank" rel="noopener">
-          <OpenInNewRounded />
-        </IconButton>
-      </Tooltip>
-      <Tooltip title="Löschen">
-        <IconButton
-          aria-label={`${file.filename} löschen`}
-          onClick={() => remove(file)}
-          sx={{ '&:hover': { color: c.error, bgcolor: 'color-mix(in srgb, var(--mui-palette-m3-error) 10%, transparent)' } }}
-        >
-          <DeleteOutlineRounded />
-        </IconButton>
-      </Tooltip>
-    </Box>
-  );
+  const restore = async (file: FileItem) => {
+    try {
+      await restoreAnyFile(file.id);
+      drop(file);
+      toast(t('Datei wiederhergestellt'), { variant: 'success' });
+      onChanged();
+      load();
+    } catch (error) {
+      toast(errorMessage(error), { variant: 'error' });
+    }
+  };
+
+  const purge = async (file: FileItem) => {
+    const ok = await confirm({
+      title: t('Endgültig löschen?'),
+      message: t('„{filename}“ von {username} wird sofort gelöscht und lässt sich nicht wiederherstellen.', {
+        filename: file.filename,
+        username: file.username,
+      }),
+      confirmLabel: t('Endgültig löschen'),
+    });
+    if (!ok) return;
+    try {
+      await purgeAnyFile(file.id);
+      drop(file);
+      toast(t('Datei endgültig gelöscht'), { variant: 'success' });
+      onChanged();
+      load();
+    } catch (error) {
+      toast(errorMessage(error), { variant: 'error' });
+    }
+  };
+
+  const actions = (file: FileItem) =>
+    trash ? (
+      <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
+        <Tooltip title={t('Wiederherstellen')}>
+          <IconButton aria-label={t('{filename} wiederherstellen', { filename: file.filename })} onClick={() => restore(file)}>
+            <RestoreFromTrashRounded />
+          </IconButton>
+        </Tooltip>
+        <Tooltip title={t('Endgültig löschen')}>
+          <IconButton
+            aria-label={t('{filename} endgültig löschen', { filename: file.filename })}
+            onClick={() => purge(file)}
+            sx={{ color: c.error }}
+          >
+            <DeleteForeverRounded />
+          </IconButton>
+        </Tooltip>
+      </Box>
+    ) : (
+      <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
+        <Tooltip title={t('Ansichtsseite öffnen')}>
+          <IconButton aria-label={t('{filename} öffnen', { filename: file.filename })} href={file.urls.view} target="_blank" rel="noopener">
+            <OpenInNewRounded />
+          </IconButton>
+        </Tooltip>
+        <Tooltip title={t('Löschen')}>
+          <IconButton
+            aria-label={t('{filename} löschen', { filename: file.filename })}
+            onClick={() => remove(file)}
+            sx={{ '&:hover': { color: c.error, bgcolor: 'color-mix(in srgb, var(--mui-palette-m3-error) 10%, transparent)' } }}
+          >
+            <DeleteOutlineRounded />
+          </IconButton>
+        </Tooltip>
+      </Box>
+    );
 
   const nameCell = (file: FileItem) => (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0 }}>
@@ -190,17 +260,38 @@ export function FilesPanel({
     <Box>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2, flexWrap: 'wrap' }}>
         <Box sx={{ flex: '1 1 280px', maxWidth: 420 }}>
-          <SearchField value={query} onChange={setQuery} placeholder="Dateien aller Benutzer suchen" busy={busy} dense />
+          <SearchField value={query} onChange={setQuery} placeholder={t('Dateien aller Benutzer suchen')} busy={busy} dense />
         </Box>
-        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-          {plural(data.total, 'Datei', 'Dateien')}
-          {search ? ` für „${search}“` : ''}
+        <Typography variant="body2" sx={{ color: 'text.secondary', flex: 1 }}>
+          {search
+            ? tn(data.total, '1 Datei für „{search}“', '{count} Dateien für „{search}“', { search })
+            : tn(data.total, '1 Datei', '{count} Dateien')}
         </Typography>
+        <ToggleButtonGroup
+          exclusive
+          size="small"
+          value={trash ? 'trash' : 'live'}
+          onChange={(_event, next) => {
+            if (!next) return;
+            const inTrash = next === 'trash';
+            setTrash(inTrash);
+            setPage(0);
+            load(0, rows, search, inTrash);
+          }}
+          aria-label={t('Ansicht')}
+        >
+          <ToggleButton value="live">{t('Dateien')}</ToggleButton>
+          <ToggleButton value="trash">{t('Papierkorb')}</ToggleButton>
+        </ToggleButtonGroup>
       </Box>
 
       {data.files.length === 0 ? (
         <Typography sx={{ py: 6, textAlign: 'center', color: 'text.secondary' }}>
-          {search ? 'Keine Datei passt zu dieser Suche.' : 'Noch keine Dateien hochgeladen.'}
+          {trash
+            ? t('Im Papierkorb liegt nichts.')
+            : search
+              ? t('Keine Datei passt zu dieser Suche.')
+              : t('Noch keine Dateien hochgeladen.')}
         </Typography>
       ) : (
         <Box
@@ -217,13 +308,14 @@ export function FilesPanel({
               {data.files.map((file) => (
                 <Box
                   component="li"
-                  key={file.filename}
+                  key={file.id}
                   sx={{ display: 'flex', alignItems: 'center', gap: 1, p: 1, borderRadius: `${radius.tile}px` }}
                 >
                   <Box sx={{ flex: 1, minWidth: 0 }}>
                     {nameCell(file)}
                     <Typography variant="caption" component="p" sx={{ color: 'text.secondary', mt: 0.5, pl: 7 }}>
-                      {file.username}, {formatBytes(file.sizeBytes)}, {relativeFromServer(file.date)}
+                      {file.username}, {formatBytes(file.sizeBytes)},{' '}
+                      {trash && file.deletedAt ? t('gelöscht {when}', { when: relativeMs(file.deletedAt) }) : relativeFromServer(file.date)}
                     </Typography>
                   </Box>
                   {actions(file)}
@@ -231,17 +323,17 @@ export function FilesPanel({
               ))}
             </Box>
           ) : (
-            <Table aria-label="Alle Dateien">
+            <Table aria-label={t('Alle Dateien')}>
               <TableHead>
                 <TableRow>
-                  <TableCell>Datei</TableCell>
-                  <TableCell>Besitzer</TableCell>
-                  <TableCell align="right">Größe</TableCell>
-                  <TableCell>Hochgeladen</TableCell>
-                  <TableCell align="right">Aufrufe</TableCell>
+                  <TableCell>{t('Datei')}</TableCell>
+                  <TableCell>{t('Besitzer')}</TableCell>
+                  <TableCell align="right">{t('Größe')}</TableCell>
+                  <TableCell>{trash ? t('Gelöscht') : t('Hochgeladen')}</TableCell>
+                  <TableCell align="right">{t('Aufrufe')}</TableCell>
                   <TableCell align="right">
                     <Box component="span" sx={srOnly}>
-                      Aktionen
+                      {t('Aktionen')}
                     </Box>
                   </TableCell>
                 </TableRow>
@@ -249,7 +341,7 @@ export function FilesPanel({
               <TableBody>
                 {data.files.map((file, i) => (
                   <TableRow
-                    key={file.filename}
+                    key={file.id}
                     hover
                     component={m.tr}
                     initial={{ opacity: 0 }}
@@ -262,9 +354,15 @@ export function FilesPanel({
                       {formatBytes(file.sizeBytes)}
                     </TableCell>
                     <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                      <Tooltip title={formatDateTime(parseServerDate(file.date))}>
-                        <span>{relativeFromServer(file.date)}</span>
-                      </Tooltip>
+                      {trash && file.deletedAt ? (
+                        <Tooltip title={formatDateTime(new Date(file.deletedAt))}>
+                          <span>{relativeMs(file.deletedAt)}</span>
+                        </Tooltip>
+                      ) : (
+                        <Tooltip title={formatDateTime(parseServerDate(file.date))}>
+                          <span>{relativeFromServer(file.date)}</span>
+                        </Tooltip>
+                      )}
                     </TableCell>
                     <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums' }}>
                       {formatNumber(file.views)}
@@ -291,16 +389,18 @@ export function FilesPanel({
               setPage(0);
               load(0, next);
             }}
-            labelRowsPerPage="Pro Seite"
-            labelDisplayedRows={({ from, to, count }) => `${formatNumber(from)}–${formatNumber(to)} von ${formatNumber(count)}`}
+            labelRowsPerPage={t('Pro Seite')}
+            labelDisplayedRows={({ from, to, count }) =>
+              t('{from}–{to} von {count}', { from: formatNumber(from), to: formatNumber(to), count: formatNumber(count) })
+            }
             getItemAriaLabel={(type) =>
               type === 'next'
-                ? 'Nächste Seite'
+                ? t('Nächste Seite')
                 : type === 'previous'
-                  ? 'Vorherige Seite'
+                  ? t('Vorherige Seite')
                   : type === 'first'
-                    ? 'Erste Seite'
-                    : 'Letzte Seite'
+                    ? t('Erste Seite')
+                    : t('Letzte Seite')
             }
           />
         </Box>

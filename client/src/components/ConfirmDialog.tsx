@@ -9,6 +9,7 @@ import DialogTitle from '@mui/material/DialogTitle';
 import DeleteOutlineRounded from '@mui/icons-material/DeleteOutlineRounded';
 import { GrowTransition } from './transitions';
 import { c } from '../theme/tokens';
+import { t } from '../lib/i18n';
 
 interface ConfirmOptions {
   title: string;
@@ -83,10 +84,10 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
             </DialogContent>
             <DialogActions>
               <Button onClick={() => close(false)} autoFocus={destructive}>
-                {options.cancelLabel ?? 'Abbrechen'}
+                {options.cancelLabel ?? t('Abbrechen')}
               </Button>
               <Button variant="contained" color={destructive ? 'error' : 'primary'} onClick={() => close(true)} autoFocus={!destructive}>
-                {options.confirmLabel ?? 'Löschen'}
+                {options.confirmLabel ?? t('Löschen')}
               </Button>
             </DialogActions>
           </>

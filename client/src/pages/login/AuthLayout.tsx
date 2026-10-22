@@ -9,6 +9,7 @@ import { ThemeToggleButton } from '../../components/ThemeToggle';
 import { SiteFooter } from '../../components/SiteFooter';
 import { mix } from '../../lib/color';
 import { c, ease, radius } from '../../theme/tokens';
+import { t } from '../../lib/i18n';
 
 export function AuthLayout({ site, children, wide = false }: { site: SiteInfo; children: ReactNode; wide?: boolean }) {
   return (
@@ -79,7 +80,7 @@ export function OrDivider() {
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, color: 'text.secondary' }} aria-hidden>
       <Box sx={{ flex: 1, height: '1px', bgcolor: c.outlineVariant }} />
-      <Typography variant="caption">oder</Typography>
+      <Typography variant="caption">{t('oder')}</Typography>
       <Box sx={{ flex: 1, height: '1px', bgcolor: c.outlineVariant }} />
     </Box>
   );
@@ -102,7 +103,7 @@ export async function postAuth<T = Record<string, unknown>>(
     return {
       ok: false,
       status: 0,
-      data: { error: 'Keine Verbindung zum Server. Prüfe deine Verbindung und versuche es erneut.' } as T & { error: string },
+      data: { error: t('Keine Verbindung zum Server. Prüfe deine Verbindung und versuche es erneut.') } as T & { error: string },
     };
   }
 }

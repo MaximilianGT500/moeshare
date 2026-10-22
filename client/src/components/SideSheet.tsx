@@ -6,6 +6,7 @@ import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import CloseRounded from '@mui/icons-material/CloseRounded';
 import { c, radius } from '../theme/tokens';
+import { t } from '../lib/i18n';
 
 export function SideSheet({
   open,
@@ -55,8 +56,8 @@ export function SideSheet({
             </Typography>
           )}
         </Box>
-        <Tooltip title="Schließen">
-          <IconButton aria-label="Schließen" onClick={onClose}>
+        <Tooltip title={t('Schließen')}>
+          <IconButton aria-label={t('Schließen')} onClick={onClose}>
             <CloseRounded />
           </IconButton>
         </Tooltip>

@@ -163,8 +163,7 @@ async function useRecoveryCode(userId, code) {
   return remainingRecoveryCodes(userId);
 }
 
-const remainingRecoveryCodes = (userId) =>
-  db.get('SELECT COUNT(*) AS count FROM recovery_codes WHERE user_id = ? AND used_at IS NULL', [userId]).then((r) => r.count);
+const remainingRecoveryCodes = (userId) => db.count('SELECT COUNT(*) FROM recovery_codes WHERE user_id = ? AND used_at IS NULL', [userId]);
 
 async function verifySecondFactor(userId, input) {
   const value = String(input || '').trim();

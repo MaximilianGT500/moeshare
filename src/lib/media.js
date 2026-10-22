@@ -3,22 +3,42 @@
 const fs = require('fs');
 const fsp = fs.promises;
 const path = require('path');
-const { spawn } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 const sharp = require('sharp');
-const { removeMetadata, base64StringToArrayBuffer } = require('@qoocollections/content-metadata-remover');
+const config = require('../config');
 const logger = require('./logger');
+const { removeLocation } = require('./geotags');
 const { filePaths, baseNameOf } = require('./storage');
 
 const log = logger.scope('media');
 
-const ffmpegPath = (() => {
-  try {
-    return require('@ffmpeg-installer/ffmpeg').path;
-  } catch (error) {
-    log.warn('FFmpeg wurde nicht gefunden, Videovorschauen und Streaming sind aus', { error });
-    return null;
+function candidates() {
+  if (config.ffmpegPath) return [config.ffmpegPath];
+  const name = process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg';
+  return (process.env.PATH || '')
+    .split(path.delimiter)
+    .filter(Boolean)
+    .map((dir) => path.join(dir, name));
+}
+
+const detected = (() => {
+  for (const candidate of candidates()) {
+    try {
+      if (!fs.statSync(candidate).isFile()) continue;
+      const probe = spawnSync(candidate, ['-hide_banner', '-version'], { encoding: 'utf8', timeout: 10000, windowsHide: true });
+      if (probe.status !== 0) continue;
+      const version = (/ffmpeg version (\S+)/.exec(probe.stdout || '') || [])[1] || null;
+      return { path: candidate, version };
+    } catch {}
   }
+  log.warn('FFmpeg wurde nicht gefunden, Videovorschauen und Streaming sind aus', {
+    hint: config.ffmpegPath
+      ? `FFMPEG_PATH zeigt auf ${config.ffmpegPath}, dort liegt kein lauffähiges ffmpeg.`
+      : 'Installiere ffmpeg oder setze FFMPEG_PATH.',
+  });
+  return null;
 })();
+const ffmpegPath = detected ? detected.path : null;
 
 const lastLine = (text) => text.trim().split(/\r?\n/).pop() || 'Unbekannter Fehler';
 
@@ -141,6 +161,8 @@ async function convertToHls(username, filename) {
     '10',
     '-hls_list_size',
     '0',
+    '-hls_segment_filename',
+    path.join(paths.hlsDir, `${baseNameOf(filename)}_%d.ts`),
     '-f',
     'hls',
     paths.playlist,
@@ -154,23 +176,7 @@ async function convertToHls(username, filename) {
   log.info('Video für Streaming umgewandelt', { user: username, file: filename });
 }
 
-async function stripLocation(file) {
-  const handle = await fsp.open(file, 'r+');
-  try {
-    const read = async (size, offset) => {
-      const buffer = Buffer.alloc(size);
-      await handle.read(buffer, 0, size, offset);
-      return base64StringToArrayBuffer(buffer.toString('base64'));
-    };
-    const write = async (value, offset, encoding) => {
-      const buffer = Buffer.from(value, encoding);
-      await handle.write(buffer, 0, buffer.length, offset);
-    };
-    await removeMetadata(file, read, write);
-  } finally {
-    await handle.close();
-  }
-}
+const stripLocation = (file) => removeLocation(file);
 
 async function analyze(username, filename, type, options) {
   const paths = filePaths(username, filename);
@@ -202,4 +208,10 @@ async function analyze(username, filename, type, options) {
   return { result, errors };
 }
 
-module.exports = { ffmpegAvailable: Boolean(ffmpegPath), analyze, stripLocation, removeHlsArtifacts };
+module.exports = {
+  ffmpegAvailable: Boolean(ffmpegPath),
+  ffmpegVersion: detected ? detected.version : null,
+  analyze,
+  stripLocation,
+  removeHlsArtifacts,
+};

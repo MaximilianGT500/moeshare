@@ -24,20 +24,23 @@ import {
 } from '../../lib/webauthn';
 import { OrDivider, postAuth, Shake } from './AuthLayout';
 import { ProviderButtons } from './ProviderButtons';
+import { t } from '../../lib/i18n';
 
 interface Props {
   site: SiteInfo;
   methods: LoginMethods;
   next: string;
   initialError: string;
+  notice?: string;
   onMfa: (challenge: MfaChallenge, remember: boolean) => void;
   onToken: () => void;
+  onForgot?: () => void;
   onSuccess: (redirect: string) => void;
 }
 
 type PasskeyOptions = Parameters<typeof startAuthentication>[0]['optionsJSON'];
 
-export function CredentialsStep({ site, methods, next, initialError, onMfa, onToken, onSuccess }: Props) {
+export function CredentialsStep({ site, methods, next, initialError, notice, onMfa, onToken, onForgot, onSuccess }: Props) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [remember, setRemember] = useState(true);
@@ -61,7 +64,7 @@ export function CredentialsStep({ site, methods, next, initialError, onMfa, onTo
       onSuccess(result.data.redirect);
       return true;
     }
-    fail(result.data.error || 'Der Passkey wurde nicht akzeptiert.');
+    fail(result.data.error || t('Der Passkey wurde nicht akzeptiert.'));
     return false;
   };
 
@@ -94,7 +97,7 @@ export function CredentialsStep({ site, methods, next, initialError, onMfa, onTo
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (!username.trim() || !password) {
-      fail('Gib Benutzername und Passwort ein.');
+      fail(t('Gib Benutzername und Passwort ein.'));
       return;
     }
     setBusy('password');
@@ -110,7 +113,7 @@ export function CredentialsStep({ site, methods, next, initialError, onMfa, onTo
       return;
     }
     setPassword('');
-    fail(result.data.error || 'Die Anmeldung hat nicht geklappt.');
+    fail(result.data.error || t('Die Anmeldung hat nicht geklappt.'));
   };
 
   const signInWithPasskey = async () => {
@@ -118,7 +121,7 @@ export function CredentialsStep({ site, methods, next, initialError, onMfa, onTo
     setError('');
     const options = await postAuth<{ flowId: string; options: PasskeyOptions }>('/api/auth/passkey/options', {});
     if (!options.ok) {
-      fail(options.data.error || 'Passkeys sind gerade nicht verfügbar.');
+      fail(options.data.error || t('Passkeys sind gerade nicht verfügbar.'));
       return;
     }
     try {
@@ -148,17 +151,23 @@ export function CredentialsStep({ site, methods, next, initialError, onMfa, onTo
             {site.title}
           </Typography>
           <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
-            Melde dich an, um deine Dateien zu verwalten.
+            {t('Melde dich an, um deine Dateien zu verwalten.')}
           </Typography>
         </div>
       </Stack>
+
+      {notice && !error && (
+        <Alert severity="success" role="status">
+          {notice}
+        </Alert>
+      )}
 
       <Box component="form" onSubmit={submit} noValidate>
         <Stack spacing={2}>
           <Shake attempt={attempt}>
             <Stack spacing={2}>
               <TextField
-                label="Benutzername"
+                label={t('Benutzername')}
                 name="username"
                 fullWidth
                 autoFocus
@@ -173,7 +182,7 @@ export function CredentialsStep({ site, methods, next, initialError, onMfa, onTo
                 }}
               />
               <PasswordField
-                label="Passwort"
+                label={t('Passwort')}
                 name="password"
                 value={password}
                 onChange={(value) => {
@@ -191,16 +200,22 @@ export function CredentialsStep({ site, methods, next, initialError, onMfa, onTo
           >
             <FormControlLabel
               control={<Checkbox checked={remember} onChange={(event) => setRemember(event.target.checked)} />}
-              label={<Typography variant="body2">Angemeldet bleiben</Typography>}
+              label={<Typography variant="body2">{t('Angemeldet bleiben')}</Typography>}
               sx={{ ml: -1 }}
             />
-            <Link component="button" type="button" variant="body2" onClick={() => setForgot((v) => !v)} underline="hover">
-              Passwort vergessen?
+            <Link
+              component="button"
+              type="button"
+              variant="body2"
+              onClick={() => (onForgot ? onForgot() : setForgot((v) => !v))}
+              underline="hover"
+            >
+              {t('Passwort vergessen?')}
             </Link>
           </Box>
           <Collapse in={forgot} unmountOnExit>
             <Alert severity="info">
-              Wende dich an einen Admin. Er setzt dein Passwort zurück, und beim nächsten Anmelden legst du ein neues fest.
+              {t('Wende dich an einen Admin. Er setzt dein Passwort zurück, und beim nächsten Anmelden legst du ein neues fest.')}
             </Alert>
           </Collapse>
 
@@ -218,7 +233,7 @@ export function CredentialsStep({ site, methods, next, initialError, onMfa, onTo
             disabled={busy !== ''}
             startIcon={busy === 'password' ? <CircularProgress size={18} color="inherit" /> : null}
           >
-            {busy === 'password' ? 'Wird geprüft' : 'Anmelden'}
+            {busy === 'password' ? t('Wird geprüft') : t('Anmelden')}
           </Button>
         </Stack>
       </Box>
@@ -235,12 +250,12 @@ export function CredentialsStep({ site, methods, next, initialError, onMfa, onTo
               disabled={busy !== ''}
               startIcon={busy === 'passkey' ? <CircularProgress size={18} color="inherit" /> : <FingerprintRounded />}
             >
-              Mit Passkey anmelden
+              {t('Mit Passkey anmelden')}
             </Button>
           )}
           <ProviderButtons
             providers={methods.providers}
-            verb="Mit {name} anmelden"
+            verb={t('Mit {name} anmelden')}
             params={{ intent: 'login', remember: remember ? '1' : '0', next: next || undefined }}
             disabled={busy !== ''}
           />
@@ -251,15 +266,15 @@ export function CredentialsStep({ site, methods, next, initialError, onMfa, onTo
         <Stack spacing={0.5} sx={{ alignItems: 'center' }}>
           {methods.register && (
             <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-              Noch kein Konto?{' '}
+              {t('Noch kein Konto?')}{' '}
               <Link href="/register" underline="hover">
-                Registrieren
+                {t('Registrieren')}
               </Link>
             </Typography>
           )}
           {methods.token && (
             <Link component="button" type="button" variant="body2" onClick={onToken} underline="hover">
-              Mit ShareX-Token anmelden
+              {t('Mit ShareX-Token anmelden')}
             </Link>
           )}
         </Stack>

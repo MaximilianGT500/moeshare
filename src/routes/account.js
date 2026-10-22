@@ -1,6 +1,7 @@
 'use strict';
 
 const express = require('express');
+const { tr } = require('../lib/i18n');
 const { badRequest, conflict, forbidden, notFound, unauthorized } = require('../lib/errors');
 const { text, integer } = require('../lib/input');
 const { renderPage } = require('../lib/render');
@@ -17,6 +18,12 @@ const audit = require('../services/auditService');
 const files = require('../services/fileService');
 const viewer = require('../services/viewerService');
 const webhook = require('../services/webhookService');
+const preferences = require('../services/preferenceService');
+const domains = require('../services/domainService');
+const emails = require('../services/emailService');
+const mail = require('../services/mailService');
+const { STYLES } = require('../lib/slugs');
+const { EXPIRY_CHOICES } = require('../lib/expiry');
 
 const router = express.Router();
 
@@ -46,6 +53,13 @@ const OWN_ACTIVITY = [
   'user_registered',
   'user_created',
   'user_updated',
+  'email_changed',
+  'email_removed',
+  'domain_added',
+  'domain_verified',
+  'domain_removed',
+  'domain_revoked',
+  'design_updated',
 ];
 
 const mfaRequired = (user) => {
@@ -53,17 +67,30 @@ const mfaRequired = (user) => {
   return enforce === 'all' || (enforce === 'admins' && user.isAdmin);
 };
 
+const translateDomain = (req, item) => ({ ...item, error: item.error ? tr(req, item.error) : null });
+
+async function domainInfo(req) {
+  return {
+    enabled: domains.enabled(),
+    max: settings.get('domains.maxPerUser'),
+    https: settings.get('domains.https'),
+    items: (await domains.listForUser(req.user.id)).map((item) => translateDomain(req, item)),
+  };
+}
+
 async function overview(req) {
   const row = await users.findById(req.user.id);
   const limits = users.effectiveLimits(row);
-  const [usedBytes, passkeyList, recoveryLeft, sessionList, tokenList, activity, linked] = await Promise.all([
+  const [usedBytes, passkeyList, recoveryLeft, sessionList, tokenList, activity, linked, email, domainState] = await Promise.all([
     users.usageBytes(row.username),
     passkeys.listForUser(row.id),
     row.totp_enabled_at ? totp.remainingRecoveryCodes(row.id) : 0,
     sessions.listForUser(row.id, req.session ? req.session.id : null),
     tokens.listForUser(row.id),
-    audit.list({ userId: row.id, limit: 25, actions: OWN_ACTIVITY }),
+    audit.list({ userId: row.id, limit: 25, actions: OWN_ACTIVITY, language: req.language }),
     identities.listForUser(row.id),
+    emails.state(row.id),
+    domainInfo(req),
   ]);
   const available = oauth.enabled();
 
@@ -86,7 +113,7 @@ async function overview(req) {
       mfaRequired: mfaRequired(req.user),
       passkeysEnabled: settings.get('auth.passkeys'),
       passkeyOrigin: new URL(settings.get('site.baseUrl')).origin,
-      passkeys: passkeyList,
+      passkeys: passkeyList.map((passkey) => ({ ...passkey, name: tr(req, passkey.name) })),
       identities: linked.map((identity) => ({
         ...identity,
         label: oauth.isKnown(identity.provider) ? oauth.labelOf(identity.provider) : identity.provider,
@@ -97,10 +124,28 @@ async function overview(req) {
     },
     limits: { usedBytes, quotaBytes: limits.quotaBytes, maxFileBytes: limits.maxFileBytes },
     policy: { passwordMinLength: settings.get('auth.passwordMinLength') },
-    sessions: sessionList,
+    sessions: sessionList.map((session) => ({ ...session, device: tr(req, session.device) })),
     tokens: tokenList,
     activity,
     setup: sessions.pendingSetup(req.user),
+    preferences: await preferences.get(row.id),
+    email,
+    domains: domainState,
+    choices: {
+      languages: preferences.LANGUAGES,
+      urlStyles: STYLES,
+      expiries: EXPIRY_CHOICES,
+      maxExpiry: settings.get('uploads.maxExpiry'),
+      domains: files.originsFor(row.username),
+      defaults: {
+        language: settings.get('site.language'),
+        urlStyle: settings.get('uploads.urlStyle'),
+        expiry: settings.get('uploads.defaultExpiry'),
+      },
+      texts: settings.get('uploads.texts'),
+      links: settings.get('links.enabled'),
+      mail: mail.ready(),
+    },
   };
 }
 
@@ -120,6 +165,13 @@ router.get('/account', requirePage(), async (req, res) => {
 
 router.get('/api/account', signedIn, async (req, res) => {
   res.json(await overview(req));
+});
+
+router.patch('/api/account/preferences', signedIn, async (req, res) => {
+  const updated = await preferences.update(req.user.id, req.body || {});
+  if (updated.language)
+    res.cookie('ms_lang', updated.language, { path: '/', sameSite: 'lax', httpOnly: false, maxAge: 365 * 24 * 60 * 60 * 1000 });
+  res.json({ preferences: updated });
 });
 
 router.post('/api/account/password', signedIn, async (req, res) => {
@@ -144,6 +196,7 @@ router.post('/api/account/password', signedIn, async (req, res) => {
   }
   const endedSessions = await sessions.revokeAll(row.id, req.session.id);
   audit.log('password_changed', { userId: row.id, req, details: { endedSessions } });
+  emails.notifySecurity(row.id, 'password_changed');
   res.json({ ok: true, endedSessions });
 });
 
@@ -155,6 +208,7 @@ router.post('/api/account/totp/setup', sudo, async (req, res) => {
 router.post('/api/account/totp/enable', sudo, async (req, res) => {
   const recoveryCodes = await totp.enable(req.user.id, text(req.body.code, 20));
   audit.log('mfa_enabled', { userId: req.user.id, req });
+  emails.notifySecurity(req.user.id, 'mfa_enabled');
   res.json({ ok: true, recoveryCodes });
 });
 
@@ -163,6 +217,7 @@ router.post('/api/account/totp/disable', sudo, async (req, res) => {
   await totp.disable(req.user.id);
   audit.log('mfa_disabled', { userId: req.user.id, req });
   webhook.notify('security', '2FA abgeschaltet', `**${req.user.username}** hat die Zwei-Faktor-Anmeldung abgeschaltet.`, 'error');
+  emails.notifySecurity(req.user.id, 'mfa_disabled');
   res.json({ ok: true });
 });
 
@@ -188,8 +243,10 @@ router.post('/api/account/passkeys', sudo, passkeysEnabled, async (req, res) => 
     response: req.body.response,
     name: req.body.name,
     userAgent: req.get('user-agent'),
+    language: req.language,
   });
   audit.log('passkey_added', { userId: req.user.id, req, details: { name: passkey.name } });
+  emails.notifySecurity(req.user.id, 'passkey_added', { name: passkey.name });
   res.json({ ok: true, passkey });
 });
 
@@ -241,8 +298,59 @@ router.delete('/api/account/tokens/:id', signedIn, async (req, res) => {
   res.json({ ok: true });
 });
 
+router.post('/api/account/email', sudo, async (req, res) => {
+  res.json({ ok: true, email: await emails.startVerification(req.user, req.body.email, req.language) });
+});
+
+router.delete('/api/account/email', sudo, async (req, res) => {
+  await emails.remove(req.user.id);
+  audit.log('email_removed', { userId: req.user.id, req });
+  res.json({ ok: true, email: await emails.state(req.user.id) });
+});
+
+router.get('/account/email', async (req, res) => {
+  try {
+    const entry = await emails.confirm(text(req.query.token, 200));
+    audit.log('email_changed', { userId: entry.userId, req, details: { email: emails.maskEmail(entry.email) } });
+    return res.redirect('/account?email=bestaetigt#einstellungen');
+  } catch (error) {
+    return res.redirect(`/account?email=${error.status === 409 ? 'vergeben' : 'abgelaufen'}#einstellungen`);
+  }
+});
+
+const domainsEnabled = (req, res, next) => {
+  if (!domains.enabled()) throw forbidden('Eigene Domains sind auf diesem Server abgeschaltet.');
+  next();
+};
+
+router.get('/api/account/domains', signedIn, async (req, res) => res.json(await domainInfo(req)));
+
+router.post('/api/account/domains', signedIn, domainsEnabled, async (req, res) => {
+  const domain = await domains.add(req.user, req.body.domain);
+  audit.log('domain_added', { userId: req.user.id, req, details: { domain: domain.domain } });
+  res.json({ ok: true, domain: translateDomain(req, domain), domains: await domainInfo(req) });
+});
+
+router.post('/api/account/domains/:id/verify', signedIn, domainsEnabled, async (req, res) => {
+  const result = await domains.verify(req.user, req.params.id);
+  if (result.newlyVerified) audit.log('domain_verified', { userId: req.user.id, req, details: { domain: result.domain } });
+  res.json({ ok: true, result: translateDomain(req, result), domains: await domainInfo(req) });
+});
+
+router.delete('/api/account/domains/:id', signedIn, async (req, res) => {
+  const removed = await domains.remove(req.user, req.params.id);
+  audit.log('domain_removed', { userId: req.user.id, req, details: { domain: removed.domain } });
+  res.json({ ok: true, domains: await domainInfo(req) });
+});
+
 router.get('/api/account/activity', signedIn, async (req, res) => {
-  const events = await audit.list({ userId: req.user.id, limit: 25, before: integer(req.query.before), actions: OWN_ACTIVITY });
+  const events = await audit.list({
+    userId: req.user.id,
+    limit: 25,
+    before: integer(req.query.before),
+    actions: OWN_ACTIVITY,
+    language: req.language,
+  });
   res.json({ events });
 });
 

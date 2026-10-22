@@ -57,6 +57,7 @@ import { SessionRow } from '../account/SessionsPanel';
 import { CredentialsDialog } from './CreateUserDialog';
 import { RoleChip, StatusChip } from './userBits';
 import { fonts } from '../../theme/tokens';
+import { t, tn } from '../../lib/i18n';
 
 function SuspendDialog({ user, onClose, onConfirm }: { user: AdminUser | null; onClose: () => void; onConfirm: (reason: string) => void }) {
   const [reason, setReason] = useState('');
@@ -74,21 +75,23 @@ function SuspendDialog({ user, onClose, onConfirm }: { user: AdminUser | null; o
       <DialogTitle id="suspend-title">{user?.username} sperren?</DialogTitle>
       <DialogContent>
         <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
-          {user?.username} wird sofort abgemeldet und kann weder hochladen noch sich anmelden. Geteilte Links bleiben erreichbar.
+          {t('{username} wird sofort abgemeldet und kann weder hochladen noch sich anmelden. Geteilte Links bleiben erreichbar.', {
+            username: user?.username,
+          })}
         </Typography>
         <TextField
-          label="Grund (optional)"
+          label={t('Grund (optional)')}
           value={reason}
           onChange={(event) => setReason(event.target.value)}
           fullWidth
-          helperText="Wird beim Anmeldeversuch angezeigt."
+          helperText={t('Wird beim Anmeldeversuch angezeigt.')}
           slotProps={{ htmlInput: { maxLength: 200 } }}
         />
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>Abbrechen</Button>
+        <Button onClick={onClose}>{t('Abbrechen')}</Button>
         <Button variant="contained" color="error" onClick={() => onConfirm(reason.trim())}>
-          Sperren
+          {t('Sperren')}
         </Button>
       </DialogActions>
     </Dialog>
@@ -137,30 +140,30 @@ function PasswordResetDialog({
       aria-labelledby="reset-pw-title"
       sx={{ zIndex: 1550 }}
     >
-      <DialogTitle id="reset-pw-title">Passwort zurücksetzen</DialogTitle>
+      <DialogTitle id="reset-pw-title">{t('Passwort zurücksetzen')}</DialogTitle>
       <DialogContent>
         <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
-          {user?.username} wird auf allen Geräten abgemeldet. ShareX-Tokens bleiben gültig.
+          {t('{username} wird auf allen Geräten abgemeldet. ShareX-Tokens bleiben gültig.', { username: user?.username })}
         </Typography>
         <Stack spacing={2}>
           <TextField
-            label="Neues Passwort (optional)"
+            label={t('Neues Passwort (optional)')}
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             fullWidth
-            helperText="Leer lassen, dann erzeugt MoeShare eins."
+            helperText={t('Leer lassen, dann erzeugt MoeShare eins.')}
             slotProps={{ htmlInput: { autoComplete: 'off', spellCheck: false, style: { fontFamily: fonts.mono } } }}
           />
           <FormControlLabel
             control={<Switch checked={mustChange} onChange={(event) => setMustChange(event.target.checked)} />}
-            label="Beim nächsten Anmelden ändern lassen"
+            label={t('Beim nächsten Anmelden ändern lassen')}
           />
           {error && <Alert severity="error">{error}</Alert>}
         </Stack>
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} disabled={busy}>
-          Abbrechen
+          {t('Abbrechen')}
         </Button>
         <Button
           variant="contained"
@@ -168,7 +171,7 @@ function PasswordResetDialog({
           disabled={busy}
           startIcon={busy ? <CircularProgress size={16} color="inherit" /> : null}
         >
-          Zurücksetzen
+          {t('Zurücksetzen')}
         </Button>
       </DialogActions>
     </Dialog>
@@ -242,39 +245,47 @@ export function UserSheet({
   const setRole = async (role: 'admin' | 'mitglied') => {
     if (!user || role === user.role) return;
     const ok = await confirm({
-      title: role === 'admin' ? `${user.username} zum Admin machen?` : `${user.username} die Admin-Rechte nehmen?`,
+      title:
+        role === 'admin'
+          ? t('{username} zum Admin machen?', { username: user.username })
+          : t('{username} die Admin-Rechte nehmen?', { username: user.username }),
       message:
         role === 'admin'
-          ? 'Admins sehen alle Dateien und können Benutzer und Einstellungen ändern.'
-          : `${user.username} wird zum Mitglied und verliert den Zugriff auf diesen Bereich.`,
-      confirmLabel: role === 'admin' ? 'Zum Admin machen' : 'Rechte entziehen',
+          ? t('Admins sehen alle Dateien und können Benutzer und Einstellungen ändern.')
+          : t('{username} wird zum Mitglied und verliert den Zugriff auf diesen Bereich.', { username: user.username }),
+      confirmLabel: role === 'admin' ? t('Zum Admin machen') : t('Rechte entziehen'),
       destructive: role !== 'admin',
     });
     if (ok)
       run(
         () => updateUser(user.id, { role }),
-        role === 'admin' ? `${user.username} ist jetzt Admin` : `${user.username} ist jetzt Mitglied`
+        role === 'admin'
+          ? t('{username} ist jetzt Admin', { username: user.username })
+          : t('{username} ist jetzt Mitglied', { username: user.username })
       );
   };
 
   const saveLimits = async () => {
     if (!user) return;
     setSaving(true);
-    await run(() => updateUser(user.id, { quotaBytes: quota, maxFileBytes: maxFile }), 'Limits gespeichert');
+    await run(() => updateUser(user.id, { quotaBytes: quota, maxFileBytes: maxFile }), t('Limits gespeichert'));
     setSaving(false);
   };
 
   const remove = async () => {
     if (!user) return;
     const ok = await confirm({
-      title: `${user.username} löschen?`,
-      message: `Das Konto und alle ${formatNumber(user.files)} Dateien (${formatBytes(user.storageBytes)}) werden endgültig gelöscht. Geteilte Links funktionieren danach nicht mehr.`,
-      confirmLabel: 'Endgültig löschen',
+      title: t('{username} löschen?', { username: user.username }),
+      message: t(
+        'Das Konto und alle {files} Dateien ({storageBytes}) werden endgültig gelöscht. Geteilte Links funktionieren danach nicht mehr.',
+        { files: formatNumber(user.files), storageBytes: formatBytes(user.storageBytes) }
+      ),
+      confirmLabel: t('Endgültig löschen'),
     });
     if (!ok) return;
     try {
       await sudo(() => deleteUserById(user.id));
-      toast(`${user.username} wurde gelöscht`, { variant: 'success' });
+      toast(t('{username} wurde gelöscht', { username: user.username }), { variant: 'success' });
       onChanged(null);
       onClose();
     } catch (failure) {
@@ -296,7 +307,7 @@ export function UserSheet({
             <Box sx={{ display: 'flex', gap: 0.75, alignItems: 'center', mt: 0.5, flexWrap: 'wrap' }}>
               <RoleChip role={user.role} />
               <StatusChip user={user} />
-              {self && <Typography variant="caption">Das bist du</Typography>}
+              {self && <Typography variant="caption">{t('Das bist du')}</Typography>}
             </Box>
           ) : null
         }
@@ -316,70 +327,108 @@ export function UserSheet({
                   <Button
                     color="inherit"
                     size="small"
-                    onClick={() => run(() => updateUser(user.id, { status: 'active' }), `${user.username} ist entsperrt`)}
+                    onClick={() =>
+                      run(() => updateUser(user.id, { status: 'active' }), t('{username} ist entsperrt', { username: user.username }))
+                    }
                   >
-                    Entsperren
+                    {t('Entsperren')}
                   </Button>
                 }
               >
-                Gesperrt{user.suspendedReason ? `: ${user.suspendedReason}` : ''}
+                {t('Gesperrt')}
+                {user.suspendedReason ? `: ${user.suspendedReason}` : ''}
               </Alert>
             )}
 
-            <SettingsSection title="Überblick">
-              <SettingRow label="Speicher" stacked>
+            <SettingsSection title={t('Überblick')}>
+              <SettingRow label={t('Speicher')} stacked>
                 <QuotaMeter usedBytes={user.storageBytes} quotaBytes={user.effectiveQuotaBytes} />
               </SettingRow>
               <SettingRow
-                label="Konto"
-                description={`${formatNumber(user.files)} Dateien, ${formatNumber(user.views)} Aufrufe. ${user.createdAt ? `Angelegt am ${formatDate(new Date(user.createdAt))}` : 'Aus der alten Version übernommen'}, zuletzt angemeldet ${relativeMs(user.lastLoginAt)}.`}
+                label={t('Konto')}
+                description={
+                  user.createdAt
+                    ? t('{files} Dateien, {views} Aufrufe. Angelegt am {date}, zuletzt angemeldet {when}.', {
+                        files: formatNumber(user.files),
+                        views: formatNumber(user.views),
+                        date: formatDate(new Date(user.createdAt)),
+                        when: relativeMs(user.lastLoginAt),
+                      })
+                    : t('{files} Dateien, {views} Aufrufe. Aus der alten Version übernommen, zuletzt angemeldet {when}.', {
+                        files: formatNumber(user.files),
+                        views: formatNumber(user.views),
+                        when: relativeMs(user.lastLoginAt),
+                      })
+                }
               />
+              <SettingRow
+                label={t('E-Mail')}
+                description={
+                  user.email
+                    ? user.emailVerified
+                      ? t('{email}, bestätigt', { email: user.email })
+                      : t('{email}, noch nicht bestätigt', { email: user.email })
+                    : t('Keine Adresse hinterlegt')
+                }
+              />
+              {user.domains > 0 && (
+                <SettingRow
+                  label={t('Eigene Domains')}
+                  description={tn(user.domains, '1 bestätigte Domain', '{count} bestätigte Domains')}
+                />
+              )}
             </SettingsSection>
 
-            <SettingsSection title="Rolle und Zugang">
-              <SettingRow label="Rolle" description={self ? 'Deine eigene Rolle kannst du nicht ändern.' : undefined}>
+            <SettingsSection title={t('Rolle und Zugang')}>
+              <SettingRow label={t('Rolle')} description={self ? t('Deine eigene Rolle kannst du nicht ändern.') : undefined}>
                 <ToggleButtonGroup
                   exclusive
                   size="small"
                   value={user.role}
                   onChange={(_event, next) => next && setRole(next)}
                   disabled={self}
-                  aria-label="Rolle"
+                  aria-label={t('Rolle')}
                 >
-                  <ToggleButton value="mitglied">Mitglied</ToggleButton>
-                  <ToggleButton value="admin">Admin</ToggleButton>
+                  <ToggleButton value="mitglied">{t('Mitglied')}</ToggleButton>
+                  <ToggleButton value="admin">{t('Admin')}</ToggleButton>
                 </ToggleButtonGroup>
               </SettingRow>
-              <SettingRow icon={<BlockRounded />} label="Konto sperren" description="Meldet sofort ab und blockiert Anmeldung und Uploads.">
+              <SettingRow
+                icon={<BlockRounded />}
+                label={t('Konto sperren')}
+                description={t('Meldet sofort ab und blockiert Anmeldung und Uploads.')}
+              >
                 {user.status === 'suspended' ? (
                   <Button
                     variant="tonal"
-                    onClick={() => run(() => updateUser(user.id, { status: 'active' }), `${user.username} ist entsperrt`)}
+                    onClick={() =>
+                      run(() => updateUser(user.id, { status: 'active' }), t('{username} ist entsperrt', { username: user.username }))
+                    }
                   >
-                    Entsperren
+                    {t('Entsperren')}
                   </Button>
                 ) : (
                   <Button variant="outlined" color="error" disabled={self} onClick={() => setSuspending(user)}>
-                    Sperren
+                    {t('Sperren')}
                   </Button>
                 )}
               </SettingRow>
             </SettingsSection>
 
-            <SettingsSection title="Limits" description="Leer bedeutet: es gilt der Standard aus den Einstellungen.">
+            <SettingsSection title={t('Limits')} description={t('Leer bedeutet: es gilt der Standard aus den Einstellungen.')}>
               <SettingRow
-                label="Speicherlimit"
-                description={`Standard: ${defaults.quotaBytes ? formatBytes(defaults.quotaBytes) : 'unbegrenzt'}`}
+                label={t('Speicherlimit')}
+                description={t('Standard: {value}', { value: defaults.quotaBytes ? formatBytes(defaults.quotaBytes) : 'unbegrenzt' })}
                 stacked
               >
-                <BytesField label="Speicher" value={quota} onChange={setQuota} nullLabel="Standard" />
+                <BytesField label={t('Speicher')} value={quota} onChange={setQuota} nullLabel={t('Standard')} />
               </SettingRow>
               <SettingRow
-                label="Größte erlaubte Datei"
-                description={`Standard: ${defaults.maxFileBytes ? formatBytes(defaults.maxFileBytes) : 'unbegrenzt'}`}
+                label={t('Größte erlaubte Datei')}
+                description={t('Standard: {value}', { value: defaults.maxFileBytes ? formatBytes(defaults.maxFileBytes) : 'unbegrenzt' })}
                 stacked
               >
-                <BytesField label="Dateigröße" value={maxFile} onChange={setMaxFile} nullLabel="Standard" />
+                <BytesField label={t('Dateigröße')} value={maxFile} onChange={setMaxFile} nullLabel={t('Standard')} />
               </SettingRow>
               {limitsDirty && (
                 <Box sx={{ px: { xs: 2, sm: 3 }, py: 1.5, display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
@@ -389,72 +438,75 @@ export function UserSheet({
                       setMaxFile(user.maxFileBytes);
                     }}
                   >
-                    Verwerfen
+                    {t('Verwerfen')}
                   </Button>
                   <Button variant="contained" onClick={saveLimits} disabled={saving}>
-                    Limits speichern
+                    {t('Limits speichern')}
                   </Button>
                 </Box>
               )}
             </SettingsSection>
 
-            <SettingsSection title="Anmeldung">
+            <SettingsSection title={t('Anmeldung')}>
               <SettingRow
                 icon={<PasswordRounded />}
-                label="Passwort"
+                label={t('Passwort')}
                 description={
                   user.hasPassword
                     ? user.mustChangePassword
-                      ? 'Vorläufig, wird beim nächsten Anmelden geändert.'
+                      ? t('Vorläufig, wird beim nächsten Anmelden geändert.')
                       : 'Gesetzt.'
-                    : 'Kein Passwort (meldet sich über einen Dienst oder einen Passkey an).'
+                    : t('Kein Passwort (meldet sich über einen Dienst oder einen Passkey an).')
                 }
               >
                 <Button variant="tonal" onClick={() => setResetting(user)}>
-                  Zurücksetzen
+                  {t('Zurücksetzen')}
                 </Button>
               </SettingRow>
               <SettingRow
                 icon={<PhonelinkLockRounded />}
-                label="Zwei-Faktor-Anmeldung"
-                description={user.totp ? 'Aktiv.' : 'Nicht eingerichtet.'}
+                label={t('Zwei-Faktor-Anmeldung')}
+                description={user.totp ? t('Aktiv.') : t('Nicht eingerichtet.')}
               >
                 {user.totp && (
                   <Button
                     variant="outlined"
                     onClick={async () => {
                       const ok = await confirm({
-                        title: '2FA zurücksetzen?',
-                        message: `${user.username} meldet sich danach nur mit dem Passwort an und kann die App neu einrichten. Nur machen, wenn du sicher bist, dass die Person ihr Handy verloren hat.`,
-                        confirmLabel: 'Zurücksetzen',
+                        title: t('2FA zurücksetzen?'),
+                        message: t(
+                          '{username} meldet sich danach nur mit dem Passwort an und kann die App neu einrichten. Nur machen, wenn du sicher bist, dass die Person ihr Handy verloren hat.',
+                          { username: user.username }
+                        ),
+                        confirmLabel: t('Zurücksetzen'),
                         icon: <PhonelinkLockRounded />,
                       });
-                      if (ok) run(() => resetUserMfa(user.id), 'Zwei-Faktor-Anmeldung zurückgesetzt');
+                      if (ok) run(() => resetUserMfa(user.id), t('Zwei-Faktor-Anmeldung zurückgesetzt'));
                     }}
                   >
-                    Zurücksetzen
+                    {t('Zurücksetzen')}
                   </Button>
                 )}
               </SettingRow>
               <SettingRow
                 icon={<FingerprintRounded />}
-                label="Passkeys"
-                description={detail.passkeys.length ? detail.passkeys.map((p) => p.name).join(', ') : 'Keine.'}
+                label={t('Passkeys')}
+                description={detail.passkeys.length ? detail.passkeys.map((p) => p.name).join(', ') : t('Keine.')}
               >
                 {detail.passkeys.length > 0 && (
                   <Button
                     variant="outlined"
                     onClick={async () => {
                       const ok = await confirm({
-                        title: 'Alle Passkeys entfernen?',
-                        message: `${user.username} kann sich danach nicht mehr mit Passkeys anmelden.`,
-                        confirmLabel: 'Entfernen',
+                        title: t('Alle Passkeys entfernen?'),
+                        message: t('{username} kann sich danach nicht mehr mit Passkeys anmelden.', { username: user.username }),
+                        confirmLabel: t('Entfernen'),
                         icon: <FingerprintRounded />,
                       });
-                      if (ok) run(() => removeUserPasskeys(user.id), 'Passkeys entfernt');
+                      if (ok) run(() => removeUserPasskeys(user.id), t('Passkeys entfernt'));
                     }}
                   >
-                    Alle entfernen
+                    {t('Alle entfernen')}
                   </Button>
                 )}
               </SettingRow>
@@ -463,22 +515,25 @@ export function UserSheet({
                   key={identity.provider}
                   icon={providerIcon(identity.provider)}
                   label={providerLabel(identity.provider)}
-                  description={`Verknüpft als ${identity.name || 'unbekannt'}.`}
+                  description={t('Verknüpft als {name}.', { name: identity.name || t('unbekannt') })}
                 >
                   <Button
                     variant="outlined"
                     onClick={() =>
-                      run(() => unlinkUserIdentity(user.id, identity.provider), `${providerLabel(identity.provider)} getrennt`)
+                      run(
+                        () => unlinkUserIdentity(user.id, identity.provider),
+                        t('{label} getrennt', { label: providerLabel(identity.provider) })
+                      )
                     }
                   >
-                    Trennen
+                    {t('Trennen')}
                   </Button>
                 </SettingRow>
               ))}
             </SettingsSection>
 
             <SettingsSection
-              title={`Sitzungen (${detail.sessions.length})`}
+              title={t('Sitzungen ({count})', { count: detail.sessions.length })}
               action={
                 detail.sessions.length > 0 && (
                   <Button
@@ -487,18 +542,18 @@ export function UserSheet({
                     onClick={() =>
                       run(
                         () => revokeUserSessions(user.id),
-                        self ? 'Andere Sitzungen beendet' : `${user.username} wurde überall abgemeldet`
+                        self ? t('Andere Sitzungen beendet') : t('{username} wurde überall abgemeldet', { username: user.username })
                       )
                     }
                   >
-                    Überall abmelden
+                    {t('Überall abmelden')}
                   </Button>
                 )
               }
             >
               {detail.sessions.length === 0 ? (
                 <Typography variant="body2" sx={{ color: 'text.secondary', px: 3, py: 2 }}>
-                  Gerade nirgends angemeldet.
+                  {t('Gerade nirgends angemeldet.')}
                 </Typography>
               ) : (
                 detail.sessions.map((session) => <SessionRow key={session.id} session={{ ...session, current: self && session.current }} />)
@@ -506,29 +561,29 @@ export function UserSheet({
             </SettingsSection>
 
             <SettingsSection
-              title="API-Tokens"
+              title={t('API-Tokens')}
               action={
                 <Button size="small" startIcon={<AddRounded />} onClick={() => setNaming(true)}>
-                  Token erstellen
+                  {t('Token erstellen')}
                 </Button>
               }
             >
               {detail.tokens.length === 0 ? (
                 <Typography variant="body2" sx={{ color: 'text.secondary', px: 3, py: 2 }}>
-                  Keine Tokens.
+                  {t('Keine Tokens.')}
                 </Typography>
               ) : (
-                detail.tokens.map((t) => (
+                detail.tokens.map((entry) => (
                   <SettingRow
-                    key={t.id}
+                    key={entry.id}
                     icon={<TokenRounded />}
-                    label={t.name}
-                    description={`${t.hint}, zuletzt benutzt ${relativeMs(t.lastUsedAt)}`}
+                    label={entry.name}
+                    description={t('{hint}, zuletzt benutzt {lastUsedAt}', { hint: entry.hint, lastUsedAt: relativeMs(entry.lastUsedAt) })}
                   >
-                    <Tooltip title="Widerrufen">
+                    <Tooltip title={t('Widerrufen')}>
                       <IconButton
-                        aria-label={`${t.name} widerrufen`}
-                        onClick={() => run(() => revokeUserToken(user.id, t.id), 'Token widerrufen')}
+                        aria-label={t('{name} widerrufen', { name: entry.name })}
+                        onClick={() => run(() => revokeUserToken(user.id, entry.id), t('Token widerrufen'))}
                       >
                         <DeleteOutlineRounded />
                       </IconButton>
@@ -538,16 +593,16 @@ export function UserSheet({
               )}
             </SettingsSection>
 
-            <SettingsSection title="Aktivität">
+            <SettingsSection title={t('Aktivität')}>
               <Box sx={{ px: { xs: 2, sm: 3 }, py: 1 }}>
-                <ActivityList events={detail.activity} empty="Keine Einträge im Aufbewahrungszeitraum." />
+                <ActivityList events={detail.activity} empty={t('Keine Einträge im Aufbewahrungszeitraum.')} />
               </Box>
             </SettingsSection>
 
             {!self && (
               <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
                 <Button color="error" variant="outlined" startIcon={<DeleteOutlineRounded />} onClick={remove}>
-                  Benutzer löschen
+                  {t('Benutzer löschen')}
                 </Button>
               </Box>
             )}
@@ -561,7 +616,11 @@ export function UserSheet({
         onConfirm={(reason) => {
           const target = suspending;
           setSuspending(null);
-          if (target) run(() => updateUser(target.id, { status: 'suspended', suspendedReason: reason }), `${target.username} ist gesperrt`);
+          if (target)
+            run(
+              () => updateUser(target.id, { status: 'suspended', suspendedReason: reason }),
+              t('{username} ist gesperrt', { username: target.username })
+            );
         }}
       />
       <PasswordResetDialog
@@ -571,15 +630,15 @@ export function UserSheet({
           const target = resetting;
           setResetting(null);
           if (target && password) setCredentials({ username: target.username, password });
-          else toast('Passwort zurückgesetzt', { variant: 'success' });
+          else toast(t('Passwort zurückgesetzt'), { variant: 'success' });
           if (target) load(target.id);
         }}
       />
-      <CredentialsDialog data={credentials} onClose={() => setCredentials(null)} baseUrl={baseUrl} title="Passwort zurückgesetzt" />
+      <CredentialsDialog data={credentials} onClose={() => setCredentials(null)} baseUrl={baseUrl} title={t('Passwort zurückgesetzt')} />
       <TokenNameDialog
         open={naming}
         onClose={() => setNaming(false)}
-        title={user ? `Token für ${user.username}` : 'Token'}
+        title={user ? t('Token für {username}', { username: user.username }) : t('Token')}
         onCreate={async (name) => {
           if (!user) return;
           try {

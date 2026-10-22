@@ -6,12 +6,31 @@ import Fab from '@mui/material/Fab';
 import GlobalStyles from '@mui/material/GlobalStyles';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
+import Tab from '@mui/material/Tab';
 import useScrollTrigger from '@mui/material/useScrollTrigger';
 import CloudUploadRounded from '@mui/icons-material/CloudUploadRounded';
 import { readBoot } from '../../lib/boot';
-import type { DashboardBoot, FileItem, UserStats } from '../../lib/types';
-import { ApiError, deleteOwnFile, fetchUserStats, listFiles, type SortKey, type TypeFilter } from '../../lib/api';
-import { formatBytes, formatNumber, plural, relativeFromServer } from '../../lib/format';
+import type { Album, DashboardBoot, FileItem, TagCount, UserStats } from '../../lib/types';
+import {
+  ApiError,
+  bulkFiles,
+  fetchTags,
+  fetchUserStats,
+  listAlbums,
+  listFiles,
+  zipUrl,
+  type SortKey,
+  type TypeFilter,
+} from '../../lib/api';
+import { extensionOf, formatBytes, formatNumber, relativeFromServer } from '../../lib/format';
+import { t, tn } from '../../lib/i18n';
+import { sharedUrl, takeSharedItems } from '../../lib/shareTarget';
+import { ScrollTabs } from '../../components/ScrollTabs';
+import { EditFileDialog } from './EditFileDialog';
+import { TextDialog } from './TextDialog';
+import { AlbumPickerDialog, AlbumsView } from './albums';
+import { LinkDialog, LinksView } from './links';
+import { EMPTY_PREFS, UploadOptionsDialog, describePrefs, prefsActive, toUploadOptions, type UploadPrefs } from './options';
 import { useDebouncedValue, useHotkey, useInView, useNow } from '../../lib/hooks';
 import { mix } from '../../lib/color';
 import { AppShell } from '../../components/AppShell';
@@ -22,8 +41,13 @@ import { useToast } from '../../components/Toaster';
 import { Gallery } from './Gallery';
 import { Viewer, type ViewerState } from './Viewer';
 import { FilterBar, type TypeCounts } from './FilterBar';
-import { EmptyState, FileMenu, SelectionBar, UrlUploadDialog } from './parts';
+import { BulkDialog, EmptyState, FileMenu, SelectionBar, UrlUploadDialog, type BulkAction, type QuickAction } from './parts';
 import { UploadProvider, useUploads } from './uploads';
+import { TrashView } from './trash';
+import { InsightsView } from './insights';
+import { ImageEditor } from './editor/ImageEditor';
+import { StatsDialog, type StatsTarget } from '../../components/StatsView';
+import { displayName } from './MediaTile';
 import { c, ease } from '../../theme/tokens';
 
 const keyframes = (
@@ -47,22 +71,39 @@ function totalBytes(stats: UserStats) {
 function summaryText(stats: UserStats, quotaBytes: number | null) {
   if (!stats.files)
     return quotaBytes
-      ? `Dein Speicher ist noch leer. Dir stehen ${formatBytes(quotaBytes)} zur Verfügung.`
-      : 'Dein Speicher ist noch leer.';
-  const parts = [`${plural(stats.files, 'Datei', 'Dateien')} mit zusammen ${formatBytes(totalBytes(stats))}`];
-  if (stats.views) parts.push(`${plural(stats.views, 'Aufruf', 'Aufrufe')}`);
-  const latest = stats.latestUpload ? ` Zuletzt hochgeladen ${relativeFromServer(stats.latestUpload)}.` : '';
+      ? t('Dein Speicher ist noch leer. Dir stehen {size} zur Verfügung.', { size: formatBytes(quotaBytes) })
+      : t('Dein Speicher ist noch leer.');
+  const parts = [
+    tn(stats.files, '1 Datei mit zusammen {size}', '{count} Dateien mit zusammen {size}', { size: formatBytes(totalBytes(stats)) }),
+  ];
+  if (stats.views) parts.push(tn(stats.views, '1 Aufruf', '{count} Aufrufe'));
+  const latest = stats.latestUpload ? ` ${t('Zuletzt hochgeladen {when}.', { when: relativeFromServer(stats.latestUpload) })}` : '';
   return `${parts.join(', ')}.${latest}`;
+}
+
+type Section = 'files' | 'albums' | 'links' | 'stats' | 'trash';
+
+const SECTION_HASH: Record<Section, string> = { files: '', albums: '#alben', links: '#links', stats: '#statistik', trash: '#papierkorb' };
+
+function sectionFromHash(boot: DashboardBoot): { section: Section; album: number | null } {
+  const hash = window.location.hash;
+  const album = /^#album=(\d+)$/.exec(hash);
+  if (album && boot.options.albums) return { section: 'albums', album: Number(album[1]) };
+  if (hash === '#alben' && boot.options.albums) return { section: 'albums', album: null };
+  if (hash === '#links' && boot.options.links) return { section: 'links', album: null };
+  if (hash === '#statistik' && boot.options.stats) return { section: 'stats', album: null };
+  if (hash === '#papierkorb' && boot.options.trash) return { section: 'trash', album: null };
+  return { section: 'files', album: null };
 }
 
 function UploadFab({ compact }: { compact: boolean }) {
   const { pick, active } = useUploads();
   return (
-    <Fab variant="extended" onClick={pick} aria-label="Dateien hochladen" sx={{ pl: compact ? 2 : 2.5, pr: compact ? 2 : 3 }}>
+    <Fab variant="extended" onClick={pick} aria-label={t('Dateien hochladen')} sx={{ pl: compact ? 2 : 2.5, pr: compact ? 2 : 3 }}>
       <CloudUploadRounded />
       <Collapse orientation="horizontal" in={!compact} timeout={220}>
         <Box component="span" sx={{ whiteSpace: 'nowrap', display: 'inline-block', pl: 1 }}>
-          {active ? `${active} läuft` : 'Hochladen'}
+          {active ? t('{count} läuft', { count: active }) : t('Hochladen')}
         </Box>
       </Collapse>
     </Fab>
@@ -72,8 +113,8 @@ function UploadFab({ compact }: { compact: boolean }) {
 function RailUpload() {
   const { pick, active } = useUploads();
   return (
-    <Tooltip title="Hochladen (U)" placement="right">
-      <Fab onClick={pick} aria-label="Dateien hochladen" sx={{ width: 56, height: 56 }}>
+    <Tooltip title={t('Hochladen (U)')} placement="right">
+      <Fab onClick={pick} aria-label={t('Dateien hochladen')} sx={{ width: 56, height: 56 }}>
         <Box sx={{ position: 'relative', display: 'grid', placeItems: 'center' }}>
           <CloudUploadRounded />
           {active > 0 && (
@@ -112,9 +153,51 @@ interface DashboardProps {
 function Dashboard({ boot, registerUploadHandler }: DashboardProps) {
   const toast = useToast();
   const confirm = useConfirm();
-  const { pick } = useUploads();
+  const { pick, enqueue, setOptions } = useUploads();
   const pageSize = boot.files.limit || 40;
   useNow(60000);
+
+  const initial = useMemo(() => sectionFromHash(boot), [boot]);
+  const [section, setSection] = useState<Section>(initial.section);
+  const [albumOpen, setAlbumOpen] = useState<number | null>(initial.album);
+  const [prefs, setPrefs] = useState<UploadPrefs>(EMPTY_PREFS);
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const [textOpen, setTextOpen] = useState(false);
+  const [textInitial, setTextInitial] = useState('');
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [linkInitial, setLinkInitial] = useState('');
+  const [linksVersion, setLinksVersion] = useState(0);
+  const [editing, setEditing] = useState<FileItem | null>(null);
+  const [albumPicker, setAlbumPicker] = useState<number[] | null>(null);
+  const [bulk, setBulk] = useState<BulkAction | null>(null);
+  const [tags, setTags] = useState<TagCount[]>(boot.tags || []);
+  const [tag, setTag] = useState('');
+  const [albums, setAlbums] = useState<Album[]>([]);
+  const [statsTarget, setStatsTarget] = useState<StatsTarget | null>(null);
+  const [imageEdit, setImageEdit] = useState<FileItem | null>(null);
+  const [trashVersion, setTrashVersion] = useState(0);
+
+  useEffect(() => setOptions(toUploadOptions(prefs)), [prefs, setOptions]);
+
+  const goSection = useCallback((next: Section, album: number | null = null) => {
+    setSection(next);
+    setAlbumOpen(album);
+    const hash = next === 'albums' && album ? `#album=${album}` : SECTION_HASH[next];
+    window.history.replaceState(null, '', window.location.pathname + window.location.search + hash);
+  }, []);
+
+  const refreshTags = useCallback(() => {
+    fetchTags()
+      .then((res) => setTags(res.tags))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!optionsOpen || !boot.options.albums) return;
+    listAlbums()
+      .then((res) => setAlbums(res.albums))
+      .catch(() => {});
+  }, [optionsOpen, boot.options.albums]);
 
   const [files, setFiles] = useState<FileItem[]>(boot.files.files);
   const [page, setPage] = useState(boot.files.page || 1);
@@ -144,7 +227,14 @@ function Dashboard({ boot, registerUploadHandler }: DashboardProps) {
   statusRef.current = status;
 
   const selecting = selectMode || selected.size > 0;
-  const filtered = !!search || type !== '';
+  const filtered = !!search || type !== '' || !!tag;
+  const overlay = viewerIndex !== null || !!imageEdit;
+  const trashOn = boot.options.trash;
+  const canEditImage = useCallback(
+    (file: FileItem) => file.type === 'image' && !file.isGif && boot.options.editable.includes(`.${extensionOf(file.filename)}`),
+    [boot.options.editable]
+  );
+  const openStats = useCallback((file: FileItem) => setStatsTarget({ kind: 'file', id: file.id, title: displayName(file) }), []);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setCascade(false), 1600);
@@ -157,10 +247,10 @@ function Dashboard({ boot, registerUploadHandler }: DashboardProps) {
         toast(error.message, {
           variant: 'error',
           duration: 10000,
-          action: { label: 'Anmelden', onClick: () => window.location.assign('/login') },
+          action: { label: t('Anmelden'), onClick: () => window.location.assign('/login') },
         });
       } else {
-        toast(error instanceof Error ? error.message : 'Etwas ist schiefgelaufen.', { variant: 'error' });
+        toast(error instanceof Error ? error.message : t('Etwas ist schiefgelaufen.'), { variant: 'error' });
       }
     },
     [toast]
@@ -180,7 +270,7 @@ function Dashboard({ boot, registerUploadHandler }: DashboardProps) {
       const id = ++requestId.current;
       setStatus('reload');
       try {
-        const res = await listFiles({ page: 1, limit: pageSize, search, type, sort });
+        const res = await listFiles({ page: 1, limit: pageSize, search, type, sort, tag });
         if (id !== requestId.current) return;
         setFiles(res.files);
         setPage(res.page);
@@ -196,7 +286,7 @@ function Dashboard({ boot, registerUploadHandler }: DashboardProps) {
         if (id === requestId.current) setStatus('idle');
       }
     },
-    [pageSize, search, type, sort, fail]
+    [pageSize, search, type, sort, tag, fail]
   );
 
   const firstRun = useRef(true);
@@ -206,14 +296,14 @@ function Dashboard({ boot, registerUploadHandler }: DashboardProps) {
       return;
     }
     reload();
-  }, [search, type, sort]);
+  }, [search, type, sort, tag]);
 
   const loadMore = useCallback(async () => {
     if (statusRef.current !== 'idle' || !hasMore) return;
     const id = requestId.current;
     setStatus('more');
     try {
-      const res = await listFiles({ page: page + 1, limit: pageSize, search, type, sort });
+      const res = await listFiles({ page: page + 1, limit: pageSize, search, type, sort, tag });
       if (id !== requestId.current) return;
       setFiles((prev) => {
         const known = new Set(prev.map((f) => f.filename));
@@ -227,7 +317,7 @@ function Dashboard({ boot, registerUploadHandler }: DashboardProps) {
     } finally {
       if (id === requestId.current) setStatus('idle');
     }
-  }, [hasMore, page, pageSize, search, type, sort, fail]);
+  }, [hasMore, page, pageSize, search, type, sort, tag, fail]);
 
   const sentinel = useInView(loadMore, hasMore && status === 'idle');
 
@@ -235,9 +325,51 @@ function Dashboard({ boot, registerUploadHandler }: DashboardProps) {
     registerUploadHandler((names) => {
       reload(names);
       refreshStats();
-      toast(names.length === 1 ? 'Datei hochgeladen' : `${names.length} Dateien hochgeladen`, { variant: 'success', duration: 2600 });
+      if (prefs.tags.length) refreshTags();
+      toast(tn(names.length, 'Datei hochgeladen', '{count} Dateien hochgeladen'), { variant: 'success', duration: 2600 });
     });
-  }, [registerUploadHandler, reload, refreshStats, toast]);
+  }, [registerUploadHandler, reload, refreshStats, refreshTags, prefs.tags.length, toast]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const action = params.get('aktion');
+    const shared = params.get('teilen');
+    if (!action && !shared) return;
+    params.delete('aktion');
+    params.delete('teilen');
+    params.delete('quelle');
+    const rest = params.toString();
+    window.history.replaceState(null, '', window.location.pathname + (rest ? `?${rest}` : '') + window.location.hash);
+    if (action === 'hochladen') pick();
+    if (action === 'text' && boot.options.texts) setTextOpen(true);
+    if (action === 'link' && boot.options.links) {
+      setLinkInitial('');
+      setLinkOpen(true);
+    }
+    if (shared === 'fehler')
+      toast(t('Das Teilen hat nicht geklappt. Öffne MoeShare einmal im Browser und versuche es erneut.'), { variant: 'error' });
+    if (shared === '1') {
+      takeSharedItems().then(({ files: sharedFiles, text }) => {
+        if (sharedFiles.length) {
+          enqueue(sharedFiles);
+          return;
+        }
+        const url = sharedUrl(text);
+        if (url && boot.options.links && text.trim() === url) {
+          setLinkInitial(url);
+          setLinkOpen(true);
+        } else if (text && boot.options.texts) {
+          setTextInitial(text);
+          setTextOpen(true);
+        } else if (url && boot.options.links) {
+          setLinkInitial(url);
+          setLinkOpen(true);
+        } else {
+          toast(t('Es wurde nichts geteilt, das sich hochladen lässt.'), { variant: 'info' });
+        }
+      });
+    }
+  }, []);
 
   const clearSelection = useCallback(() => {
     setSelected(new Set());
@@ -268,18 +400,37 @@ function Dashboard({ boot, registerUploadHandler }: DashboardProps) {
   const allSelected = files.length > 0 && files.every((f) => selected.has(f.filename));
   const selectedFiles = useMemo(() => files.filter((f) => selected.has(f.filename)), [files, selected]);
 
+  const restoreFiles = useCallback(
+    async (ids: number[]) => {
+      try {
+        const res = await bulkFiles({ action: 'restore', ids });
+        toast(tn(res.count, 'Datei wiederhergestellt', '{count} Dateien wiederhergestellt'), { variant: 'success' });
+        reload();
+        refreshStats();
+        setTrashVersion((value) => value + 1);
+      } catch (error) {
+        fail(error);
+      }
+    },
+    [toast, reload, refreshStats, fail]
+  );
+
   const deleteFiles = useCallback(
     async (list: FileItem[]) => {
       if (!list.length) return false;
       const single = list.length === 1;
-      const ok = await confirm({
-        title: single ? 'Datei löschen?' : `${formatNumber(list.length)} Dateien löschen?`,
-        message: single
-          ? `„${list[0].filename}“ wird endgültig gelöscht. Geteilte Links funktionieren danach nicht mehr.`
-          : `Die ${formatNumber(list.length)} Dateien werden endgültig gelöscht. Geteilte Links funktionieren danach nicht mehr.`,
-        confirmLabel: 'Löschen',
-      });
-      if (!ok) return false;
+      if (!trashOn) {
+        const ok = await confirm({
+          title: single ? t('Datei löschen?') : t('{count} Dateien löschen?', { count: formatNumber(list.length) }),
+          message: single
+            ? t('„{name}“ wird endgültig gelöscht. Geteilte Links funktionieren danach nicht mehr.', { name: displayName(list[0]) })
+            : t('Die {count} Dateien werden endgültig gelöscht. Geteilte Links funktionieren danach nicht mehr.', {
+                count: formatNumber(list.length),
+              }),
+          confirmLabel: t('Löschen'),
+        });
+        if (!ok) return false;
+      }
 
       const names = new Set(list.map((f) => f.filename));
       setFiles((prev) => prev.filter((f) => !names.has(f.filename)));
@@ -290,32 +441,36 @@ function Dashboard({ boot, registerUploadHandler }: DashboardProps) {
         return next;
       });
 
-      let failed = 0;
-      const queue = [...list];
-      const worker = async () => {
-        while (queue.length) {
-          const file = queue.shift()!;
-          try {
-            await deleteOwnFile(file.filename);
-          } catch (error) {
-            failed += 1;
-            if (error instanceof ApiError && error.sessionExpired) fail(error);
-          }
+      const ids = list.map((file) => file.id);
+      try {
+        let count = 0;
+        let trashed = false;
+        for (let index = 0; index < ids.length; index += 500) {
+          const res = await bulkFiles({ action: 'delete', ids: ids.slice(index, index + 500) });
+          count += res.count;
+          trashed = trashed || res.trashed;
         }
-      };
-      await Promise.all([worker(), worker(), worker()]);
-
-      const deleted = list.length - failed;
-      if (deleted) toast(deleted === 1 ? 'Datei gelöscht' : `${formatNumber(deleted)} Dateien gelöscht`, { variant: 'success' });
-      if (failed) {
-        toast(`${formatNumber(failed)} ${failed === 1 ? 'Datei konnte' : 'Dateien konnten'} nicht gelöscht werden.`, { variant: 'error' });
+        if (count < list.length) reload();
+        if (trashed) {
+          toast(
+            single
+              ? t('„{name}“ liegt jetzt im Papierkorb', { name: displayName(list[0]) })
+              : tn(count, '1 Datei in den Papierkorb gelegt', '{count} Dateien in den Papierkorb gelegt'),
+            { variant: 'success', duration: 8000, action: { label: t('Rückgängig'), onClick: () => restoreFiles(ids) } }
+          );
+          setTrashVersion((value) => value + 1);
+        } else if (count) {
+          toast(tn(count, 'Datei gelöscht', '{count} Dateien gelöscht'), { variant: 'success' });
+        }
+      } catch (error) {
+        fail(error);
         reload();
       }
       refreshStats();
       if (!single) clearSelection();
       return true;
     },
-    [confirm, toast, fail, reload, refreshStats, clearSelection]
+    [confirm, toast, fail, reload, refreshStats, clearSelection, restoreFiles, trashOn]
   );
 
   useEffect(() => {
@@ -332,7 +487,7 @@ function Dashboard({ boot, registerUploadHandler }: DashboardProps) {
         } catch {}
       }
       if (file) deleteFiles([file]);
-      else toast('Diese Datei gibt es nicht (mehr) oder sie gehört einem anderen Konto.', { variant: 'error' });
+      else toast(t('Diese Datei gibt es nicht (mehr) oder sie gehört einem anderen Konto.'), { variant: 'error' });
     })();
   }, []);
 
@@ -378,16 +533,16 @@ function Dashboard({ boot, registerUploadHandler }: DashboardProps) {
   const onViewerIndex = useCallback((index: number) => setViewer((v) => (v ? { ...v, index } : v)), []);
 
   useHotkey('/', (event) => {
-    if (viewerIndex !== null) return;
+    if (overlay) return;
     event.preventDefault();
     searchRef.current?.focus();
   });
-  useHotkey('u', () => viewerIndex === null && pick());
-  useHotkey('Escape', () => viewerIndex === null && selecting && clearSelection(), { enabled: selecting });
+  useHotkey('u', () => !overlay && section === 'files' && pick());
+  useHotkey('Escape', () => !overlay && selecting && clearSelection(), { enabled: selecting });
   useEffect(() => {
     if (!selecting) return undefined;
     const onKey = (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a' && viewerIndex === null) {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a' && !overlay) {
         const el = event.target as HTMLElement;
         if (['INPUT', 'TEXTAREA'].includes(el.tagName)) return;
         event.preventDefault();
@@ -396,15 +551,39 @@ function Dashboard({ boot, registerUploadHandler }: DashboardProps) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [selecting, files, viewerIndex]);
+  }, [selecting, files, overlay]);
 
   const counts: TypeCounts = {
     all: stats.files,
     image: stats.images,
     video: stats.videos,
     audio: stats.audio,
-    file: Math.max(0, stats.files - stats.images - stats.videos - stats.audio),
+    text: stats.texts || 0,
+    file: Math.max(0, stats.files - stats.images - stats.videos - stats.audio - (stats.texts || 0)),
   };
+
+  const runBulk = useCallback(
+    async (action: string, extra: { tags?: string[]; expires?: string; password?: string } = {}) => {
+      const ids = selectedFiles.map((file) => file.id);
+      if (!ids.length) return;
+      try {
+        const res = await bulkFiles({ action, ids, ...extra });
+        toast(
+          action === 'list'
+            ? tn(res.count, '1 Datei erscheint jetzt im Profil', '{count} Dateien erscheinen jetzt im Profil')
+            : action === 'unlist'
+              ? tn(res.count, '1 Datei aus dem Profil genommen', '{count} Dateien aus dem Profil genommen')
+              : tn(res.count, '1 Datei geändert', '{count} Dateien geändert'),
+          { variant: 'success' }
+        );
+        reload();
+        if (action === 'tag' || action === 'untag') refreshTags();
+      } catch (error) {
+        fail(error);
+      }
+    },
+    [selectedFiles, toast, reload, refreshTags, fail]
+  );
 
   const scrolledDown = useScrollTrigger({ threshold: 120 });
   const showEmpty = status !== 'reload' && files.length === 0;
@@ -427,6 +606,11 @@ function Dashboard({ boot, registerUploadHandler }: DashboardProps) {
             onClear={clearSelection}
             onSelectAll={() => (allSelected ? setSelected(new Set()) : setSelected(new Set(files.map((f) => f.filename))))}
             onDelete={() => deleteFiles(selectedFiles)}
+            onAlbum={boot.options.albums ? () => setAlbumPicker(selectedFiles.map((f) => f.id)) : undefined}
+            onBulk={setBulk}
+            onQuick={boot.options.profiles ? (action: QuickAction) => runBulk(action) : undefined}
+            zipHref={boot.options.zip ? zipUrl(selectedFiles.map((f) => f.id)) : undefined}
+            trash={trashOn}
           />
         </m.div>
       ) : (
@@ -441,8 +625,11 @@ function Dashboard({ boot, registerUploadHandler }: DashboardProps) {
           <SearchField
             ref={searchRef}
             value={query}
-            onChange={setQuery}
-            placeholder="Dateien durchsuchen"
+            onChange={(value) => {
+              setQuery(value);
+              if (section !== 'files') goSection('files');
+            }}
+            placeholder={t('Dateien durchsuchen')}
             shortcut="/"
             busy={status === 'reload' && !!query}
           />
@@ -459,7 +646,7 @@ function Dashboard({ boot, registerUploadHandler }: DashboardProps) {
       topBar={topBar}
       railAction={<RailUpload />}
       mobileAction={<UploadFab compact={scrolledDown} />}
-      accountSummary={`${plural(stats.files, 'Datei', 'Dateien')}, ${formatBytes(totalBytes(stats))} belegt`}
+      accountSummary={tn(stats.files, '1 Datei, {size} belegt', '{count} Dateien, {size} belegt', { size: formatBytes(totalBytes(stats)) })}
       contextual={selecting}
     >
       {keyframes}
@@ -476,57 +663,127 @@ function Dashboard({ boot, registerUploadHandler }: DashboardProps) {
             {summaryText(stats, quotaBytes)}
           </Typography>
         </m.div>
-        {stats.files > 0 && (
+        {(stats.files > 0 || (stats.trash?.bytes ?? 0) > 0) && (
           <Box sx={{ mt: 2.5 }}>
-            <StorageMeter breakdown={stats.storageBreakdown} capacity={quotaBytes} />
+            <StorageMeter breakdown={stats.storageBreakdown} capacity={quotaBytes} trash={stats.trash?.bytes ?? 0} />
           </Box>
         )}
       </Box>
 
-      {(stats.files > 0 || filtered || files.length > 0) && (
-        <FilterBar
-          type={type}
-          onType={setType}
-          sort={sort}
-          onSort={setSort}
-          counts={counts}
-          onUrl={boot.urlFetch ? () => setUrlOpen(true) : undefined}
-          selecting={selecting}
-          onSelectMode={() => (selecting ? clearSelection() : setSelectMode(true))}
-        />
+      {(boot.options.albums || boot.options.links || boot.options.stats || trashOn) && (
+        <Box sx={{ mb: 2.5, mt: -1 }}>
+          <ScrollTabs value={section} onChange={(next) => goSection(next)} label={t('Bereiche')}>
+            <Tab value="files" label={t('Dateien')} />
+            {boot.options.albums && <Tab value="albums" label={t('Alben')} />}
+            {boot.options.links && <Tab value="links" label={t('Links')} />}
+            {boot.options.stats && <Tab value="stats" label={t('Statistik')} />}
+            {trashOn && (
+              <Tab
+                value="trash"
+                label={
+                  stats.trash?.files ? (
+                    <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
+                      {t('Papierkorb')}
+                      <Box
+                        component="span"
+                        aria-label={tn(stats.trash.files, '1 Datei', '{count} Dateien')}
+                        sx={{
+                          minWidth: 20,
+                          px: 0.75,
+                          borderRadius: '10px',
+                          bgcolor: c.surfaceContainerHighest,
+                          fontSize: '0.75rem',
+                          lineHeight: '20px',
+                        }}
+                      >
+                        {formatNumber(stats.trash.files)}
+                      </Box>
+                    </Box>
+                  ) : (
+                    t('Papierkorb')
+                  )
+                }
+              />
+            )}
+          </ScrollTabs>
+        </Box>
       )}
 
-      {search && status !== 'reload' && (
-        <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1.5 }} aria-live="polite">
-          {total === 0 ? 'Keine Treffer' : `${plural(total, 'Treffer', 'Treffer')} für „${search}“`}
-        </Typography>
-      )}
-
-      {showEmpty ? (
-        <EmptyState
-          filtered={filtered}
-          query={search}
-          onReset={() => {
-            setQuery('');
-            setType('');
+      {section === 'albums' && <AlbumsView openId={albumOpen} onOpen={(id) => goSection('albums', id)} info={boot.options} />}
+      {section === 'links' && <LinksView info={boot.options} version={linksVersion} />}
+      {section === 'stats' && <InsightsView onOpen={openStats} />}
+      {section === 'trash' && (
+        <TrashView
+          key={trashVersion}
+          onChanged={() => {
+            reload();
+            refreshStats();
           }}
-          onPick={pick}
-          onUrl={boot.urlFetch ? () => setUrlOpen(true) : undefined}
-        />
-      ) : (
-        <Gallery
-          files={files}
-          selected={selected}
-          selecting={selecting}
-          hiddenFilename={hidden}
-          fresh={fresh}
-          cascade={cascade}
-          dimmed={status === 'reload'}
-          loadingMore={status === 'more'}
-          {...tileHandlers}
         />
       )}
-      <Box ref={sentinel} sx={{ height: '1px' }} />
+
+      {section === 'files' && (
+        <>
+          {(stats.files > 0 || filtered || files.length > 0) && (
+            <FilterBar
+              type={type}
+              onType={setType}
+              sort={sort}
+              onSort={setSort}
+              counts={counts}
+              onUrl={boot.urlFetch ? () => setUrlOpen(true) : undefined}
+              onText={boot.options.texts ? () => setTextOpen(true) : undefined}
+              onOptions={() => setOptionsOpen(true)}
+              optionsActive={prefsActive(prefs)}
+              tags={tags}
+              tag={tag}
+              onTag={setTag}
+              selecting={selecting}
+              onSelectMode={() => (selecting ? clearSelection() : setSelectMode(true))}
+            />
+          )}
+
+          {prefsActive(prefs) && (
+            <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1.5, mt: -1 }}>
+              {t('Für neue Uploads: {options}', { options: describePrefs(prefs, albums) })}
+            </Typography>
+          )}
+
+          {search && status !== 'reload' && (
+            <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1.5 }} aria-live="polite">
+              {total === 0 ? t('Keine Treffer') : tn(total, '1 Treffer für „{query}“', '{count} Treffer für „{query}“', { query: search })}
+            </Typography>
+          )}
+
+          {showEmpty ? (
+            <EmptyState
+              filtered={filtered}
+              query={search}
+              onReset={() => {
+                setQuery('');
+                setType('');
+                setTag('');
+              }}
+              onPick={pick}
+              onUrl={boot.urlFetch ? () => setUrlOpen(true) : undefined}
+              onText={boot.options.texts ? () => setTextOpen(true) : undefined}
+            />
+          ) : (
+            <Gallery
+              files={files}
+              selected={selected}
+              selecting={selecting}
+              hiddenFilename={hidden}
+              fresh={fresh}
+              cascade={cascade}
+              dimmed={status === 'reload'}
+              loadingMore={status === 'more'}
+              {...tileHandlers}
+            />
+          )}
+          <Box ref={sentinel} sx={{ height: '1px' }} />
+        </>
+      )}
 
       <FileMenu
         file={menu?.file ?? null}
@@ -535,6 +792,11 @@ function Dashboard({ boot, registerUploadHandler }: DashboardProps) {
         onPreview={(file) => openViewer(file)}
         onSelect={(file) => toggleSelect(file, false)}
         onDelete={(file) => deleteFiles([file])}
+        onEdit={(file) => setEditing(file)}
+        onAlbum={boot.options.albums ? (file) => setAlbumPicker([file.id]) : undefined}
+        onStats={boot.options.stats ? openStats : undefined}
+        onImageEdit={menu && canEditImage(menu.file) ? (file) => setImageEdit(file) : undefined}
+        trash={trashOn}
       />
 
       <Viewer
@@ -547,13 +809,100 @@ function Dashboard({ boot, registerUploadHandler }: DashboardProps) {
         onHide={onHide}
         hasMore={hasMore}
         onNeedMore={loadMore}
+        statsEnabled={boot.options.stats}
+        canEdit={canEditImage}
+        onImageEdit={(file) => setImageEdit(file)}
+        trash={trashOn}
+        paused={!!imageEdit}
+      />
+
+      <ImageEditor
+        file={imageEdit}
+        onClose={() => setImageEdit(null)}
+        onSaveCopy={(file) => enqueue([file])}
+        onReplaced={(updated) => {
+          setFiles((prev) => prev.map((file) => (file.id === updated.id ? updated : file)));
+          refreshStats();
+          toast(t('Bild gespeichert'), { variant: 'success' });
+        }}
+      />
+
+      <StatsDialog target={statsTarget} onClose={() => setStatsTarget(null)} />
+
+      <UploadOptionsDialog
+        open={optionsOpen}
+        value={prefs}
+        info={boot.options}
+        tags={tags}
+        albums={albums}
+        onClose={() => setOptionsOpen(false)}
+        onChange={setPrefs}
+      />
+
+      <TextDialog
+        open={textOpen}
+        info={boot.options}
+        tags={tags}
+        initialText={textInitial}
+        onClose={() => {
+          setTextOpen(false);
+          setTextInitial('');
+        }}
+        onDone={(result) => {
+          toast(t('Text gespeichert'), {
+            variant: 'success',
+            action: { label: t('Öffnen'), onClick: () => window.open(result.view, '_blank', 'noopener') },
+          });
+          reload([result.filename]);
+          refreshStats();
+          refreshTags();
+        }}
+      />
+
+      <LinkDialog
+        open={linkOpen}
+        info={boot.options}
+        initialUrl={linkInitial}
+        onClose={() => setLinkOpen(false)}
+        onCreated={() => setLinksVersion((value) => value + 1)}
+      />
+
+      <EditFileDialog
+        file={editing}
+        info={boot.options}
+        tags={tags}
+        onClose={() => setEditing(null)}
+        onSaved={(updated) => {
+          setFiles((prev) => prev.map((file) => (file.id === updated.id ? updated : file)));
+          refreshTags();
+          toast(t('Änderungen gespeichert'), { variant: 'success' });
+        }}
+      />
+
+      <AlbumPickerDialog
+        open={!!albumPicker}
+        fileIds={albumPicker || []}
+        onClose={() => setAlbumPicker(null)}
+        onDone={() => {
+          if (selecting) clearSelection();
+        }}
+      />
+
+      <BulkDialog
+        action={bulk}
+        count={selectedFiles.length}
+        tags={tags}
+        maxExpiry={boot.options.maxExpiry}
+        onClose={() => setBulk(null)}
+        onSubmit={(action, extra) => runBulk(action, extra)}
       />
 
       <UrlUploadDialog
         open={urlOpen}
         onClose={() => setUrlOpen(false)}
+        options={toUploadOptions(prefs)}
         onDone={() => {
-          toast('Datei von der URL hochgeladen', { variant: 'success' });
+          toast(t('Datei von der URL hochgeladen'), { variant: 'success' });
           reload();
           refreshStats();
         }}

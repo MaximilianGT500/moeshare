@@ -1,7 +1,7 @@
 {
   "name": "moeshare-ui",
   "private": true,
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "Material UI Web-Oberfläche für MoeShare (Dashboard, Admin, Login, Datei-Ansicht).",
   "type": "module",
   "scripts": {
@@ -18,8 +18,9 @@
     "@mui/icons-material": "^9.5.0",
     "@mui/material": "^9.5.0",
     "@simplewebauthn/browser": "^14.0.0",
+    "highlight.js": "^11.12.0",
     "hls.js": "^1.7.3",
-    "motion": "^14.4.0",
+    "motion": "^14.5.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-transition-group": "^4.4.5"
@@ -30,6 +31,6 @@
     "@types/react-transition-group": "^4.4.12",
     "@vitejs/plugin-react": "^6.1.2",
     "typescript": "^7.0.2",
-    "vite": "^8.3.4"
+    "vite": "^8.3.5"
   }
 }

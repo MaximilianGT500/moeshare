@@ -16,7 +16,7 @@ import ChevronRightRounded from '@mui/icons-material/ChevronRightRounded';
 import type { AdminUser } from '../../lib/types';
 import { listUsers } from '../../lib/api';
 import { useDebouncedValue } from '../../lib/hooks';
-import { formatBytes, plural, relativeMs } from '../../lib/format';
+import { formatBytes, formatNumber, relativeMs } from '../../lib/format';
 import { SearchField } from '../../components/SearchField';
 import { UserAvatar } from '../../components/UserAvatar';
 import { useToast } from '../../components/Toaster';
@@ -24,13 +24,14 @@ import { CreateUserDialog, CredentialsDialog } from './CreateUserDialog';
 import { UserSheet } from './UserSheet';
 import { RoleChip, SecurityBadges, StatusChip } from './userBits';
 import { c, ease, radius, srOnly } from '../../theme/tokens';
+import { t, tn } from '../../lib/i18n';
 
 type Filter = 'all' | 'admin' | 'suspended' | 'no2fa';
 const FILTERS: Array<{ key: Filter; label: string }> = [
-  { key: 'all', label: 'Alle' },
-  { key: 'admin', label: 'Admins' },
-  { key: 'suspended', label: 'Gesperrt' },
-  { key: 'no2fa', label: 'Ohne 2FA' },
+  { key: 'all', label: t('Alle') },
+  { key: 'admin', label: t('Admins') },
+  { key: 'suspended', label: t('Gesperrt') },
+  { key: 'no2fa', label: t('Ohne 2FA') },
 ];
 
 const matches = (user: AdminUser, filter: Filter) =>
@@ -48,7 +49,7 @@ function UsageBar({ user, max }: { user: AdminUser; max: number }) {
       <Typography variant="body2" sx={{ fontVariantNumeric: 'tabular-nums' }}>
         {formatBytes(user.storageBytes)}
         <Box component="span" sx={{ color: 'text.secondary' }}>
-          {limit ? ` von ${formatBytes(limit)}` : ''}
+          {limit ? t(' von {limit}', { limit: formatBytes(limit) }) : ''}
         </Box>
       </Typography>
       <Box sx={{ height: 4, mt: 0.75, borderRadius: `${radius.full}px`, bgcolor: c.surfaceContainerHighest, overflow: 'hidden' }}>
@@ -98,7 +99,7 @@ export function UsersPanel({
       try {
         setUsers((await listUsers(term)).users);
       } catch (error) {
-        toast(error instanceof Error ? error.message : 'Benutzer konnten nicht geladen werden.', { variant: 'error' });
+        toast(error instanceof Error ? error.message : t('Benutzer konnten nicht geladen werden.'), { variant: 'error' });
       } finally {
         setBusy(false);
       }
@@ -147,13 +148,13 @@ export function UsersPanel({
                 color: c.onSecondaryContainer,
               }}
             >
-              Du
+              {t('Du')}
             </Box>
           )}
           <SecurityBadges user={user} />
         </Typography>
         <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-          {user.lastLoginAt ? `Zuletzt ${relativeMs(user.lastLoginAt)}` : 'Noch nie angemeldet'}
+          {user.lastLoginAt ? t('Zuletzt {lastLoginAt}', { lastLoginAt: relativeMs(user.lastLoginAt) }) : t('Noch nie angemeldet')}
         </Typography>
       </Box>
     </Box>
@@ -163,9 +164,9 @@ export function UsersPanel({
     <Box>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2, flexWrap: 'wrap' }}>
         <Box sx={{ flex: '1 1 260px', maxWidth: 380 }}>
-          <SearchField value={query} onChange={setQuery} placeholder="Benutzer suchen" busy={busy} dense />
+          <SearchField value={query} onChange={setQuery} placeholder={t('Benutzer suchen')} busy={busy} dense />
         </Box>
-        <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }} role="group" aria-label="Filter">
+        <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }} role="group" aria-label={t('Filter')}>
           {FILTERS.map((f) => {
             const count = users.filter((u) => matches(u, f.key)).length;
             if (f.key !== 'all' && count === 0 && filter !== f.key) return null;
@@ -183,13 +184,13 @@ export function UsersPanel({
         </Box>
         <Box sx={{ flex: 1 }} />
         <Button variant="contained" startIcon={<PersonAddRounded />} onClick={() => setCreating(true)}>
-          Benutzer anlegen
+          {t('Benutzer anlegen')}
         </Button>
       </Box>
 
       {visible.length === 0 ? (
         <Typography sx={{ py: 6, textAlign: 'center', color: 'text.secondary' }}>
-          {search ? `Kein Benutzer passt zu „${search}“.` : 'Keine Benutzer in diesem Filter.'}
+          {search ? t('Kein Benutzer passt zu „{search}“.', { search }) : t('Keine Benutzer in diesem Filter.')}
         </Typography>
       ) : phone ? (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
@@ -210,7 +211,7 @@ export function UsersPanel({
                   borderRadius: `${radius.md}px`,
                   bgcolor: c.surfaceContainerLow,
                 }}
-                aria-label={`${user.username} bearbeiten`}
+                aria-label={t('{username} bearbeiten', { username: user.username })}
               >
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <Box sx={{ flex: 1, minWidth: 0 }}>{nameCell(user)}</Box>
@@ -228,17 +229,17 @@ export function UsersPanel({
         </Box>
       ) : (
         <Box sx={{ borderRadius: `${radius.lg}px`, bgcolor: c.surfaceContainerLow, overflow: 'hidden' }}>
-          <Table aria-label="Benutzer">
+          <Table aria-label={t('Benutzer')}>
             <TableHead>
               <TableRow>
-                <TableCell>Benutzer</TableCell>
-                <TableCell>Rolle</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell>Speicher</TableCell>
-                <TableCell align="right">Dateien</TableCell>
+                <TableCell>{t('Benutzer')}</TableCell>
+                <TableCell>{t('Rolle')}</TableCell>
+                <TableCell>{t('Status')}</TableCell>
+                <TableCell>{t('Speicher')}</TableCell>
+                <TableCell align="right">{t('Dateien')}</TableCell>
                 <TableCell align="right">
                   <Box component="span" sx={srOnly}>
-                    Öffnen
+                    {t('Öffnen')}
                   </Box>
                 </TableCell>
               </TableRow>
@@ -276,9 +277,9 @@ export function UsersPanel({
                         event.stopPropagation();
                         setOpen(user.id);
                       }}
-                      aria-label={`${user.username} bearbeiten`}
+                      aria-label={t('{username} bearbeiten', { username: user.username })}
                     >
-                      Details
+                      {t('Details')}
                     </Button>
                   </TableCell>
                 </TableRow>
@@ -289,8 +290,9 @@ export function UsersPanel({
       )}
 
       <Typography variant="caption" component="p" sx={{ color: 'text.secondary', mt: 1.5 }}>
-        {plural(users.length, 'Benutzer', 'Benutzer')}, davon {plural(users.filter((u) => u.totp).length, 'mit', 'mit')}{' '}
-        Zwei-Faktor-Anmeldung
+        {tn(users.length, '1 Benutzer, davon {mfa} mit Zwei-Faktor-Anmeldung', '{count} Benutzer, davon {mfa} mit Zwei-Faktor-Anmeldung', {
+          mfa: formatNumber(users.filter((u) => u.totp).length),
+        })}
       </Typography>
 
       <UserSheet
@@ -312,7 +314,7 @@ export function UsersPanel({
           setUsers((list) => [...list, user]);
           onChanged();
           if (password) setCredentials({ username: user.username, password });
-          else toast(`${user.username} wurde angelegt`, { variant: 'success' });
+          else toast(t('{username} wurde angelegt', { username: user.username }), { variant: 'success' });
         }}
       />
       <CredentialsDialog data={credentials} onClose={() => setCredentials(null)} baseUrl={baseUrl} />

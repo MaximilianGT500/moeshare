@@ -12,6 +12,7 @@ import { AuthLayout } from '../login/AuthLayout';
 import { c, fonts, radius } from '../../theme/tokens';
 import { SetupWizard } from './SetupWizard';
 import { tokenFromInput } from './wizard';
+import { t } from '../../lib/i18n';
 
 function LockedSetup({ rejected }: { rejected: boolean }) {
   const [input, setInput] = useState('');
@@ -39,18 +40,22 @@ function LockedSetup({ rejected }: { rejected: boolean }) {
         </Box>
         <div>
           <Typography variant="h4" component="h1">
-            Einrichtungslink öffnen
+            {t('Einrichtungslink öffnen')}
           </Typography>
           <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1 }}>
-            Beim Start zeigt MoeShare in der Konsole einen Link mit Einrichtungscode. Nur wer ihn kennt, kann das erste Admin-Konto anlegen.
+            {t(
+              'Beim Start zeigt MoeShare in der Konsole einen Link mit Einrichtungscode. Nur wer ihn kennt, kann das erste Admin-Konto anlegen.'
+            )}
           </Typography>
         </div>
       </Stack>
-      {rejected && <Alert severity="error">Dieser Code passt nicht. Den aktuellen Link findest du in der Konsole des Servers.</Alert>}
+      {rejected && (
+        <Alert severity="error">{t('Dieser Code passt nicht. Den aktuellen Link findest du in der Konsole des Servers.')}</Alert>
+      )}
       <Box component="form" onSubmit={submit} noValidate>
         <Stack spacing={2}>
           <TextField
-            label="Link oder Code"
+            label={t('Link oder Code')}
             autoFocus
             fullWidth
             value={input}
@@ -58,7 +63,7 @@ function LockedSetup({ rejected }: { rejected: boolean }) {
             slotProps={{ htmlInput: { autoComplete: 'off', spellCheck: false, style: { fontFamily: fonts.mono } } }}
           />
           <Button type="submit" variant="contained" size="large" fullWidth disabled={!input.trim()}>
-            Einrichtung starten
+            {t('Einrichtung starten')}
           </Button>
         </Stack>
       </Box>

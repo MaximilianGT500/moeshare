@@ -2,7 +2,10 @@
 
 const fs = require('fs');
 const os = require('os');
+const path = require('path');
 const config = require('../config');
+const db = require('../lib/db');
+const { parseDatabaseUrl, describe } = require('../lib/db/url');
 const logger = require('../lib/logger');
 const media = require('../lib/media');
 const ephemeral = require('../lib/ephemeral');
@@ -29,6 +32,8 @@ const WIZARD_SETTINGS = [
   'uploads.dominantColor',
   'uploads.hls',
   'uploads.urlFetch',
+  'uploads.urlStyle',
+  'site.language',
   'auth.registration',
   'auth.enforceMfa',
   'auth.passkeys',
@@ -98,7 +103,7 @@ function checks() {
   const nodeMajor = Number(process.versions.node.split('.')[0]);
   const storage = writable(config.paths.uploads);
   return [
-    { key: 'database', ok: true, label: 'Datenbank', detail: 'SQLite ist bereit.' },
+    { key: 'database', ok: true, label: 'Datenbank', detail: `${db.describe()} ist bereit.` },
     {
       key: 'storage',
       ok: storage,
@@ -112,7 +117,7 @@ function checks() {
       label: 'FFmpeg',
       detail: media.ffmpegAvailable ? 'Videovorschauen und Streaming sind möglich.' : 'Fehlt, Videos werden ohne Vorschau gespeichert.',
     },
-    { key: 'node', ok: nodeMajor >= 20, label: 'Node.js', detail: `Version ${process.versions.node}` },
+    { key: 'node', ok: nodeMajor >= 24, label: 'Node.js', detail: `Version ${process.versions.node}` },
   ];
 }
 
@@ -163,4 +168,66 @@ async function complete({ token, account, patch }) {
   }
 }
 
-module.exports = { isOpen, prepare, verify, checks, wizardSettings, validate, complete };
+function databaseState() {
+  const { client, source, host = null, port = null, database = null, user = null, ssl = false } = db.options;
+  const sqliteDefault = client === 'sqlite' && path.resolve(db.options.file) === path.resolve(config.defaultDatabase);
+  return {
+    client,
+    label: db.describe(),
+    source,
+    locked: source === 'env',
+    host,
+    port,
+    database,
+    user,
+    ssl: Boolean(ssl),
+    sqliteDefault,
+  };
+}
+
+function targetOf(url) {
+  if (db.options.source === 'env')
+    throw forbidden('Die Datenbank ist über DATABASE_URL festgelegt und lässt sich hier nicht ändern.', { code: 'locked' });
+  try {
+    return parseDatabaseUrl(url, config.paths.root);
+  } catch (error) {
+    throw badRequest(error.message, { field: 'database' });
+  }
+}
+
+async function probe(options) {
+  const { Database } = require('../lib/db');
+  const candidate = new Database({ ...options, source: 'file' });
+  try {
+    await candidate.ready;
+    const info = await candidate.info();
+    const accounts = await candidate.count('SELECT COUNT(*) FROM users');
+    return { label: info.label, version: info.version, accounts };
+  } catch (error) {
+    throw badRequest(`Keine Verbindung: ${error.message}`, { field: 'database' });
+  } finally {
+    await candidate.close().catch(() => {});
+  }
+}
+
+async function testDatabase({ token, url }) {
+  await assertAccess(token);
+  return probe(targetOf(url));
+}
+
+async function useDatabase({ token, url }) {
+  await assertAccess(token);
+  const options = targetOf(url);
+  if (describe(options, config.paths.root) === db.describe()) return { ...databaseState(), switched: false };
+  const result = await probe(options);
+  const entry = await ephemeral.get(KIND, ID);
+  await db.replace({ ...options, source: 'file' });
+  fs.mkdirSync(path.dirname(config.databaseFile), { recursive: true });
+  fs.writeFileSync(config.databaseFile, `${JSON.stringify({ url: options.url }, null, 2)}\n`, { mode: 0o600 });
+  await settings.load();
+  if (entry && result.accounts === 0) await ephemeral.put(KIND, ID, entry, TTL_MS);
+  logger.scope('setup').info('Datenbank gewechselt', { db: db.describe() });
+  return { ...databaseState(), switched: true, accounts: result.accounts };
+}
+
+module.exports = { isOpen, prepare, verify, checks, wizardSettings, validate, complete, databaseState, testDatabase, useDatabase };

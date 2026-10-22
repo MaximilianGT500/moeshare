@@ -115,6 +115,6 @@ export function buildScheme(seedHex: string, dark: boolean): M3Tokens {
 }
 
 export const FILE_TYPE_COLORS = {
-  dark: { image: '#9085e9', video: '#199e70', audio: '#d95926', other: '#8a8494' },
-  light: { image: '#6250d6', video: '#1baf7a', audio: '#eb6834', other: '#8f8a97' },
+  dark: { image: '#9085e9', video: '#199e70', audio: '#d95926', text: '#c9a227', other: '#8a8494' },
+  light: { image: '#6250d6', video: '#1baf7a', audio: '#eb6834', text: '#a07d00', other: '#8f8a97' },
 } as const;

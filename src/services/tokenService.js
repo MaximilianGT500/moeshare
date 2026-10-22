@@ -3,6 +3,7 @@
 const db = require('../lib/db');
 const { badRequest, notFound } = require('../lib/errors');
 const { randomToken, sha256 } = require('../lib/secrets');
+const { languageOf } = require('./preferenceService');
 
 const PREFIX = 'ms_';
 const MAX_TOKENS = 25;
@@ -26,26 +27,27 @@ function cleanName(name) {
 
 async function create(userId, name) {
   const label = cleanName(name);
-  const { count } = await db.get('SELECT COUNT(*) AS count FROM api_tokens WHERE user_id = ?', [userId]);
+  const count = await db.count('SELECT COUNT(*) FROM api_tokens WHERE user_id = ?', [userId]);
   if (count >= MAX_TOKENS) throw badRequest(`Mehr als ${MAX_TOKENS} Tokens sind nicht möglich. Widerrufe zuerst ein altes.`);
 
   const token = `${PREFIX}${randomToken(32)}`;
   const now = Date.now();
-  const result = await db.run('INSERT INTO api_tokens (user_id, name, token_hash, hint, legacy, created_at) VALUES (?, ?, ?, ?, 0, ?)', [
-    userId,
-    label,
-    sha256(token),
-    `${token.slice(0, 7)}…${token.slice(-4)}`,
-    now,
-  ]);
-  const row = await db.get('SELECT * FROM api_tokens WHERE id = ?', [result.lastID]);
+  const id = await db.insertRow('api_tokens', {
+    user_id: userId,
+    name: label,
+    token_hash: sha256(token),
+    hint: `${token.slice(0, 7)}…${token.slice(-4)}`,
+    legacy: 0,
+    created_at: now,
+  });
+  const row = await db.get('SELECT * FROM api_tokens WHERE id = ?', [id]);
   return { token, record: toRecord(row) };
 }
 
 async function resolve(token) {
   if (typeof token !== 'string' || token.length < 20 || token.length > 4096) return null;
   const row = await db.get(
-    `SELECT t.id AS token_id, t.last_used_at, u.id, u.username, u.role, u.status
+    `SELECT t.id AS token_id, t.last_used_at, u.id, u.username, u.role, u.status, u.preferences
      FROM api_tokens t JOIN users u ON u.id = t.user_id
      WHERE t.token_hash = ?`,
     [sha256(token.trim())]
@@ -57,7 +59,14 @@ async function resolve(token) {
   }
   return {
     tokenId: row.token_id,
-    user: { id: row.id, username: row.username, role: row.role, isAdmin: row.role === 'admin', status: row.status },
+    user: {
+      id: row.id,
+      username: row.username,
+      role: row.role,
+      isAdmin: row.role === 'admin',
+      status: row.status,
+      language: languageOf(row.preferences),
+    },
   };
 }
 

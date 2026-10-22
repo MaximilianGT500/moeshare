@@ -6,7 +6,7 @@ import Typography from '@mui/material/Typography';
 import { readBoot } from '../../lib/boot';
 import type { AdminBoot, GlobalStats, SettingsPayload } from '../../lib/types';
 import { fetchAdminStats } from '../../lib/api';
-import { formatBytes, formatNumber, plural, storageSummary } from '../../lib/format';
+import { formatBytes, formatNumber, storageSummary } from '../../lib/format';
 import { AppShell } from '../../components/AppShell';
 import { AnimatedNumber } from '../../components/AnimatedNumber';
 import { ConfirmProvider } from '../../components/ConfirmDialog';
@@ -19,14 +19,18 @@ import { SettingsPanel } from './SettingsPanel';
 import { HomePanel } from './HomePanel';
 import { ActivityPanel } from './ActivityPanel';
 import { SystemPanel } from './SystemPanel';
+import { ReportsPanel } from './ReportsPanel';
 import { c, ease, radius } from '../../theme/tokens';
+import { t, tn } from '../../lib/i18n';
 
-type TabKey = 'benutzer' | 'einladungen' | 'dateien' | 'startseite' | 'einstellungen' | 'aktivitaet' | 'system';
-const TABS: TabKey[] = ['benutzer', 'einladungen', 'dateien', 'startseite', 'einstellungen', 'aktivitaet', 'system'];
+type TabKey = 'benutzer' | 'einladungen' | 'dateien' | 'meldungen' | 'startseite' | 'einstellungen' | 'aktivitaet' | 'system';
+const ALL_TABS: TabKey[] = ['benutzer', 'einladungen', 'dateien', 'meldungen', 'startseite', 'einstellungen', 'aktivitaet', 'system'];
 
-const tabFromHash = (): TabKey => {
+const tabsFor = (boot: AdminBoot) => ALL_TABS.filter((key) => key !== 'meldungen' || boot.moderation.enabled || boot.moderation.open > 0);
+
+const tabFromHash = (tabs: TabKey[]): TabKey => {
   const hash = window.location.hash.replace('#', '') as TabKey;
-  return TABS.includes(hash) ? hash : 'benutzer';
+  return tabs.includes(hash) ? hash : 'benutzer';
 };
 
 function Figure({ label, value, note, index }: { label: string; value: ReactNode; note: string; index: number }) {
@@ -53,7 +57,9 @@ function Figure({ label, value, note, index }: { label: string; value: ReactNode
 }
 
 function Admin({ boot }: { boot: AdminBoot }) {
-  const [tab, setTab] = useState<TabKey>(tabFromHash);
+  const TABS = tabsFor(boot);
+  const [tab, setTab] = useState<TabKey>(() => tabFromHash(tabsFor(boot)));
+  const [openReports, setOpenReports] = useState(boot.moderation.open);
   const [direction, setDirection] = useState(0);
   const [stats, setStats] = useState<GlobalStats>(boot.stats);
   const [fileTotal, setFileTotal] = useState(boot.files.total);
@@ -63,10 +69,10 @@ function Admin({ boot }: { boot: AdminBoot }) {
   const values = settings.values;
 
   useEffect(() => {
-    const onHash = () => setTab(tabFromHash());
+    const onHash = () => setTab(tabFromHash(tabsFor(boot)));
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
-  }, []);
+  }, [boot]);
 
   const refreshStats = useCallback(() => {
     fetchAdminStats()
@@ -85,37 +91,42 @@ function Admin({ boot }: { boot: AdminBoot }) {
 
   const figures = [
     {
-      label: 'Benutzer',
+      label: t('Benutzer'),
       value: <AnimatedNumber value={stats.users} format={formatNumber} />,
-      note: `${plural(admins, 'Admin', 'Admins')}, ${withMfa} mit Zwei-Faktor`,
+      note: tn(admins, '1 Admin, {mfa} mit Zwei-Faktor', '{count} Admins, {mfa} mit Zwei-Faktor', { mfa: formatNumber(withMfa) }),
     },
     {
-      label: 'Dateien',
+      label: t('Dateien'),
       value: <AnimatedNumber value={stats.files} format={formatNumber} />,
-      note: stats.files ? `im Schnitt ${formatBytes(stats.storageBytes / stats.files)} pro Datei` : 'noch keine Uploads',
+      note: stats.files
+        ? t('im Schnitt {bytes} pro Datei', { bytes: formatBytes(stats.storageBytes / stats.files) })
+        : t('noch keine Uploads'),
     },
     {
-      label: 'Speicher',
+      label: t('Speicher'),
       value: <AnimatedNumber value={stats.storageBytes} format={formatBytes} />,
       note: values['uploads.defaultQuotaBytes']
-        ? `Limit pro Konto: ${formatBytes(values['uploads.defaultQuotaBytes'] as number)}`
-        : 'ohne Limit pro Konto',
+        ? t('Limit pro Konto: {bytes}', { bytes: formatBytes(values['uploads.defaultQuotaBytes'] as number) })
+        : t('ohne Limit pro Konto'),
     },
     {
-      label: 'Aufrufe',
+      label: t('Aufrufe'),
       value: <AnimatedNumber value={stats.views} format={formatNumber} />,
-      note: stats.files ? `im Schnitt ${formatNumber(stats.views / stats.files)} pro Datei` : 'über alle Ansichtsseiten',
+      note: stats.files
+        ? t('im Schnitt {number} pro Datei', { number: formatNumber(stats.views / stats.files) })
+        : t('über alle Ansichtsseiten'),
     },
   ];
 
   const label: Record<TabKey, string> = {
-    benutzer: `Benutzer (${formatNumber(stats.users)})`,
-    einladungen: activeInvites ? `Einladungen (${activeInvites})` : 'Einladungen',
-    dateien: `Dateien (${formatNumber(fileTotal)})`,
-    startseite: 'Startseite',
-    einstellungen: 'Einstellungen',
-    aktivitaet: 'Aktivität',
-    system: 'System',
+    benutzer: t('Benutzer ({users})', { users: formatNumber(stats.users) }),
+    einladungen: activeInvites ? t('Einladungen ({activeInvites})', { activeInvites }) : t('Einladungen'),
+    dateien: t('Dateien ({fileTotal})', { fileTotal: formatNumber(fileTotal) }),
+    meldungen: openReports ? t('Meldungen ({count})', { count: formatNumber(openReports) }) : t('Meldungen'),
+    startseite: t('Startseite'),
+    einstellungen: t('Einstellungen'),
+    aktivitaet: t('Aktivität'),
+    system: t('System'),
   };
 
   const defaults = {
@@ -130,7 +141,7 @@ function Admin({ boot }: { boot: AdminBoot }) {
       active="admin"
       topBar={
         <Typography variant="h5" component="h1" sx={{ pl: { xs: 1, md: 0 } }}>
-          Administration
+          {t('Administration')}
         </Typography>
       }
       accountSummary={storageSummary(boot.userStats)}
@@ -159,7 +170,7 @@ function Admin({ boot }: { boot: AdminBoot }) {
       </Box>
 
       <Box sx={{ mt: 3, mb: 2.5, borderBottom: `1px solid ${c.outlineVariant}` }}>
-        <ScrollTabs value={tab} onChange={select} label="Bereiche">
+        <ScrollTabs value={tab} onChange={select} label={t('Bereiche')}>
           {TABS.map((key) => (
             <Tab key={key} value={key} label={label[key]} id={`tab-${key}`} aria-controls={`panel-${key}`} />
           ))}
@@ -190,9 +201,17 @@ function Admin({ boot }: { boot: AdminBoot }) {
             />
           )}
           {tab === 'einladungen' && (
-            <InvitesPanel initial={boot.invites} registration={values['auth.registration'] as string} onCount={setActiveInvites} />
+            <InvitesPanel
+              initial={boot.invites}
+              registration={values['auth.registration'] as string}
+              onCount={setActiveInvites}
+              mailReady={boot.mail.ready}
+            />
           )}
-          {tab === 'dateien' && <FilesPanel initial={boot.files} onChanged={refreshStats} onTotal={setFileTotal} />}
+          {tab === 'dateien' && (
+            <FilesPanel initial={boot.files} onChanged={refreshStats} onTotal={setFileTotal} trashEnabled={!!values['trash.enabled']} />
+          )}
+          {tab === 'meldungen' && <ReportsPanel enabled={!!values['reports.enabled']} onOpenCount={setOpenReports} />}
           {tab === 'startseite' && (
             <HomePanel
               initial={settings}
@@ -211,6 +230,8 @@ function Admin({ boot }: { boot: AdminBoot }) {
               initial={settings}
               initialSection={settingsSection}
               currentUserTotp={boot.sudo.totp}
+              storage={boot.storage}
+              backups={boot.backups}
               onSaved={(next) => {
                 setSettings(next);
                 if (next.values['auth.enforceMfa'] !== 'off' && !boot.sudo.totp) window.location.assign('/account?setup=mfa');
@@ -220,7 +241,7 @@ function Admin({ boot }: { boot: AdminBoot }) {
           {tab === 'aktivitaet' && (
             <ActivityPanel initial={boot.audit} retentionDays={(values['system.auditRetentionDays'] as number) || 90} />
           )}
-          {tab === 'system' && <SystemPanel initial={boot.system} />}
+          {tab === 'system' && <SystemPanel initial={boot.system} database={boot.database} ffmpeg={boot.storage.ffmpeg} />}
         </m.div>
       </AnimatePresence>
     </AppShell>

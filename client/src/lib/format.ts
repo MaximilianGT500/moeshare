@@ -1,4 +1,6 @@
-const LOCALE = 'de-DE';
+import { language, locale, t, tn } from './i18n';
+
+const LOCALE = locale;
 
 const numberFormat = new Intl.NumberFormat(LOCALE);
 export const formatNumber = (value: number) => numberFormat.format(Math.round(value || 0));
@@ -42,7 +44,7 @@ export function parseServerDate(value: string | null | undefined): Date | null {
   return new Date(utc);
 }
 
-const relative = new Intl.RelativeTimeFormat('de', { numeric: 'auto' });
+const relative = new Intl.RelativeTimeFormat(language, { numeric: 'auto' });
 const shortDate = new Intl.DateTimeFormat(LOCALE, { day: 'numeric', month: 'short' });
 const fullDate = new Intl.DateTimeFormat(LOCALE, { day: 'numeric', month: 'short', year: 'numeric' });
 const dateTime = new Intl.DateTimeFormat(LOCALE, {
@@ -57,7 +59,7 @@ export function formatRelative(date: Date | null, now = Date.now()): string {
   if (!date) return '';
   const diff = (date.getTime() - now) / 1000;
   const abs = Math.abs(diff);
-  if (abs < 45) return 'gerade eben';
+  if (abs < 45) return t('gerade eben');
   if (abs < 3600) return relative.format(Math.round(diff / 60), 'minute');
   if (abs < 86400) return relative.format(Math.round(diff / 3600), 'hour');
   if (abs < 7 * 86400) return relative.format(Math.round(diff / 86400), 'day');
@@ -65,11 +67,13 @@ export function formatRelative(date: Date | null, now = Date.now()): string {
   return (sameYear ? shortDate : fullDate).format(date);
 }
 
-export const formatDateTime = (date: Date | null) => (date ? `${dateTime.format(date)} Uhr` : '');
+export const formatDateTime = (date: Date | null) =>
+  date ? (language === 'de' ? `${dateTime.format(date)} Uhr` : dateTime.format(date)) : '';
 
 export const formatDate = (date: Date | null) => (date ? fullDate.format(date) : '');
 
-export const relativeMs = (ms: number | null | undefined, fallback = 'nie') => (ms ? formatRelative(new Date(ms)) : fallback);
+export const relativeMs = (ms: number | null | undefined, fallback?: string) =>
+  ms ? formatRelative(new Date(ms)) : (fallback ?? t('nie'));
 
 export const relativeFromServer = (value: string | null | undefined) => formatRelative(parseServerDate(value));
 
@@ -78,15 +82,13 @@ export function formatDuration(seconds: number): string {
   const days = Math.floor(s / 86400);
   const hours = Math.floor((s % 86400) / 3600);
   const minutes = Math.floor((s % 3600) / 60);
-  if (days > 0) return `${days} ${days === 1 ? 'Tag' : 'Tage'}, ${hours} Std.`;
-  if (hours > 0) return `${hours} Std., ${minutes} Min.`;
-  return `${minutes} Min.`;
+  if (days > 0) return tn(days, '1 Tag, {hours} Std.', '{count} Tage, {hours} Std.', { hours });
+  if (hours > 0) return t('{hours} Std., {minutes} Min.', { hours, minutes });
+  return t('{minutes} Min.', { minutes });
 }
 
-export const plural = (count: number, one: string, many: string) => `${formatNumber(count)} ${count === 1 ? one : many}`;
-
 export const storageSummary = (stats: { files: number; storageBytes: number }) =>
-  `${plural(stats.files, 'Datei', 'Dateien')}, ${formatBytes(stats.storageBytes)} belegt`;
+  tn(stats.files, '1 Datei, {size} belegt', '{count} Dateien, {size} belegt', { size: formatBytes(stats.storageBytes) });
 
 export function extensionOf(filename: string): string {
   const match = /\.([a-z0-9]{1,10})$/i.exec(filename);

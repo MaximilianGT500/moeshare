@@ -1,11 +1,12 @@
 'use strict';
 
 const express = require('express');
-const rateLimit = require('express-rate-limit');
 const logger = require('../lib/logger');
 const ephemeral = require('../lib/ephemeral');
 const { HttpError, badRequest, forbidden, gone, tooManyRequests, unauthorized } = require('../lib/errors');
 const { text, flag } = require('../lib/input');
+const { tr } = require('../lib/i18n');
+const { limiter } = require('../lib/limiter');
 const { renderPage } = require('../lib/render');
 const { Throttle } = require('../lib/throttle');
 const { randomToken, safeEqual } = require('../lib/secrets');
@@ -23,17 +24,17 @@ const invites = require('../services/inviteService');
 const setup = require('../services/setupService');
 const audit = require('../services/auditService');
 const webhook = require('../services/webhookService');
+const emails = require('../services/emailService');
+const mail = require('../services/mailService');
 
 const router = express.Router();
 const log = logger.scope('auth');
 
-const credentialLimiter = rateLimit({
+const credentialLimiter = limiter({
   windowMs: 15 * 60 * 1000,
   limit: 30,
   skipSuccessfulRequests: true,
-  standardHeaders: 'draft-7',
-  legacyHeaders: false,
-  message: { error: 'Zu viele Versuche von deiner Verbindung. Warte ein paar Minuten und versuche es dann erneut.' },
+  message: 'Zu viele Versuche von deiner Verbindung. Warte ein paar Minuten und versuche es dann erneut.',
 });
 
 const guarded = [sameOriginOnly, credentialLimiter];
@@ -87,8 +88,8 @@ async function secondFactor(userId) {
 
 function assertActive(row) {
   if (!row || row.status === 'active') return;
-  const reason = row.suspended_reason ? ` Grund: ${row.suspended_reason}` : '';
-  throw forbidden(`Dieses Konto ist gesperrt.${reason}`, { code: 'suspended' });
+  const message = row.suspended_reason ? `Dieses Konto ist gesperrt. Grund: ${row.suspended_reason}` : 'Dieses Konto ist gesperrt.';
+  throw forbidden(message, { code: 'suspended' });
 }
 
 async function signIn(req, res, row, { method, remember, next }) {
@@ -105,8 +106,14 @@ const methodsInfo = () => ({
   providers: oauth.enabled(),
   token: settings.get('auth.tokenLogin'),
   register: settings.get('auth.registration') === 'open',
+  reset: mail.ready(),
   passkeyOrigin: new URL(settings.get('site.baseUrl')).origin,
 });
+
+const NOTICES = {
+  reset: 'Dein neues Passwort ist gespeichert. Melde dich jetzt damit an.',
+  bestaetigt: 'Deine E-Mail-Adresse ist bestätigt.',
+};
 
 const inviteInfo = (record) => ({ code: record.code, role: record.role, expiresAt: record.expiresAt, createdBy: record.createdBy });
 
@@ -123,12 +130,56 @@ router.get('/login', async (req, res) => {
     title: 'Anmelden',
     data: {
       mode: 'login',
-      error: loginError(text(req.query.error, 40), text(req.query.provider, 20)),
+      error: tr(req, loginError(text(req.query.error, 40), text(req.query.provider, 20))),
+      notice: tr(req, NOTICES[text(req.query.hinweis, 20)] || ''),
       next: safeNext(text(req.query.next), ''),
       methods: methodsInfo(),
       mfa,
     },
   });
+});
+
+router.get('/reset', async (req, res) => {
+  if (await setup.isOpen()) return res.redirect('/setup');
+  const found = await emails.peekReset(text(req.query.token, 200));
+  return renderPage(res, {
+    page: 'login',
+    title: 'Neues Passwort',
+    data: {
+      mode: 'reset',
+      error: '',
+      next: '',
+      methods: methodsInfo(),
+      reset: {
+        valid: Boolean(found),
+        username: found ? found.user.username : '',
+        passwordMinLength: settings.get('auth.passwordMinLength'),
+      },
+    },
+  });
+});
+
+const resetLimiter = limiter({ windowMs: 15 * 60 * 1000, limit: 10 });
+
+router.post('/api/auth/forgot', sameOriginOnly, resetLimiter, async (req, res) => {
+  const login = text(req.body.login, 191).trim();
+  if (!login) throw badRequest('Gib deinen Benutzernamen oder deine E-Mail-Adresse ein.', { field: 'login' });
+  await emails.requestReset(login, req.language);
+  res.json({ ok: true });
+});
+
+router.post('/api/auth/reset', guarded, async (req, res) => {
+  const token = text(req.body.token, 200);
+  const password = text(req.body.password, 300);
+  const found = await emails.peekReset(token);
+  if (!found) throw gone('Dieser Link ist abgelaufen oder wurde schon benutzt. Fordere einen neuen an.', { code: 'expired' });
+  users.validatePassword(password, found.user.username);
+  const user = await emails.consumeReset(token);
+  await users.setPassword(user.id, password);
+  const endedSessions = await sessions.revokeAll(user.id);
+  audit.log('password_reset', { userId: user.id, actorId: null, req, details: { method: 'email', endedSessions } });
+  emails.notifySecurity(user.id, 'password_reset');
+  res.json({ ok: true, redirect: '/login?hinweis=reset' });
 });
 
 router.get('/register', async (req, res) => {
@@ -162,7 +213,7 @@ router.get('/register', async (req, res) => {
       const record = entry.invite && !invite ? await invites.get(entry.invite) : null;
       if (record) invite = inviteInfo(record);
     } else {
-      error = loginError('oauth_expired');
+      error = tr(req, loginError('oauth_expired'));
     }
   }
 
@@ -432,6 +483,7 @@ async function registerWithProvider(req, res, pendingId) {
     details: { method: entry.provider, invite: invite ? invite.code.slice(0, 4) : null },
   });
   webhook.notify('user', 'Neuer Benutzer', `**${row.username}** hat sich mit ${label} registriert.`);
+  emails.notifyNewUser(row.username, label);
   res.json({ ok: true, redirect: await sessions.start(req, res, row, { method: entry.provider, remember: entry.remember }) });
 }
 
@@ -455,6 +507,7 @@ router.post('/api/auth/register', guarded, async (req, res) => {
   if (invite) await invites.consume(invite.code);
   audit.log('user_registered', { userId: row.id, req, details: { method: 'password', invite: invite ? invite.code.slice(0, 4) : null } });
   webhook.notify('user', 'Neuer Benutzer', `**${row.username}** hat sich registriert.`);
+  emails.notifyNewUser(row.username, invite ? 'Einladung' : 'Passwort');
   return res.json({ ok: true, redirect: await sessions.start(req, res, row, { method: 'password', remember: flag(req.body.remember) }) });
 });
 

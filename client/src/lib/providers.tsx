@@ -5,6 +5,7 @@ import Google from '@mui/icons-material/Google';
 import Microsoft from '@mui/icons-material/Microsoft';
 import CodeRounded from '@mui/icons-material/CodeRounded';
 import KeyRounded from '@mui/icons-material/KeyRounded';
+import { t } from './i18n';
 
 const ICONS: Record<string, ReactElement> = {
   discord: <ForumRounded />,
@@ -24,10 +25,10 @@ export const PROVIDER_LABELS: Record<string, string> = {
   microsoft: 'Microsoft',
   gitlab: 'GitLab',
   oidc: 'SSO',
-  password: 'Passwort',
-  passkey: 'Passkey',
-  token: 'Token',
-  setup: 'Einrichtung',
+  password: t('Passwort'),
+  passkey: t('Passkey'),
+  token: t('Token'),
+  setup: t('Einrichtung'),
 };
 
 export const providerLabel = (key: string, fallback?: string) => fallback || PROVIDER_LABELS[key] || key;

@@ -18,6 +18,7 @@ import { UserAvatar } from '../../components/UserAvatar';
 import { passkeyErrorMessage, passkeySupport, startAuthentication } from '../../lib/webauthn';
 import { postAuth, Shake } from './AuthLayout';
 import { c, fonts, radius } from '../../theme/tokens';
+import { t } from '../../lib/i18n';
 
 interface Props {
   challenge: MfaChallenge;
@@ -53,11 +54,11 @@ export function SecondFactorStep({ challenge, passkeyOrigin, onBack, onSuccess, 
       return;
     }
     if (result.status === 410) {
-      onExpired(result.data.error || 'Die Anmeldung ist abgelaufen. Bitte melde dich erneut an.');
+      onExpired(result.data.error || t('Die Anmeldung ist abgelaufen. Bitte melde dich erneut an.'));
       return;
     }
     setCode('');
-    fail(result.data.error || 'Der Code stimmt nicht.');
+    fail(result.data.error || t('Der Code stimmt nicht.'));
   };
 
   const submit = (event: FormEvent) => {
@@ -73,15 +74,15 @@ export function SecondFactorStep({ challenge, passkeyOrigin, onBack, onSuccess, 
       ticket: challenge.ticket,
     });
     if (!options.ok) {
-      if (options.status === 410) onExpired(options.data.error || 'Die Anmeldung ist abgelaufen.');
-      else fail(options.data.error || 'Passkeys sind gerade nicht verfügbar.');
+      if (options.status === 410) onExpired(options.data.error || t('Die Anmeldung ist abgelaufen.'));
+      else fail(options.data.error || t('Passkeys sind gerade nicht verfügbar.'));
       return;
     }
     try {
       const response = await startAuthentication({ optionsJSON: options.data.options });
       const result = await postAuth('/api/auth/mfa/passkey', { ticket: challenge.ticket, flowId: options.data.flowId, response });
       if (result.ok && result.data.redirect) onSuccess(result.data.redirect);
-      else fail(result.data.error || 'Der Passkey wurde nicht akzeptiert.');
+      else fail(result.data.error || t('Der Passkey wurde nicht akzeptiert.'));
     } catch (failure) {
       const message = passkeyErrorMessage(failure);
       if (message) fail(message);
@@ -108,12 +109,12 @@ export function SecondFactorStep({ challenge, passkeyOrigin, onBack, onSuccess, 
         </Box>
         <div>
           <Typography variant="h5" component="h1">
-            Bestätige die Anmeldung
+            {t('Bestätige die Anmeldung')}
           </Typography>
           <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
             {mode === 'code'
-              ? 'Gib den 6-stelligen Code aus deiner Authenticator-App ein.'
-              : 'Gib einen deiner Wiederherstellungscodes ein. Jeder Code funktioniert nur einmal.'}
+              ? t('Gib den 6-stelligen Code aus deiner Authenticator-App ein.')
+              : t('Gib einen deiner Wiederherstellungscodes ein. Jeder Code funktioniert nur einmal.')}
           </Typography>
         </div>
         {challenge.username && (
@@ -128,7 +129,7 @@ export function SecondFactorStep({ challenge, passkeyOrigin, onBack, onSuccess, 
               <OtpInput value={code} onChange={setCode} onComplete={verify} disabled={busy !== ''} error={!!error} autoFocus />
             ) : (
               <TextField
-                label="Wiederherstellungscode"
+                label={t('Wiederherstellungscode')}
                 fullWidth
                 autoFocus
                 value={recovery}
@@ -161,7 +162,7 @@ export function SecondFactorStep({ challenge, passkeyOrigin, onBack, onSuccess, 
             disabled={busy !== '' || (mode === 'code' ? code.length !== 6 : !recovery.trim())}
             startIcon={busy === 'code' ? <CircularProgress size={18} color="inherit" /> : null}
           >
-            {busy === 'code' ? 'Wird geprüft' : 'Bestätigen'}
+            {busy === 'code' ? t('Wird geprüft') : t('Bestätigen')}
           </Button>
           {passkeys && (
             <Button
@@ -172,7 +173,7 @@ export function SecondFactorStep({ challenge, passkeyOrigin, onBack, onSuccess, 
               disabled={busy !== ''}
               startIcon={busy === 'passkey' ? <CircularProgress size={18} color="inherit" /> : <FingerprintRounded />}
             >
-              Stattdessen Passkey verwenden
+              {t('Stattdessen Passkey verwenden')}
             </Button>
           )}
         </Stack>
@@ -189,10 +190,10 @@ export function SecondFactorStep({ challenge, passkeyOrigin, onBack, onSuccess, 
             setError('');
           }}
         >
-          {mode === 'code' ? 'Kein Zugriff auf die App? Wiederherstellungscode verwenden' : 'Code aus der App eingeben'}
+          {mode === 'code' ? t('Kein Zugriff auf die App? Wiederherstellungscode verwenden') : t('Code aus der App eingeben')}
         </Link>
         <Button size="small" startIcon={<ArrowBackRounded />} onClick={onBack} sx={{ color: 'text.secondary' }}>
-          Zurück zur Anmeldung
+          {t('Zurück zur Anmeldung')}
         </Button>
       </Stack>
     </Stack>

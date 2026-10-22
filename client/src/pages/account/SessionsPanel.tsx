@@ -20,6 +20,7 @@ import { useConfirm } from '../../components/ConfirmDialog';
 import { useToast } from '../../components/Toaster';
 import { providerLabel } from '../../lib/providers';
 import { c, ease, radius } from '../../theme/tokens';
+import { t, tn } from '../../lib/i18n';
 
 function DeviceIcon({ device }: { device: string }) {
   if (/iPhone|Android/.test(device)) return <SmartphoneRounded />;
@@ -49,22 +50,28 @@ export function SessionRow({ session, onRevoke }: { session: SessionInfo; onRevo
       <Box sx={{ flex: 1, minWidth: 0 }}>
         <Typography variant="subtitle2" sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', fontSize: '0.9375rem' }}>
           {session.device}
-          {session.current && <Chip size="small" label="Dieses Gerät" sx={{ bgcolor: c.primary, color: c.onPrimary, fontWeight: 700 }} />}
+          {session.current && (
+            <Chip size="small" label={t('Dieses Gerät')} sx={{ bgcolor: c.primary, color: c.onPrimary, fontWeight: 700 }} />
+          )}
         </Typography>
         <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-          {session.current ? 'Gerade aktiv' : `Aktiv ${relativeMs(session.lastSeenAt)}`}
+          {session.current ? t('Gerade aktiv') : t('Aktiv {lastSeenAt}', { lastSeenAt: relativeMs(session.lastSeenAt) })}
           {session.ip ? `, ${session.ip}` : ''}
         </Typography>
-        <Tooltip title={`Angemeldet am ${formatDateTime(new Date(session.createdAt))}`}>
+        <Tooltip title={t('Angemeldet am {dateTime}', { dateTime: formatDateTime(new Date(session.createdAt)) })}>
           <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-            Angemeldet mit {providerLabel(session.method)} {relativeMs(session.createdAt)}
-            {session.persistent ? '' : ', bis der Browser schließt'}
+            {t('Angemeldet mit {method} {createdAt}', { method: providerLabel(session.method), createdAt: relativeMs(session.createdAt) })}
+            {session.persistent ? '' : t(', bis der Browser schließt')}
           </Typography>
         </Tooltip>
       </Box>
       {onRevoke && !session.current && (
-        <Tooltip title="Abmelden">
-          <IconButton aria-label={`${session.device} abmelden`} onClick={onRevoke} sx={{ '&:hover': { color: c.error } }}>
+        <Tooltip title={t('Abmelden')}>
+          <IconButton
+            aria-label={t('{device} abmelden', { device: session.device })}
+            onClick={onRevoke}
+            sx={{ '&:hover': { color: c.error } }}
+          >
             <LogoutRounded />
           </IconButton>
         </Tooltip>
@@ -81,7 +88,7 @@ export function SessionsPanel({ sessions, reload }: { sessions: SessionInfo[]; r
   const revoke = async (session: SessionInfo) => {
     try {
       await revokeSession(session.id);
-      toast(`${session.device} abgemeldet`, { variant: 'success' });
+      toast(t('{device} abgemeldet', { device: session.device }), { variant: 'success' });
       reload();
     } catch (failure) {
       toast(errorMessage(failure), { variant: 'error' });
@@ -90,15 +97,21 @@ export function SessionsPanel({ sessions, reload }: { sessions: SessionInfo[]; r
 
   const revokeOthers = async () => {
     const ok = await confirm({
-      title: 'Alle anderen Geräte abmelden?',
-      message: `${others.length === 1 ? 'Ein Gerät wird' : `${others.length} Geräte werden`} sofort abgemeldet. ShareX und andere Programme mit API-Token sind davon nicht betroffen.`,
-      confirmLabel: 'Abmelden',
+      title: t('Alle anderen Geräte abmelden?'),
+      message: tn(
+        others.length,
+        'Ein Gerät wird sofort abgemeldet. ShareX und andere Programme mit API-Token sind davon nicht betroffen.',
+        '{count} Geräte werden sofort abgemeldet. ShareX und andere Programme mit API-Token sind davon nicht betroffen.'
+      ),
+      confirmLabel: t('Abmelden'),
       icon: <DevicesRounded />,
     });
     if (!ok) return;
     try {
       const result = await revokeOtherSessions();
-      toast(result.count === 1 ? 'Ein Gerät abgemeldet' : `${result.count} Geräte abgemeldet`, { variant: 'success' });
+      toast(result.count === 1 ? t('Ein Gerät abgemeldet') : t('{count} Geräte abgemeldet', { count: result.count }), {
+        variant: 'success',
+      });
       reload();
     } catch (failure) {
       toast(errorMessage(failure), { variant: 'error' });
@@ -109,12 +122,12 @@ export function SessionsPanel({ sessions, reload }: { sessions: SessionInfo[]; r
     <Stack spacing={4}>
       <SettingsSection
         id="geraete"
-        title="Angemeldete Geräte"
-        description="Siehst du ein Gerät, das du nicht kennst? Melde es ab und ändere dein Passwort."
+        title={t('Angemeldete Geräte')}
+        description={t('Siehst du ein Gerät, das du nicht kennst? Melde es ab und ändere dein Passwort.')}
         action={
           others.length > 0 && (
             <Button variant="tonal" onClick={revokeOthers} startIcon={<LogoutRounded />}>
-              Alle anderen abmelden
+              {t('Alle anderen abmelden')}
             </Button>
           )
         }

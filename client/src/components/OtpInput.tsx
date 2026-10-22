@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { m } from 'motion/react';
 import Box from '@mui/material/Box';
 import { c, css, fonts, radius } from '../theme/tokens';
+import { t } from '../lib/i18n';
 
 interface OtpInputProps {
   value: string;
@@ -22,7 +23,7 @@ export function OtpInput({
   disabled,
   error,
   autoFocus,
-  label = 'Bestätigungscode',
+  label = t('Bestätigungscode'),
 }: OtpInputProps) {
   const ref = useRef<HTMLInputElement | null>(null);
   const [focused, setFocused] = useState(false);

@@ -9,6 +9,7 @@ import VisibilityRounded from '@mui/icons-material/VisibilityRounded';
 import VisibilityOffRounded from '@mui/icons-material/VisibilityOffRounded';
 import { passwordStrength } from '../lib/password';
 import { c, css, radius } from '../theme/tokens';
+import { t } from '../lib/i18n';
 
 const STRENGTH_COLORS = [c.outlineVariant, c.error, c.warning, c.success, c.success];
 
@@ -67,9 +68,9 @@ export function PasswordField({
           input: {
             endAdornment: (
               <InputAdornment position="end">
-                <Tooltip title={visible ? 'Passwort verbergen' : 'Passwort anzeigen'}>
+                <Tooltip title={visible ? t('Passwort verbergen') : t('Passwort anzeigen')}>
                   <IconButton
-                    aria-label={visible ? 'Passwort verbergen' : 'Passwort anzeigen'}
+                    aria-label={visible ? t('Passwort verbergen') : t('Passwort anzeigen')}
                     onClick={() => setVisible((v) => !v)}
                     edge="end"
                     size="small"
@@ -99,7 +100,7 @@ export function PasswordField({
             ))}
           </Box>
           <Typography variant="caption" sx={{ color: 'text.secondary', minWidth: 72, textAlign: 'right' }}>
-            {result ? result.label : `mind. ${strength.minLength} Zeichen`}
+            {result ? result.label : t('mind. {minLength} Zeichen', { minLength: strength.minLength })}
           </Typography>
         </Box>
       )}

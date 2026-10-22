@@ -21,7 +21,11 @@ import MailRounded from '@mui/icons-material/MailRounded';
 import PublicRounded from '@mui/icons-material/PublicRounded';
 import SendRounded from '@mui/icons-material/SendRounded';
 import EditRounded from '@mui/icons-material/EditRounded';
-import type { SettingValue, SetupCheck } from '../../lib/types';
+import StorageRounded from '@mui/icons-material/StorageRounded';
+import DnsRounded from '@mui/icons-material/DnsRounded';
+import CableRounded from '@mui/icons-material/CableRounded';
+import type { DatabaseChoice, SettingValue, SetupCheck, UrlStyle } from '../../lib/types';
+import { UrlStyleSelect, urlStyleLabel } from '../../components/ShareOptions';
 import { PasswordField } from '../../components/PasswordField';
 import { BytesField, ColorField } from '../../components/Fields';
 import { SwitchRow } from '../../components/SettingsKit';
@@ -29,7 +33,8 @@ import { BrandMark } from '../../components/BrandMark';
 import { formatBytes } from '../../lib/format';
 import { mix } from '../../lib/color';
 import { c, fonts, radius, srOnly } from '../../theme/tokens';
-import { COLOR_PRESETS, WEBHOOK_EVENTS, type StepKey, type Values } from './wizard';
+import { COLOR_PRESETS, DEFAULT_PORTS, WEBHOOK_EVENTS, type DatabaseForm, type StepKey, type Values } from './wizard';
+import { rich, t, tn } from '../../lib/i18n';
 
 interface SettingsStepProps {
   values: Values;
@@ -168,6 +173,135 @@ export function WelcomeStep({ checks }: { checks: SetupCheck[] }) {
   );
 }
 
+const DATABASE_LABELS: Record<DatabaseForm['client'], string> = {
+  sqlite: 'SQLite',
+  postgres: 'PostgreSQL',
+  mysql: t('MySQL oder MariaDB'),
+};
+
+export function DatabaseStep({
+  current,
+  form,
+  onChange,
+  error,
+  testing,
+  tested,
+  onTest,
+  keepsPassword,
+}: {
+  current: DatabaseChoice;
+  form: DatabaseForm;
+  onChange: (next: DatabaseForm) => void;
+  error?: string;
+  testing: boolean;
+  tested: { label: string; version: string; accounts: number } | null;
+  onTest: () => void;
+  keepsPassword: boolean;
+}) {
+  if (current.locked) {
+    return (
+      <Alert severity="info" icon={<StorageRounded />}>
+        {t('Die Datenbank ist über die Umgebungsvariable DATABASE_URL festgelegt: {label}.', { label: current.label })}
+      </Alert>
+    );
+  }
+  const field = (key: 'host' | 'port' | 'database' | 'user', label: string, extra: { placeholder?: string; mono?: boolean } = {}) => (
+    <TextField
+      label={label}
+      fullWidth
+      value={form[key]}
+      onChange={(event) => onChange({ ...form, [key]: event.target.value })}
+      placeholder={extra.placeholder}
+      slotProps={{ htmlInput: { spellCheck: false, autoCapitalize: 'off', style: extra.mono ? { fontFamily: fonts.mono } : undefined } }}
+    />
+  );
+  const server = form.client !== 'sqlite';
+  return (
+    <Stack spacing={3}>
+      <ChoiceCards<DatabaseForm['client']>
+        name="database-client"
+        value={form.client}
+        onChange={(client) => onChange({ ...form, client, port: client === 'sqlite' ? form.port : DEFAULT_PORTS[client] })}
+        columns={3}
+        options={[
+          {
+            value: 'sqlite',
+            title: t('SQLite'),
+            text: t('Eine Datei im Ordner db. Nichts weiter einzurichten.'),
+            icon: <StorageRounded />,
+          },
+          {
+            value: 'postgres',
+            title: 'PostgreSQL',
+            text: t('Für große Server oder wenn schon eine Datenbank läuft.'),
+            icon: <DnsRounded />,
+          },
+          { value: 'mysql', title: t('MySQL oder MariaDB'), text: t('Läuft auf fast jedem Webspace.'), icon: <DnsRounded /> },
+        ]}
+      />
+      {server && (
+        <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', sm: 'repeat(6, minmax(0, 1fr))' } }}>
+          <Box sx={{ gridColumn: { sm: 'span 4' } }}>{field('host', t('Server'), { placeholder: 'localhost', mono: true })}</Box>
+          <Box sx={{ gridColumn: { sm: 'span 2' } }}>{field('port', t('Port'), { mono: true })}</Box>
+          <Box sx={{ gridColumn: { sm: 'span 3' } }}>{field('database', t('Datenbank'), { placeholder: 'moeshare', mono: true })}</Box>
+          <Box sx={{ gridColumn: { sm: 'span 3' } }}>{field('user', t('Benutzer'), { placeholder: 'moeshare', mono: true })}</Box>
+          <Box sx={{ gridColumn: '1 / -1' }}>
+            <PasswordField
+              label={t('Passwort')}
+              value={form.password}
+              onChange={(password) => onChange({ ...form, password })}
+              autoComplete="new-password"
+              helperText={keepsPassword && !form.password ? t('Leer lassen, um das gespeicherte Passwort zu behalten.') : undefined}
+            />
+          </Box>
+          <FormControlLabel
+            sx={{ gridColumn: '1 / -1' }}
+            control={<Checkbox checked={form.ssl} onChange={(event) => onChange({ ...form, ssl: event.target.checked })} />}
+            label={t('Verschlüsselt verbinden (TLS)')}
+          />
+        </Box>
+      )}
+      {error && <Alert severity="error">{error}</Alert>}
+      {tested && !error && (
+        <Alert severity={tested.accounts ? 'warning' : 'success'}>
+          {tested.accounts
+            ? tn(
+                tested.accounts,
+                'Verbunden mit {label}, Version {version}. In dieser Datenbank gibt es schon ein Konto. Nach dem Wechsel meldest du dich damit an, die Einrichtung ist dann schon erledigt.',
+                'Verbunden mit {label}, Version {version}. In dieser Datenbank gibt es schon {count} Konten. Nach dem Wechsel meldest du dich damit an, die Einrichtung ist dann schon erledigt.',
+                { label: tested.label, version: tested.version }
+              )
+            : t('Verbunden mit {label}, Version {version}.', { label: tested.label, version: tested.version })}
+        </Alert>
+      )}
+      {server && (
+        <Box>
+          <Button
+            variant="tonal"
+            onClick={onTest}
+            disabled={testing || !form.host.trim() || !form.database.trim()}
+            startIcon={testing ? <CircularProgress size={16} color="inherit" /> : <CableRounded />}
+          >
+            {t('Verbindung testen')}
+          </Button>
+        </Box>
+      )}
+      <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+        {t(
+          'Gerade verbunden: {label}. Die Tabellen legt MoeShare selbst an, die Datenbank muss nur existieren und der Benutzer Tabellen erstellen dürfen.',
+          { label: current.label }
+        )}
+      </Typography>
+    </Stack>
+  );
+}
+
+export function databaseSummary(form: DatabaseForm, current: DatabaseChoice) {
+  if (current.locked) return current.label;
+  if (form.client === 'sqlite') return t('SQLite (db/datenbank.sqlite)');
+  return `${DATABASE_LABELS[form.client]} ${form.user ? `${form.user}@` : ''}${form.host}:${form.port}/${form.database}`;
+}
+
 export function AccountStep({
   account,
   onChange,
@@ -182,17 +316,17 @@ export function AccountStep({
   return (
     <Stack spacing={2.5}>
       <TextField
-        label="Benutzername"
+        label={t('Benutzername')}
         autoFocus
         fullWidth
         value={account.username}
         onChange={(event) => onChange({ ...account, username: event.target.value })}
         error={!!errors.username}
-        helperText={errors.username || 'Buchstaben, Ziffern, Punkt, Unterstrich oder Bindestrich.'}
+        helperText={errors.username || t('Buchstaben, Ziffern, Punkt, Unterstrich oder Bindestrich.')}
         slotProps={{ htmlInput: { autoComplete: 'username', autoCapitalize: 'off', spellCheck: false, maxLength: 32 } }}
       />
       <PasswordField
-        label="Passwort"
+        label={t('Passwort')}
         value={account.password}
         onChange={(password) => onChange({ ...account, password })}
         autoComplete="new-password"
@@ -211,44 +345,50 @@ export function SiteStep({ values, set, errors }: SettingsStepProps) {
   return (
     <Stack spacing={3}>
       <TextField
-        label="Name der Seite"
+        label={t('Name der Seite')}
         fullWidth
         value={str(values, 'site.title')}
         onChange={(event) => set('site.title', event.target.value)}
         error={!!errors['site.title']}
-        helperText={errors['site.title'] || 'Steht im Browser-Tab, auf der Startseite und in Link-Vorschauen.'}
+        helperText={errors['site.title'] || t('Steht im Browser-Tab, auf der Startseite und in Link-Vorschauen.')}
         slotProps={{ htmlInput: { maxLength: 60 } }}
       />
       <Box>
         <TextField
-          label="Adresse"
+          label={t('Adresse')}
           fullWidth
           value={baseUrl}
           onChange={(event) => set('site.baseUrl', event.target.value)}
           error={!!errors['site.baseUrl']}
           helperText={
             errors['site.baseUrl'] ||
-            'Unter dieser Adresse erreichen andere deine Seite. Daraus entstehen alle Links, und Passkeys sind an sie gebunden.'
+            t('Unter dieser Adresse erreichen andere deine Seite. Daraus entstehen alle Links, und Passkeys sind an sie gebunden.')
           }
           placeholder="https://share.example.com"
           slotProps={{ htmlInput: { spellCheck: false, autoCapitalize: 'off', style: { fontFamily: fonts.mono } } }}
         />
         {mismatch && (
           <Alert severity="info" sx={{ mt: 1.5 }}>
-            Du hast den Assistenten über {window.location.origin} geöffnet. Stimmt die Adresse oben, ist alles gut, sonst übernimm{' '}
-            <ButtonBase
-              onClick={() => set('site.baseUrl', window.location.origin)}
-              sx={{ font: 'inherit', fontWeight: 700, textDecoration: 'underline', verticalAlign: 'baseline' }}
-            >
-              diese Adresse
-            </ButtonBase>
-            .
+            {rich(
+              'Du hast den Assistenten über {origin} geöffnet. Stimmt die Adresse oben, ist alles gut, sonst übernimm {link}.',
+              {
+                link: (
+                  <ButtonBase
+                    onClick={() => set('site.baseUrl', window.location.origin)}
+                    sx={{ font: 'inherit', fontWeight: 700, textDecoration: 'underline', verticalAlign: 'baseline' }}
+                  >
+                    {t('diese Adresse')}
+                  </ButtonBase>
+                ),
+              },
+              { origin: window.location.origin }
+            )}
           </Alert>
         )}
       </Box>
       <Box>
-        <Label hint="Die Seite färbt sich sofort um, damit du das Ergebnis siehst.">Grundfarbe</Label>
-        <Box role="radiogroup" aria-label="Farbvorlagen" sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.25, alignItems: 'center' }}>
+        <Label hint={t('Die Seite färbt sich sofort um, damit du das Ergebnis siehst.')}>{t('Grundfarbe')}</Label>
+        <Box role="radiogroup" aria-label={t('Farbvorlagen')} sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.25, alignItems: 'center' }}>
           {COLOR_PRESETS.map((preset) => {
             const selected = preset.hex === color;
             return (
@@ -275,7 +415,7 @@ export function SiteStep({ values, set, errors }: SettingsStepProps) {
             );
           })}
           <ColorField
-            label="Eigene Farbe"
+            label={t('Eigene Farbe')}
             value={color}
             onChange={(hex) => set('site.uiColor', hex)}
             error={!!errors['site.uiColor']}
@@ -284,7 +424,20 @@ export function SiteStep({ values, set, errors }: SettingsStepProps) {
         </Box>
       </Box>
       <Box>
-        <Label hint="Optional. Adresse eines Bildes (PNG oder SVG), z. B. dein Logo.">Symbol</Label>
+        <Label hint={t('Für Besucher und neue Konten. Jeder kann sie später für sich ändern.')}>{t('Sprache')}</Label>
+        <ChoiceCards
+          name="site-language"
+          value={str(values, 'site.language') || 'de'}
+          onChange={(language) => set('site.language', language)}
+          columns={2}
+          options={[
+            { value: 'de', title: 'Deutsch', text: t('Die Oberfläche auf Deutsch.') },
+            { value: 'en', title: 'English', text: t('The interface in English.') },
+          ]}
+        />
+      </Box>
+      <Box>
+        <Label hint={t('Optional. Adresse eines Bildes (PNG oder SVG), z. B. dein Logo.')}>{t('Symbol')}</Label>
         <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
           <BrandMark src={str(values, 'site.favicon')} title={str(values, 'site.title') || 'M'} size={48} />
           <TextField
@@ -295,7 +448,7 @@ export function SiteStep({ values, set, errors }: SettingsStepProps) {
             error={!!errors['site.favicon']}
             helperText={errors['site.favicon']}
             placeholder="https://example.com/logo.png"
-            slotProps={{ htmlInput: { 'aria-label': 'Symbol', spellCheck: false, style: { fontFamily: fonts.mono } } }}
+            slotProps={{ htmlInput: { 'aria-label': t('Symbol'), spellCheck: false, style: { fontFamily: fonts.mono } } }}
           />
         </Box>
       </Box>
@@ -323,27 +476,29 @@ export function HomeStep({ values, set, errors }: SettingsStepProps) {
         options={[
           {
             value: 'page',
-            title: 'Startseite mit Statistiken',
-            text: 'Zeigt Dateien, Speicher, Aufrufe und die Uploads der letzten Tage. Texte und Links passt du später unter Admin › Startseite an.',
+            title: t('Startseite mit Statistiken'),
+            text: t(
+              'Zeigt Dateien, Speicher, Aufrufe und die Uploads der letzten Tage. Texte und Links passt du später unter Admin › Startseite an.'
+            ),
             icon: <InsightsRounded />,
           },
           {
             value: 'login',
-            title: 'Direkt zur Anmeldung',
-            text: 'Wer die Adresse öffnet, landet bei der Anmeldung oder im eigenen Dashboard.',
+            title: t('Direkt zur Anmeldung'),
+            text: t('Wer die Adresse öffnet, landet bei der Anmeldung oder im eigenen Dashboard.'),
             icon: <LoginRounded />,
           },
           {
             value: 'redirect',
-            title: 'Auf eine andere Seite weiterleiten',
-            text: 'Zum Beispiel auf deine eigene Website.',
+            title: t('Auf eine andere Seite weiterleiten'),
+            text: t('Zum Beispiel auf deine eigene Website.'),
             icon: <OpenInNewRounded />,
           },
         ]}
       />
       {mode === 'redirect' && (
         <TextField
-          label="Ziel der Weiterleitung"
+          label={t('Ziel der Weiterleitung')}
           fullWidth
           autoFocus
           value={str(values, 'site.redirectUrl')}
@@ -362,11 +517,24 @@ export function UploadsStep({ values, set, errors, ffmpeg }: SettingsStepProps &
   const bytes = (key: string) => (typeof values[key] === 'number' ? (values[key] as number) : null);
   return (
     <Stack spacing={3}>
+      <Box>
+        <Label hint={t('So sehen neue Links aus. Jeder kann das für sich und beim Hochladen ändern.')}>{t('Adressen')}</Label>
+        <UrlStyleSelect
+          label=""
+          value={(str(values, 'uploads.urlStyle') || 'uuid') as UrlStyle}
+          onChange={(style) => style && set('uploads.urlStyle', style)}
+        />
+        {errors['uploads.urlStyle'] && (
+          <Typography variant="caption" sx={{ color: c.error }}>
+            {errors['uploads.urlStyle']}
+          </Typography>
+        )}
+      </Box>
       <Box sx={{ display: 'grid', gap: 2.5, gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' } }}>
         <Box>
-          <Label hint="Pro Upload.">Größte Datei</Label>
+          <Label hint={t('Pro Upload.')}>{t('Größte Datei')}</Label>
           <BytesField
-            label="Dateigröße"
+            label={t('Dateigröße')}
             value={bytes('uploads.maxFileBytes')}
             onChange={(value) => set('uploads.maxFileBytes', value)}
             error={!!errors['uploads.maxFileBytes']}
@@ -374,9 +542,9 @@ export function UploadsStep({ values, set, errors, ffmpeg }: SettingsStepProps &
           />
         </Box>
         <Box>
-          <Label hint="Für jedes Konto, änderbar pro Benutzer.">Speicher pro Konto</Label>
+          <Label hint={t('Für jedes Konto, änderbar pro Benutzer.')}>{t('Speicher pro Konto')}</Label>
           <BytesField
-            label="Speicher"
+            label={t('Speicher')}
             value={bytes('uploads.defaultQuotaBytes')}
             onChange={(value) => set('uploads.defaultQuotaBytes', value)}
             error={!!errors['uploads.defaultQuotaBytes']}
@@ -387,32 +555,34 @@ export function UploadsStep({ values, set, errors, ffmpeg }: SettingsStepProps &
       <Group>
         <SwitchRow
           id="setup-preview"
-          label="Vorschaubilder"
-          description="Kleinere Vorschauen für Bilder und Standbilder für Videos. Die Galerie lädt dadurch deutlich schneller."
+          label={t('Vorschaubilder')}
+          description={t('Kleinere Vorschauen für Bilder und Standbilder für Videos. Die Galerie lädt dadurch deutlich schneller.')}
           checked={bool(values, 'uploads.preview')}
           onChange={(on) => set('uploads.preview', on)}
         />
         <SwitchRow
           id="setup-metadata"
-          label="Standortdaten entfernen"
-          description="Löscht GPS-Koordinaten aus Fotos, bevor sie öffentlich erreichbar sind."
+          label={t('Standortdaten entfernen')}
+          description={t('Löscht GPS-Koordinaten aus Fotos, bevor sie öffentlich erreichbar sind.')}
           checked={bool(values, 'uploads.removeMetadata')}
           onChange={(on) => set('uploads.removeMetadata', on)}
         />
         <SwitchRow
           id="setup-color"
-          label="Hauptfarbe erkennen"
-          description="Färbt Ansichtsseite und Discord-Vorschau passend zum Bild."
+          label={t('Hauptfarbe erkennen')}
+          description={t('Färbt Ansichtsseite und Discord-Vorschau passend zum Bild.')}
           checked={bool(values, 'uploads.dominantColor')}
           onChange={(on) => set('uploads.dominantColor', on)}
         />
         <SwitchRow
           id="setup-hls"
-          label="Videos als Stream"
+          label={t('Videos als Stream')}
           description={
             ffmpeg
-              ? 'Wandelt Videos zusätzlich in einen Stream um, damit lange Videos schneller starten. Braucht mehr Speicher und Rechenzeit.'
-              : 'Braucht FFmpeg, das auf diesem Server fehlt.'
+              ? t(
+                  'Wandelt Videos zusätzlich in einen Stream um, damit lange Videos schneller starten. Braucht mehr Speicher und Rechenzeit.'
+                )
+              : t('Braucht FFmpeg, das auf diesem Server fehlt.')
           }
           checked={ffmpeg && bool(values, 'uploads.hls')}
           disabled={!ffmpeg}
@@ -420,8 +590,8 @@ export function UploadsStep({ values, set, errors, ffmpeg }: SettingsStepProps &
         />
         <SwitchRow
           id="setup-fetch"
-          label="Hochladen per Link"
-          description="Im Dashboard Dateien direkt aus dem Internet übernehmen."
+          label={t('Hochladen per Link')}
+          description={t('Im Dashboard Dateien direkt aus dem Internet übernehmen.')}
           checked={bool(values, 'uploads.urlFetch')}
           onChange={(on) => set('uploads.urlFetch', on)}
         />
@@ -435,46 +605,46 @@ export function SignInStep({ values, set }: SettingsStepProps) {
   return (
     <Stack spacing={3}>
       <Box>
-        <Label>Wer bekommt ein Konto?</Label>
+        <Label>{t('Wer bekommt ein Konto?')}</Label>
         <ChoiceCards
           name="registration"
           value={str(values, 'auth.registration') || 'invite'}
           onChange={(value) => set('auth.registration', value)}
           columns={3}
           options={[
-            { value: 'closed', title: 'Nur Admins', text: 'Konten legst du selbst an.', icon: <LockRounded /> },
-            { value: 'invite', title: 'Mit Einladung', text: 'Über Links, die du verschickst.', icon: <MailRounded /> },
-            { value: 'open', title: 'Alle', text: 'Jeder kann sich registrieren.', icon: <PublicRounded /> },
+            { value: 'closed', title: t('Nur Admins'), text: t('Konten legst du selbst an.'), icon: <LockRounded /> },
+            { value: 'invite', title: t('Mit Einladung'), text: t('Über Links, die du verschickst.'), icon: <MailRounded /> },
+            { value: 'open', title: t('Alle'), text: t('Jeder kann sich registrieren.'), icon: <PublicRounded /> },
           ]}
         />
       </Box>
       <Box>
-        <Label hint="Ein Code aus einer Authenticator-App zusätzlich zum Passwort.">Zwei-Faktor-Pflicht</Label>
+        <Label hint={t('Ein Code aus einer Authenticator-App zusätzlich zum Passwort.')}>{t('Zwei-Faktor-Pflicht')}</Label>
         <ChoiceCards
           name="mfa"
           value={str(values, 'auth.enforceMfa') || 'off'}
           onChange={(value) => set('auth.enforceMfa', value)}
           columns={3}
           options={[
-            { value: 'off', title: 'Freiwillig', text: 'Jeder entscheidet selbst.' },
-            { value: 'admins', title: 'Für Admins', text: 'Admins müssen sie nutzen.' },
-            { value: 'all', title: 'Für alle', text: 'Gilt für jedes Konto.' },
+            { value: 'off', title: t('Freiwillig'), text: t('Jeder entscheidet selbst.') },
+            { value: 'admins', title: t('Für Admins'), text: t('Admins müssen sie nutzen.') },
+            { value: 'all', title: t('Für alle'), text: t('Gilt für jedes Konto.') },
           ]}
         />
         {str(values, 'auth.enforceMfa') !== 'off' && (
           <Alert severity="info" sx={{ mt: 1.5 }}>
-            Du richtest die Zwei-Faktor-Anmeldung direkt nach der Einrichtung ein.
+            {t('Du richtest die Zwei-Faktor-Anmeldung direkt nach der Einrichtung ein.')}
           </Alert>
         )}
       </Box>
       <Group>
         <SwitchRow
           id="setup-passkeys"
-          label="Passkeys"
+          label={t('Passkeys')}
           description={
             secure
-              ? 'Anmelden mit Fingerabdruck, Gesicht oder Geräte-PIN.'
-              : 'Anmelden mit Fingerabdruck, Gesicht oder Geräte-PIN. Funktioniert nur über HTTPS oder localhost.'
+              ? t('Anmelden mit Fingerabdruck, Gesicht oder Geräte-PIN.')
+              : t('Anmelden mit Fingerabdruck, Gesicht oder Geräte-PIN. Funktioniert nur über HTTPS oder localhost.')
           }
           checked={bool(values, 'auth.passkeys')}
           onChange={(on) => set('auth.passkeys', on)}
@@ -508,8 +678,8 @@ export function NotifyStep({
       <Group>
         <SwitchRow
           id="setup-webhook"
-          label="Nachrichten an Discord senden"
-          description="Über einen Webhook in einem Kanal deiner Wahl."
+          label={t('Nachrichten an Discord senden')}
+          description={t('Über einen Webhook in einem Kanal deiner Wahl.')}
           checked={enabled}
           onChange={(on) => set('webhook.enabled', on)}
         />
@@ -518,7 +688,7 @@ export function NotifyStep({
         <>
           <Box>
             <TextField
-              label="Webhook-Adresse"
+              label={t('Webhook-Adresse')}
               fullWidth
               value={url}
               onChange={(event) => onUrl(event.target.value)}
@@ -527,8 +697,8 @@ export function NotifyStep({
                 errors['webhook.url'] ||
                 errors['webhook.enabled'] ||
                 (stored
-                  ? 'Eine Adresse ist schon hinterlegt. Trag nur etwas ein, wenn du sie ersetzen willst.'
-                  : 'In Discord unter Kanal bearbeiten › Integrationen › Webhooks.')
+                  ? t('Eine Adresse ist schon hinterlegt. Trag nur etwas ein, wenn du sie ersetzen willst.')
+                  : t('In Discord unter Kanal bearbeiten › Integrationen › Webhooks.'))
               }
               placeholder="https://discord.com/api/webhooks/…"
               slotProps={{ htmlInput: { spellCheck: false, autoCapitalize: 'off', style: { fontFamily: fonts.mono } } }}
@@ -540,11 +710,11 @@ export function NotifyStep({
               disabled={testing || (!url.trim() && !stored)}
               startIcon={testing ? <CircularProgress size={16} color="inherit" /> : <SendRounded />}
             >
-              Testnachricht senden
+              {t('Testnachricht senden')}
             </Button>
           </Box>
           <Box>
-            <Label>Worüber benachrichtigen?</Label>
+            <Label>{t('Worüber benachrichtigen?')}</Label>
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
               {WEBHOOK_EVENTS.map((event) => (
                 <Chip
@@ -565,14 +735,15 @@ export function NotifyStep({
 }
 
 const REGISTRATION = {
-  closed: 'Nur Admins legen Konten an',
-  invite: 'Konten nur mit Einladung',
-  open: 'Jeder kann sich registrieren',
+  closed: t('Nur Admins legen Konten an'),
+  invite: t('Konten nur mit Einladung'),
+  open: t('Jeder kann sich registrieren'),
 } as Record<string, string>;
-const MFA = { off: 'Zwei-Faktor freiwillig', admins: 'Zwei-Faktor Pflicht für Admins', all: 'Zwei-Faktor Pflicht für alle' } as Record<
-  string,
-  string
->;
+const MFA = {
+  off: t('Zwei-Faktor freiwillig'),
+  admins: t('Zwei-Faktor Pflicht für Admins'),
+  all: t('Zwei-Faktor Pflicht für alle'),
+} as Record<string, string>;
 
 function Summary({
   title,
@@ -594,7 +765,7 @@ function Summary({
         <Box sx={{ mt: 0.25, fontWeight: 600, overflowWrap: 'anywhere' }}>{children}</Box>
       </Box>
       <Button size="small" startIcon={<EditRounded />} onClick={() => onEdit(step)}>
-        Ändern
+        {t('Ändern')}
       </Button>
     </Box>
   );
@@ -607,6 +778,7 @@ export function ReviewStep({
   createToken,
   onCreateToken,
   onEdit,
+  database,
 }: {
   values: Values;
   username: string;
@@ -614,34 +786,38 @@ export function ReviewStep({
   createToken: boolean;
   onCreateToken: (value: boolean) => void;
   onEdit: (step: StepKey) => void;
+  database: string;
 }) {
   const bytes = (key: string) => (typeof values[key] === 'number' ? formatBytes(values[key] as number) : null);
   const fileLimit = bytes('uploads.maxFileBytes');
   const quota = bytes('uploads.defaultQuotaBytes');
   const limits = [
-    fileLimit ? `Bis ${fileLimit} pro Datei` : 'Dateien ohne Größenlimit',
-    quota ? `${quota} Speicher pro Konto` : 'Speicher ohne Limit',
+    fileLimit ? t('Bis {fileLimit} pro Datei', { fileLimit }) : t('Dateien ohne Größenlimit'),
+    quota ? t('{quota} Speicher pro Konto', { quota }) : t('Speicher ohne Limit'),
   ].join(', ');
   const processing = [
-    bool(values, 'uploads.preview') && 'Vorschaubilder',
-    bool(values, 'uploads.removeMetadata') && 'ohne Standortdaten',
-    bool(values, 'uploads.dominantColor') && 'Hauptfarbe',
+    bool(values, 'uploads.preview') && t('Vorschaubilder'),
+    bool(values, 'uploads.removeMetadata') && t('ohne Standortdaten'),
+    bool(values, 'uploads.dominantColor') && t('Hauptfarbe'),
     bool(values, 'uploads.hls') && 'Video-Streams',
-    bool(values, 'uploads.urlFetch') && 'Hochladen per Link',
+    bool(values, 'uploads.urlFetch') && t('Hochladen per Link'),
   ].filter(Boolean);
   const home = bool(values, 'home.enabled')
-    ? 'Startseite mit Statistiken'
+    ? t('Startseite mit Statistiken')
     : str(values, 'site.redirectUrl')
-      ? `Weiterleitung auf ${str(values, 'site.redirectUrl')}`
-      : 'Direkt zur Anmeldung';
+      ? t('Weiterleitung auf {url}', { url: str(values, 'site.redirectUrl') })
+      : t('Direkt zur Anmeldung');
 
   return (
     <Stack spacing={2.5}>
       <Group>
-        <Summary title="Admin-Konto" step="account" onEdit={onEdit}>
+        <Summary title={t('Datenbank')} step="database" onEdit={onEdit}>
+          {database}
+        </Summary>
+        <Summary title={t('Admin-Konto')} step="account" onEdit={onEdit}>
           {username}
         </Summary>
-        <Summary title="Seite" step="site" onEdit={onEdit}>
+        <Summary title={t('Seite')} step="site" onEdit={onEdit}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Box sx={{ width: 14, height: 14, borderRadius: '50%', bgcolor: str(values, 'site.uiColor'), flexShrink: 0 }} />
             {str(values, 'site.title')}
@@ -649,31 +825,37 @@ export function ReviewStep({
           <Box component="span" sx={{ fontFamily: fonts.mono, fontWeight: 400, fontSize: '0.8125rem' }}>
             {str(values, 'site.baseUrl')}
           </Box>
+          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+            {str(values, 'site.language') === 'en' ? 'English' : 'Deutsch'}
+          </Typography>
         </Summary>
-        <Summary title="Startseite" step="home" onEdit={onEdit}>
+        <Summary title={t('Startseite')} step="home" onEdit={onEdit}>
           {home}
         </Summary>
-        <Summary title="Uploads" step="uploads" onEdit={onEdit}>
+        <Summary title={t('Uploads')} step="uploads" onEdit={onEdit}>
           {limits}
+          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+            {t('Adressen: {style}', { style: urlStyleLabel((str(values, 'uploads.urlStyle') || 'uuid') as UrlStyle) })}
+          </Typography>
           {processing.length > 0 && (
             <Typography variant="body2" sx={{ color: 'text.secondary' }}>
               {processing.join(', ')}
             </Typography>
           )}
         </Summary>
-        <Summary title="Anmeldung" step="signin" onEdit={onEdit}>
+        <Summary title={t('Anmeldung')} step="signin" onEdit={onEdit}>
           {REGISTRATION[str(values, 'auth.registration')]}
           <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-            {MFA[str(values, 'auth.enforceMfa')]}, Passkeys {bool(values, 'auth.passkeys') ? 'an' : 'aus'}
+            {MFA[str(values, 'auth.enforceMfa')]}, {bool(values, 'auth.passkeys') ? t('Passkeys an') : t('Passkeys aus')}
           </Typography>
         </Summary>
-        <Summary title="Benachrichtigungen" step="notify" onEdit={onEdit}>
-          {bool(values, 'webhook.enabled') ? (webhookUrl ? 'An Discord, neue Adresse' : 'An Discord') : 'Aus'}
+        <Summary title={t('Benachrichtigungen')} step="notify" onEdit={onEdit}>
+          {bool(values, 'webhook.enabled') ? (webhookUrl ? t('An Discord, neue Adresse') : t('An Discord')) : t('Aus')}
         </Summary>
       </Group>
       <FormControlLabel
         control={<Checkbox checked={createToken} onChange={(event) => onCreateToken(event.target.checked)} />}
-        label="Gleich ein API-Token für ShareX erstellen"
+        label={t('Gleich ein API-Token für ShareX erstellen')}
       />
     </Stack>
   );

@@ -17,6 +17,7 @@ import DeleteOutlineRounded from '@mui/icons-material/DeleteOutlineRounded';
 import InfoOutlined from '@mui/icons-material/InfoOutlined';
 import InfoRounded from '@mui/icons-material/InfoRounded';
 import ShareRounded from '@mui/icons-material/ShareRounded';
+import CropRotateRounded from '@mui/icons-material/CropRotateRounded';
 import type { FileItem } from '../../lib/types';
 import { extensionOf, formatBytes, formatDateTime, formatNumber, parseServerDate, relativeFromServer } from '../../lib/format';
 import { shareFormats } from '../../lib/share';
@@ -25,8 +26,11 @@ import { CopyIconButton, CopyTextButton } from '../../components/CopyButton';
 import { SHARE_ICONS, ShareMenuItems } from '../../components/ShareList';
 import { fileIcon, typeDescription } from '../../components/FileIcons';
 import { VideoPlayer } from '../../components/VideoPlayer';
+import { StatsPanel } from '../../components/StatsView';
+import { fetchFileStats } from '../../lib/api';
 import { stopAudio } from './audioPlayer';
 import { c, ease, elevation, fonts, radius } from '../../theme/tokens';
+import { t } from '../../lib/i18n';
 
 export interface ViewerState {
   index: number;
@@ -44,6 +48,11 @@ interface ViewerProps {
   onHide: (filename: string | null) => void;
   hasMore: boolean;
   onNeedMore: () => void;
+  statsEnabled?: boolean;
+  canEdit?: (file: FileItem) => boolean;
+  onImageEdit?: (file: FileItem) => void;
+  trash?: boolean;
+  paused?: boolean;
 }
 
 interface Rect {
@@ -105,29 +114,34 @@ function DetailRow({ label, children }: { label: string; children: ReactNode }) 
   );
 }
 
-function InfoPanel({ file }: { file: FileItem }) {
+function FileStats({ id }: { id: number }) {
+  const load = useCallback((days: number) => fetchFileStats(id, days), [id]);
+  return <StatsPanel load={load} compact />;
+}
+
+function InfoPanel({ file, stats }: { file: FileItem; stats: boolean }) {
   const date = parseServerDate(file.date);
   return (
     <Box sx={{ p: 3, overflowY: 'auto', height: '100%' }}>
       <Typography variant="h6" component="h2">
-        Details
+        {t('Details')}
       </Typography>
       <Box sx={{ mt: 1 }}>
-        <DetailRow label="Typ">{typeDescription(file.filename, file.type, file.isGif)}</DetailRow>
-        <DetailRow label="Größe">{formatBytes(file.sizeBytes)}</DetailRow>
+        <DetailRow label={t('Typ')}>{typeDescription(file.filename, file.type, file.isGif)}</DetailRow>
+        <DetailRow label={t('Größe')}>{formatBytes(file.sizeBytes)}</DetailRow>
         {file.width > 0 && file.height > 0 && (
-          <DetailRow label="Auflösung">
+          <DetailRow label={t('Auflösung')}>
             {formatNumber(file.width)} × {formatNumber(file.height)} px
           </DetailRow>
         )}
-        <DetailRow label="Hochgeladen">
+        <DetailRow label={t('Hochgeladen')}>
           {formatDateTime(date)}
           <Typography variant="caption" component="p" sx={{ color: 'text.secondary' }}>
             {relativeFromServer(file.date)}
           </Typography>
         </DetailRow>
-        <DetailRow label="Aufrufe">{formatNumber(file.views)}</DetailRow>
-        <DetailRow label="Dateiname">
+        <DetailRow label={t('Aufrufe')}>{formatNumber(file.views)}</DetailRow>
+        <DetailRow label={t('Dateiname')}>
           <Box component="span" sx={{ fontFamily: fonts.mono, fontSize: '0.8rem' }}>
             {file.filename}
           </Box>
@@ -135,7 +149,7 @@ function InfoPanel({ file }: { file: FileItem }) {
       </Box>
 
       <Typography variant="h6" component="h2" sx={{ mt: 3, mb: 1 }}>
-        Teilen
+        {t('Teilen')}
       </Typography>
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
         {shareFormats(file).map((format) => (
@@ -161,10 +175,24 @@ function InfoPanel({ file }: { file: FileItem }) {
                 {format.value}
               </Typography>
             </Box>
-            <CopyIconButton value={format.value} label={`${format.label} kopieren`} message={format.copied} size="small" />
+            <CopyIconButton
+              value={format.value}
+              label={t('{label} kopieren', { label: format.label })}
+              message={format.copied}
+              size="small"
+            />
           </Box>
         ))}
       </Box>
+
+      {stats && (
+        <>
+          <Typography variant="h6" component="h2" sx={{ mt: 3, mb: 1.5 }}>
+            {t('Statistik')}
+          </Typography>
+          <FileStats key={file.id} id={file.id} />
+        </>
+      )}
     </Box>
   );
 }
@@ -209,10 +237,10 @@ function MediaCard({ file }: { file: FileItem }) {
       ) : (
         <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center', mt: 3, flexWrap: 'wrap' }}>
           <Button variant="contained" startIcon={<DownloadRounded />} href={file.urls.download}>
-            Herunterladen
+            {t('Herunterladen')}
           </Button>
           <Button variant="tonal" startIcon={<OpenInNewRounded />} href={file.urls.view} target="_blank" rel="noopener">
-            Ansichtsseite
+            {t('Ansichtsseite')}
           </Button>
         </Box>
       )}
@@ -220,7 +248,22 @@ function MediaCard({ file }: { file: FileItem }) {
   );
 }
 
-export function Viewer({ files, state, frameFor, onIndexChange, onClosed, onDelete, onHide, hasMore, onNeedMore }: ViewerProps) {
+export function Viewer({
+  files,
+  state,
+  frameFor,
+  onIndexChange,
+  onClosed,
+  onDelete,
+  onHide,
+  hasMore,
+  onNeedMore,
+  statsEnabled = false,
+  canEdit,
+  onImageEdit,
+  trash = false,
+  paused = false,
+}: ViewerProps) {
   const open = state !== null;
   const index = state ? state.index : null;
   const file = open ? (files[index!] ?? null) : null;
@@ -313,7 +356,7 @@ export function Viewer({ files, state, frameFor, onIndexChange, onClosed, onDele
   useEffect(() => {
     if (!open) return undefined;
     const onKey = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || shareAnchor) return;
+      if (event.defaultPrevented || shareAnchor || paused) return;
       if (event.key === 'ArrowRight') go(1);
       else if (event.key === 'ArrowLeft') go(-1);
       else if (event.key === 'i') setPanelOpen((v) => !v);
@@ -321,7 +364,7 @@ export function Viewer({ files, state, frameFor, onIndexChange, onClosed, onDele
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open, go, file, onDelete, shareAnchor]);
+  }, [open, go, file, onDelete, shareAnchor, paused]);
 
   if (!open || !file) return null;
 
@@ -357,7 +400,13 @@ export function Viewer({ files, state, frameFor, onIndexChange, onClosed, onDele
   };
 
   return (
-    <Modal open onClose={requestClose} hideBackdrop sx={{ zIndex: 1400 }} aria-label={`Vorschau: ${file.filename}`}>
+    <Modal
+      open
+      onClose={requestClose}
+      hideBackdrop
+      sx={{ zIndex: 1400 }}
+      aria-label={t('Vorschau: {filename}', { filename: file.filename })}
+    >
       <Box sx={{ position: 'fixed', inset: 0, outline: 'none', color: '#fff' }} tabIndex={-1}>
         <m.div
           initial={{ opacity: 0 }}
@@ -414,8 +463,8 @@ export function Viewer({ files, state, frameFor, onIndexChange, onClosed, onDele
             background: 'linear-gradient(to bottom, rgb(0 0 0 / 0.5), transparent)',
           }}
         >
-          <Tooltip title="Schließen (Esc)">
-            <IconButton aria-label="Schließen" onClick={requestClose} sx={glassButton}>
+          <Tooltip title={t('Schließen (Esc)')}>
+            <IconButton aria-label={t('Schließen')} onClick={requestClose} sx={glassButton}>
               <CloseRounded />
             </IconButton>
           </Tooltip>
@@ -424,7 +473,7 @@ export function Viewer({ files, state, frameFor, onIndexChange, onClosed, onDele
               {file.filename}
             </Typography>
             <Typography variant="caption" sx={{ color: 'rgb(255 255 255 / 0.7)' }}>
-              {index! + 1} von {files.length}
+              {t('{current} von {total}', { current: index! + 1, total: files.length })}
               {hasMore ? '+' : ''}
             </Typography>
           </Box>
@@ -433,38 +482,50 @@ export function Viewer({ files, state, frameFor, onIndexChange, onClosed, onDele
               value={file.urls.view}
               variant="tonal"
               size="small"
-              message="Link kopiert"
+              message={t('Link kopiert')}
               sx={{ mr: 0.5, bgcolor: 'rgb(255 255 255 / 0.14)', color: '#fff', '&:hover': { bgcolor: 'rgb(255 255 255 / 0.22)' } }}
             >
-              Link kopieren
+              {t('Link kopieren')}
             </CopyTextButton>
           )}
           {phone && <CopyIconButton value={file.urls.view} sx={glassButton} />}
-          <Tooltip title="Teilen">
-            <IconButton aria-label="Teilen" aria-haspopup="menu" onClick={(event) => setShareAnchor(event.currentTarget)} sx={glassButton}>
+          <Tooltip title={t('Teilen')}>
+            <IconButton
+              aria-label={t('Teilen')}
+              aria-haspopup="menu"
+              onClick={(event) => setShareAnchor(event.currentTarget)}
+              sx={glassButton}
+            >
               <ShareRounded />
             </IconButton>
           </Tooltip>
-          <Tooltip title="Herunterladen">
-            <IconButton aria-label="Herunterladen" href={file.urls.download} sx={glassButton}>
+          <Tooltip title={t('Herunterladen')}>
+            <IconButton aria-label={t('Herunterladen')} href={file.urls.download} sx={glassButton}>
               <DownloadRounded />
             </IconButton>
           </Tooltip>
           {!phone && (
-            <Tooltip title="Ansichtsseite öffnen">
-              <IconButton aria-label="Ansichtsseite öffnen" href={file.urls.view} target="_blank" rel="noopener" sx={glassButton}>
+            <Tooltip title={t('Ansichtsseite öffnen')}>
+              <IconButton aria-label={t('Ansichtsseite öffnen')} href={file.urls.view} target="_blank" rel="noopener" sx={glassButton}>
                 <OpenInNewRounded />
               </IconButton>
             </Tooltip>
           )}
-          <Tooltip title="Löschen">
-            <IconButton aria-label="Löschen" onClick={() => onDelete(file)} sx={glassButton}>
+          {onImageEdit && canEdit?.(file) && (
+            <Tooltip title={t('Bild bearbeiten')}>
+              <IconButton aria-label={t('Bild bearbeiten')} onClick={() => onImageEdit(file)} sx={glassButton}>
+                <CropRotateRounded />
+              </IconButton>
+            </Tooltip>
+          )}
+          <Tooltip title={trash ? t('In den Papierkorb (Entf)') : t('Löschen')}>
+            <IconButton aria-label={trash ? t('In den Papierkorb') : t('Löschen')} onClick={() => onDelete(file)} sx={glassButton}>
               <DeleteOutlineRounded />
             </IconButton>
           </Tooltip>
           {!phone && (
-            <Tooltip title={panelOpen ? 'Details ausblenden (i)' : 'Details zeigen (i)'}>
-              <IconButton aria-label="Details" aria-pressed={panelOpen} onClick={() => setPanelOpen((v) => !v)} sx={glassButton}>
+            <Tooltip title={panelOpen ? t('Details ausblenden (i)') : t('Details zeigen (i)')}>
+              <IconButton aria-label={t('Details')} aria-pressed={panelOpen} onClick={() => setPanelOpen((v) => !v)} sx={glassButton}>
                 {panelOpen ? <InfoRounded /> : <InfoOutlined />}
               </IconButton>
             </Tooltip>
@@ -598,7 +659,7 @@ export function Viewer({ files, state, frameFor, onIndexChange, onClosed, onDele
 
         {!phone && index! > 0 && phase !== 'closing' && (
           <IconButton
-            aria-label="Vorherige Datei"
+            aria-label={t('Vorherige Datei')}
             onClick={() => go(-1)}
             sx={{
               position: 'absolute',
@@ -619,7 +680,7 @@ export function Viewer({ files, state, frameFor, onIndexChange, onClosed, onDele
         )}
         {!phone && index! < files.length - 1 && phase !== 'closing' && (
           <IconButton
-            aria-label="Nächste Datei"
+            aria-label={t('Nächste Datei')}
             onClick={() => go(1)}
             sx={{
               position: 'absolute',
@@ -653,13 +714,13 @@ export function Viewer({ files, state, frameFor, onIndexChange, onClosed, onDele
               pb: 'env(safe-area-inset-bottom)',
             }}
           >
-            <IconButton aria-label="Vorherige Datei" disabled={index === 0} onClick={() => go(-1)} sx={glassButton}>
+            <IconButton aria-label={t('Vorherige Datei')} disabled={index === 0} onClick={() => go(-1)} sx={glassButton}>
               <ChevronLeftRounded />
             </IconButton>
             <Typography variant="caption" sx={{ color: 'rgb(255 255 255 / 0.75)' }}>
               {formatBytes(file.sizeBytes)}, {relativeFromServer(file.date)}
             </Typography>
-            <IconButton aria-label="Nächste Datei" disabled={index === files.length - 1} onClick={() => go(1)} sx={glassButton}>
+            <IconButton aria-label={t('Nächste Datei')} disabled={index === files.length - 1} onClick={() => go(1)} sx={glassButton}>
               <ChevronRightRounded />
             </IconButton>
           </Box>
@@ -685,7 +746,7 @@ export function Viewer({ files, state, frameFor, onIndexChange, onClosed, onDele
                   boxShadow: wide ? 'none' : elevation[4],
                 }}
               >
-                <InfoPanel file={file} />
+                <InfoPanel file={file} stats={statsEnabled} />
               </Box>
             </m.aside>
           )}

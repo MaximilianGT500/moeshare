@@ -2,18 +2,27 @@
 
 const axios = require('axios');
 const logger = require('../lib/logger');
+const i18n = require('../lib/i18n');
 const settings = require('./settingsService');
 
 const log = logger.scope('webhook');
 
 const colorValue = (hex) => Number.parseInt(String(hex).replace(/^#/, ''), 16) || 0;
 
+const localize = (text) => {
+  const language = settings.get('site.language');
+  return String(text)
+    .split('\n')
+    .map((line) => i18n.translate(language, line))
+    .join('\n');
+};
+
 const payload = (title, description, kind) => ({
   username: settings.get('webhook.name'),
   embeds: [
     {
-      title: String(title).slice(0, 256),
-      description: String(description).slice(0, 2000),
+      title: localize(title).slice(0, 256),
+      description: localize(description).slice(0, 2000),
       color: colorValue(settings.get(kind === 'error' ? 'webhook.errorColor' : 'webhook.successColor')),
       timestamp: new Date().toISOString(),
     },

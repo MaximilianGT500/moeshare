@@ -12,6 +12,7 @@ import type { FileType } from '../lib/types';
 import { copyText } from '../lib/clipboard';
 import { useToast } from './Toaster';
 import { fonts } from '../theme/tokens';
+import { t } from '../lib/i18n';
 
 export const SHARE_ICONS: Record<ShareFormat['key'], ReactElement> = {
   view: <LinkRounded />,
@@ -35,12 +36,12 @@ export function ShareMenuItems({
       onClick={async () => {
         onDone?.();
         const ok = await copyText(format.value);
-        toast(ok ? format.copied : 'Kopieren hat nicht geklappt.', { variant: ok ? 'success' : 'error', duration: 2400 });
+        toast(ok ? format.copied : t('Kopieren hat nicht geklappt.'), { variant: ok ? 'success' : 'error', duration: 2400 });
       }}
     >
       <ListItemIcon>{SHARE_ICONS[format.key]}</ListItemIcon>
       <ListItemText
-        primary={`${format.label} kopieren`}
+        primary={t('{label} kopieren', { label: format.label })}
         secondary={format.value}
         slotProps={{
           secondary: {

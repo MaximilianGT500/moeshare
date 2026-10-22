@@ -4,8 +4,13 @@ import Link from '@mui/material/Link';
 import Typography from '@mui/material/Typography';
 import type { SxProps, Theme } from '@mui/material/styles';
 import type { SiteInfo, SiteLink } from '../lib/types';
+import { LanguageLink } from './LanguageSwitch';
+import { t } from '../lib/i18n';
 
 const isExternal = (url: string) => /^https?:\/\//.test(url);
+
+export const reportLink = (site: SiteInfo): SiteLink[] =>
+  site.report ? [{ label: t('Inhalt melden'), url: site.custom ? `${site.baseUrl}/report` : '/report' }] : [];
 
 export function FooterLinks({
   links,
@@ -18,7 +23,7 @@ export function FooterLinks({
 }) {
   if (!links.length) return null;
   return (
-    <Box component="nav" aria-label="Links" sx={{ display: 'flex', flexWrap: 'wrap', columnGap: strong ? 3 : 2, rowGap: 0.75 }}>
+    <Box component="nav" aria-label={t('Links')} sx={{ display: 'flex', flexWrap: 'wrap', columnGap: strong ? 3 : 2, rowGap: 0.75 }}>
       {links.map((link) => (
         <Link
           key={`${link.label}-${link.url}`}
@@ -41,17 +46,18 @@ export function FooterLinks({
 export function SiteFooter({
   site,
   version = false,
+  report = false,
   inert,
   sx,
 }: {
   site: SiteInfo;
   version?: boolean;
+  report?: boolean;
   inert?: (event: MouseEvent) => void;
   sx?: SxProps<Theme>;
 }) {
-  const links = [...(site.links || []), ...(site.legal || [])];
+  const links = [...(site.links || []), ...(site.legal || []), ...(report ? reportLink(site) : [])];
   const showVersion = version && Boolean(site.version);
-  if (!links.length && !site.copyright && !showVersion) return null;
   return (
     <Box
       component="footer"
@@ -68,12 +74,11 @@ export function SiteFooter({
       ]}
     >
       <FooterLinks links={links} inert={inert} />
-      {(site.copyright || showVersion) && (
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', columnGap: 1.5, opacity: 0.8 }}>
-          {site.copyright && <Typography variant="caption">{site.copyright}</Typography>}
-          {showVersion && <Typography variant="caption">MoeShare {site.version}</Typography>}
-        </Box>
-      )}
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center', columnGap: 1.5, opacity: 0.8 }}>
+        {site.copyright && <Typography variant="caption">{site.copyright}</Typography>}
+        {showVersion && <Typography variant="caption">{t('MoeShare {version}', { version: site.version })}</Typography>}
+        <LanguageLink inert={inert} />
+      </Box>
     </Box>
   );
 }

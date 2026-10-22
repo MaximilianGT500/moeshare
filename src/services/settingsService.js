@@ -7,13 +7,18 @@ const logger = require('../lib/logger');
 const { badRequest, HttpError } = require('../lib/errors');
 const { readLegacyEnv } = require('../lib/legacyEnv');
 const { DEFAULT_TEMPLATE, normalizeTemplate } = require('../lib/embedTemplate');
+const { DEFAULT_DESIGN, normalizeDesign } = require('../lib/viewDesign');
+const { STYLES, LINK_STYLES } = require('../lib/slugs');
+const { EXPIRY_CHOICES } = require('../lib/expiry');
+const secrets = require('../lib/secrets');
 
 const log = logger.scope('settings');
 
 const META_IMPORTED = '_meta.importedAt';
 const META_REVISION = '_meta.revision';
 
-const WEBHOOK_EVENTS = ['upload', 'delete', 'user', 'security', 'processing', 'system'];
+const WEBHOOK_EVENTS = ['upload', 'delete', 'user', 'security', 'processing', 'report', 'system'];
+const EMAIL_PATTERN = /^[^\s@<>"',;]+@[^\s@<>"',;]+\.[^\s@<>"',;]{2,}$/;
 const HOME_STATS = ['files', 'storage', 'views', 'users', 'images', 'videos', 'audio', 'today'];
 
 const extension = (item) => {
@@ -41,6 +46,10 @@ const DEFINITIONS = {
   'site.copyright': { type: 'string', default: '', allowEmpty: true, max: 200 },
   'site.uiColor': { type: 'color', default: '#8b5cf6' },
   'site.links': { type: 'links', default: [], max: 8 },
+  'site.language': { type: 'enum', values: ['de', 'en'], default: 'de' },
+  'site.detectLanguage': { type: 'bool', default: true },
+  'site.domains': { type: 'domains', default: [], max: 10 },
+  'site.pwa': { type: 'bool', default: true },
 
   'legal.imprintUrl': { type: 'url', default: '', allowEmpty: true, allowPath: true },
   'legal.imprintText': { type: 'string', default: '', allowEmpty: true, multiline: true, max: 20000 },
@@ -64,6 +73,11 @@ const DEFINITIONS = {
   'uploads.defaultQuotaBytes': { type: 'bytes', default: null },
   'uploads.preview': { type: 'bool', default: true },
   'uploads.removeMetadata': { type: 'bool', default: true },
+  'uploads.urlStyle': { type: 'enum', values: STYLES, default: 'uuid' },
+  'uploads.defaultExpiry': { type: 'enum', values: EXPIRY_CHOICES, default: 'never' },
+  'uploads.maxExpiry': { type: 'enum', values: EXPIRY_CHOICES, default: 'never' },
+  'uploads.texts': { type: 'bool', default: true },
+  'uploads.textMaxBytes': { type: 'bytes', default: 1024 * 1024 },
   'uploads.hls': { type: 'bool', default: false },
   'uploads.dominantColor': { type: 'bool', default: true },
   'uploads.urlFetch': { type: 'bool', default: true },
@@ -150,6 +164,57 @@ const DEFINITIONS = {
   'embed.default': { type: 'embed', default: DEFAULT_TEMPLATE },
   'embed.allowUserTemplates': { type: 'bool', default: true },
 
+  'view.default': { type: 'design', default: DEFAULT_DESIGN },
+  'view.allowUserDesigns': { type: 'bool', default: true },
+  'view.customCss': { type: 'enum', values: ['off', 'admins', 'all'], default: 'off' },
+
+  'profiles.enabled': { type: 'bool', default: true },
+
+  'domains.enabled': { type: 'bool', default: false },
+  'domains.maxPerUser': { type: 'int', min: 1, max: 20, default: 3 },
+  'domains.target': {
+    type: 'string',
+    default: '',
+    allowEmpty: true,
+    max: 191,
+    pattern: /^(?=.{1,191}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}\.?$/i,
+    patternMessage: 'Bitte nur einen Hostnamen wie share.example.com eingeben.',
+  },
+  'domains.https': { type: 'bool', default: true },
+
+  'trash.enabled': { type: 'bool', default: true },
+  'trash.days': { type: 'int', min: 1, max: 365, default: 30 },
+
+  'stats.enabled': { type: 'bool', default: true },
+  'stats.retentionDays': { type: 'int', min: 30, max: 1825, default: 365 },
+
+  'zip.enabled': { type: 'bool', default: true },
+
+  'reports.enabled': { type: 'bool', default: true },
+
+  'mail.enabled': { type: 'bool', default: false },
+  'mail.host': {
+    type: 'string',
+    default: '',
+    allowEmpty: true,
+    max: 191,
+    pattern: /^[A-Za-z0-9.:-]+$/,
+    patternMessage: 'Bitte nur den Hostnamen des Mailservers eingeben, z. B. smtp.example.com.',
+  },
+  'mail.port': { type: 'int', min: 1, max: 65535, default: 587 },
+  'mail.security': { type: 'enum', values: ['starttls', 'tls', 'none'], default: 'starttls' },
+  'mail.username': { type: 'string', default: '', allowEmpty: true, max: 191 },
+  'mail.password': { type: 'secret', default: '', max: 300 },
+  'mail.from': {
+    type: 'string',
+    default: '',
+    allowEmpty: true,
+    max: 191,
+    pattern: EMAIL_PATTERN,
+    patternMessage: 'Bitte eine gültige E-Mail-Adresse wie moeshare@example.com eingeben.',
+  },
+  'mail.fromName': { type: 'string', default: '', allowEmpty: true, max: 80 },
+
   'webhook.enabled': { type: 'bool', default: false },
   'webhook.url': {
     type: 'secret',
@@ -162,6 +227,48 @@ const DEFINITIONS = {
   'webhook.successColor': { type: 'color', default: '#03fc28' },
   'webhook.errorColor': { type: 'color', default: '#fc0303' },
   'webhook.events': { type: 'list', values: WEBHOOK_EVENTS, default: WEBHOOK_EVENTS },
+
+  'links.enabled': { type: 'bool', default: true },
+  'links.urlStyle': { type: 'enum', values: LINK_STYLES, default: 'random' },
+
+  'albums.enabled': { type: 'bool', default: true },
+
+  'storage.driver': { type: 'enum', values: ['local', 's3'], default: 'local' },
+  'storage.s3.endpoint': { type: 'url', default: '', allowEmpty: true },
+  'storage.s3.region': {
+    type: 'string',
+    default: '',
+    allowEmpty: true,
+    max: 64,
+    pattern: /^[a-z0-9-]+$/,
+    patternMessage: 'Die Region besteht aus Kleinbuchstaben, Ziffern und Bindestrichen, z. B. eu-central-1 oder auto.',
+  },
+  'storage.s3.bucket': {
+    type: 'string',
+    default: '',
+    allowEmpty: true,
+    max: 63,
+    pattern: /^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/,
+    patternMessage: 'Bucket-Namen bestehen aus 3 bis 63 Kleinbuchstaben, Ziffern, Punkten und Bindestrichen.',
+  },
+  'storage.s3.accessKeyId': clientId(128),
+  'storage.s3.secretAccessKey': { type: 'secret', default: '', max: 256 },
+  'storage.s3.prefix': {
+    type: 'string',
+    default: '',
+    allowEmpty: true,
+    max: 100,
+    pattern: /^[\w.-]+(\/[\w.-]+)*\/?$/,
+    patternMessage: 'Der Ordner besteht aus Buchstaben, Ziffern, Punkten, Bindestrichen und Schrägstrichen.',
+  },
+  'storage.s3.pathStyle': { type: 'bool', default: false },
+  'storage.s3.delivery': { type: 'enum', values: ['proxy', 'redirect'], default: 'proxy' },
+
+  'backup.enabled': { type: 'bool', default: false },
+  'backup.intervalHours': { type: 'int', min: 1, max: 720, default: 24 },
+  'backup.keep': { type: 'int', min: 1, max: 100, default: 7 },
+  'backup.includeUploads': { type: 'bool', default: false },
+  'backup.target': { type: 'enum', values: ['local', 's3'], default: 'local' },
 
   'system.trustProxy': { type: 'bool', default: false },
   'system.errorReports': { type: 'bool', default: false },
@@ -267,6 +374,22 @@ const VALIDATORS = {
     return parsed.origin;
   },
 
+  domains(key, def, value) {
+    if (!Array.isArray(value)) fail(key, 'Erwartet wird eine Liste.');
+    const origins = [];
+    for (const raw of value) {
+      const text = typeof raw === 'string' ? raw.trim() : '';
+      if (!text) continue;
+      const { parsed } = parseUrl(key, /^https?:\/\//i.test(text) ? text : `https://${text}`);
+      if (parsed.pathname !== '/' || parsed.search || parsed.hash || parsed.username) {
+        fail(key, `„${text.slice(0, 40)}“: bitte nur die Domain angeben, ohne Pfad.`);
+      }
+      if (!origins.includes(parsed.origin)) origins.push(parsed.origin);
+    }
+    if (origins.length > def.max) fail(key, `Höchstens ${def.max} Domains.`);
+    return origins;
+  },
+
   links(key, def, value) {
     if (!Array.isArray(value)) fail(key, 'Erwartet wird eine Liste.');
     if (value.length > def.max) fail(key, `Höchstens ${def.max} Links.`);
@@ -282,6 +405,15 @@ const VALIDATORS = {
   embed(key, def, value) {
     try {
       return normalizeTemplate(value);
+    } catch (error) {
+      if (error instanceof HttpError) error.field = `${key}.${error.field}`;
+      throw error;
+    }
+  },
+
+  design(key, def, value) {
+    try {
+      return normalizeDesign(value);
     } catch (error) {
       if (error instanceof HttpError) error.field = `${key}.${error.field}`;
       throw error;
@@ -344,6 +476,10 @@ function validatePatch(patch) {
   if (touches('webhook.enabled', 'webhook.url') && merged['webhook.enabled'] && !merged['webhook.url']) {
     fail('webhook.enabled', 'Trage zuerst eine Webhook-Adresse ein.');
   }
+  if (touches('mail.enabled', 'mail.host', 'mail.from') && merged['mail.enabled']) {
+    if (!merged['mail.host']) fail('mail.enabled', 'Trage zuerst den Mailserver ein.');
+    if (!merged['mail.from']) fail('mail.enabled', 'Trage zuerst eine Absenderadresse ein.');
+  }
   return next;
 }
 
@@ -358,30 +494,59 @@ function notify(changed) {
   }
 }
 
-async function persist(key, value, actorId = null) {
-  await db.run(
-    `INSERT INTO settings (key, value, updated_at, updated_by) VALUES (?, ?, ?, ?)
-     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at, updated_by = excluded.updated_by`,
-    [key, JSON.stringify(value), Date.now(), actorId]
-  );
+const isSecret = (key) => DEFINITIONS[key] && DEFINITIONS[key].type === 'secret';
+
+function sealed(key, value) {
+  return isSecret(key) && typeof value === 'string' && value ? secrets.encrypt(value) : value;
 }
 
+function unsealed(key, value) {
+  if (!isSecret(key) || typeof value !== 'string' || !value.startsWith('v1:')) return value;
+  try {
+    return secrets.decrypt(value);
+  } catch (error) {
+    log.warn('Ein gespeichertes Geheimnis lässt sich nicht entschlüsseln, bitte neu eintragen', { key, error });
+    return '';
+  }
+}
+
+async function persist(key, value, actorId = null) {
+  await db.upsert('settings', { name: key, value: JSON.stringify(sealed(key, value)), updated_at: Date.now(), updated_by: actorId }, [
+    'name',
+  ]);
+}
+
+async function readMeta(key) {
+  const row = await db.get('SELECT value FROM settings WHERE name = ?', [`_meta.${key}`]);
+  if (!row) return null;
+  try {
+    return JSON.parse(row.value);
+  } catch {
+    return null;
+  }
+}
+
+const writeMeta = (key, value) => persist(`_meta.${key}`, value);
+
 async function readStored() {
-  const rows = await db.all('SELECT key, value FROM settings');
+  const rows = await db.all('SELECT name, value FROM settings');
   const stored = {};
   const meta = {};
+  const plaintext = [];
   for (const row of rows) {
-    if (row.key.startsWith('_meta.')) {
-      meta[row.key] = row.value;
-    } else if (row.key in DEFINITIONS) {
+    if (row.name.startsWith('_meta.')) {
+      meta[row.name] = row.value;
+    } else if (row.name in DEFINITIONS) {
       try {
-        stored[row.key] = validate(row.key, JSON.parse(row.value));
+        const raw = JSON.parse(row.value);
+        stored[row.name] = validate(row.name, unsealed(row.name, raw));
+        if (isSecret(row.name) && typeof raw === 'string' && raw && !raw.startsWith('v1:')) plaintext.push(row.name);
       } catch (error) {
-        log.warn('Gespeicherte Einstellung ist ungültig und wird ignoriert', { key: row.key, error });
+        log.warn('Gespeicherte Einstellung ist ungültig und wird ignoriert', { key: row.name, error });
       }
     }
   }
-  return { stored, meta };
+  return { stored, meta, plaintext };
 }
 
 async function importLegacyEnv(stored, legacy) {
@@ -407,7 +572,8 @@ async function importLegacyEnv(stored, legacy) {
 }
 
 async function load(env = process.env) {
-  const { stored, meta } = await readStored();
+  const { stored, meta, plaintext } = await readStored();
+  for (const key of plaintext) await persist(key, stored[key]);
   const legacy = readLegacyEnv(env);
   if (!meta[META_IMPORTED]) await importLegacyEnv(stored, legacy);
   else if (legacy.present.length) {
@@ -448,7 +614,7 @@ function onChange(listener) {
 
 async function refresh() {
   if (!loaded) return;
-  const row = await db.get('SELECT value FROM settings WHERE key = ?', [META_REVISION]);
+  const row = await db.get('SELECT value FROM settings WHERE name = ?', [META_REVISION]);
   if ((row ? row.value : null) === revision) return;
   const before = all();
   const { stored, meta } = await readStored();
@@ -461,4 +627,18 @@ function startSync(intervalMs = 2000) {
   setInterval(() => refresh().catch((error) => log.debug('Einstellungen nicht abgeglichen', { error })), intervalMs).unref();
 }
 
-module.exports = { load, get, all, forAdmin, validatePatch, update, onChange, startSync };
+module.exports = {
+  load,
+  get,
+  all,
+  forAdmin,
+  defaultFor,
+  validatePatch,
+  update,
+  onChange,
+  startSync,
+  readMeta,
+  writeMeta,
+  DEFINITIONS,
+  EMAIL_PATTERN,
+};

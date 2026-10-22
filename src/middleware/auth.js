@@ -5,12 +5,15 @@ const { HttpError, forbidden, unauthorized } = require('../lib/errors');
 const { isSameOrigin } = require('../lib/request');
 const sessions = require('../services/sessionService');
 const tokens = require('../services/tokenService');
+const settings = require('../services/settingsService');
+const i18n = require('../lib/i18n');
 
 const log = logger.scope('auth');
 const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const LEGACY_COOKIE = 'token';
 
 async function loadSession(req, res, next) {
+  if (req.customDomain) return next();
   if (req.cookies[LEGACY_COOKIE]) res.clearCookie(LEGACY_COOKIE, { path: '/' });
 
   const token = req.cookies[sessions.COOKIE];
@@ -84,6 +87,8 @@ async function apiAuth(req, res, next) {
     if (!resolved) throw unauthorized('Ungültiges Token!');
     if (resolved.user.status !== 'active') throw forbidden('Dieses Konto ist gesperrt.');
     req.user = resolved.user;
+    req.language = i18n.detect(req, settings);
+    res.set('Content-Language', req.language);
     return next();
   }
   if (!req.user) throw unauthorized('Authentifizierungstoken fehlt!');

@@ -9,8 +9,16 @@ import Typography from '@mui/material/Typography';
 import ArrowBackRounded from '@mui/icons-material/ArrowBackRounded';
 import CheckRounded from '@mui/icons-material/CheckRounded';
 import RocketLaunchRounded from '@mui/icons-material/RocketLaunchRounded';
-import type { SettingValue, SetupBoot } from '../../lib/types';
-import { ApiError, completeSetup, errorMessage, testSetupWebhook, validateSetup } from '../../lib/api';
+import type { DatabaseChoice, SettingValue, SetupBoot } from '../../lib/types';
+import {
+  ApiError,
+  completeSetup,
+  errorMessage,
+  switchSetupDatabase,
+  testSetupDatabase,
+  testSetupWebhook,
+  validateSetup,
+} from '../../lib/api';
 import { useThemeSeed } from '../../app/mount';
 import { useToast } from '../../components/Toaster';
 import { AmbientBackdrop } from '../../components/Ambient';
@@ -19,11 +27,70 @@ import { ThemeToggleButton } from '../../components/ThemeToggle';
 import { AutoHeight, stepMotion } from '../login/AuthLayout';
 import { mix } from '../../lib/color';
 import { c, radius } from '../../theme/tokens';
-import { isLocalOrigin, STEP_SETTINGS, STEPS, stepOfField, type StepKey, type Values } from './wizard';
-import { AccountStep, HomeStep, NotifyStep, ReviewStep, SignInStep, SiteStep, UploadsStep, WelcomeStep } from './steps';
+import {
+  databaseUrl,
+  DEFAULT_PORTS,
+  isLocalOrigin,
+  STEP_SETTINGS,
+  STEPS,
+  stepOfField,
+  type DatabaseForm,
+  type StepKey,
+  type Values,
+} from './wizard';
+import {
+  AccountStep,
+  DatabaseStep,
+  databaseSummary,
+  HomeStep,
+  NotifyStep,
+  ReviewStep,
+  SignInStep,
+  SiteStep,
+  UploadsStep,
+  WelcomeStep,
+} from './steps';
 import { SetupDone, type SetupResult } from './SetupDone';
+import { language, t } from '../../lib/i18n';
 
 const HEX = /^#[0-9a-f]{6}$/i;
+
+const FALLBACK_DATABASE: DatabaseChoice = {
+  client: 'sqlite',
+  label: t('SQLite'),
+  source: 'default',
+  locked: false,
+  host: null,
+  port: null,
+  database: null,
+  user: null,
+  ssl: false,
+  sqliteDefault: true,
+};
+
+const formOf = (choice: DatabaseChoice): DatabaseForm => ({
+  client: choice.client,
+  host: choice.host ?? 'localhost',
+  port: choice.port ? String(choice.port) : choice.client === 'sqlite' ? '' : DEFAULT_PORTS[choice.client],
+  database: choice.database ?? 'moeshare',
+  user: choice.user ?? 'moeshare',
+  password: '',
+  ssl: choice.ssl,
+});
+
+function sameDatabase(form: DatabaseForm, current: DatabaseChoice) {
+  if (current.locked) return true;
+  if (form.client === 'sqlite') return current.client === 'sqlite' && current.sqliteDefault;
+  return (
+    !form.password &&
+    current.client === form.client &&
+    current.host === form.host.trim() &&
+    String(current.port) === (form.port.trim() || DEFAULT_PORTS[form.client]) &&
+    current.database === form.database.trim() &&
+    (current.user || '') === form.user.trim() &&
+    current.ssl === form.ssl
+  );
+}
 
 function StepRail({
   title,
@@ -41,7 +108,11 @@ function StepRail({
   onSelect: (index: number) => void;
 }) {
   return (
-    <Box component="nav" aria-label="Schritte der Einrichtung" sx={{ display: { xs: 'none', md: 'block' }, position: 'sticky', top: 64 }}>
+    <Box
+      component="nav"
+      aria-label={t('Schritte der Einrichtung')}
+      sx={{ display: { xs: 'none', md: 'block' }, position: 'sticky', top: 64 }}
+    >
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 4, px: 1 }}>
         <BrandMark src={favicon} title={title} size={44} ring />
         <Box sx={{ minWidth: 0 }}>
@@ -49,7 +120,7 @@ function StepRail({
             {title || 'MoeShare'}
           </Typography>
           <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-            Einrichtung
+            {t('Einrichtung')}
           </Typography>
         </Box>
       </Box>
@@ -115,14 +186,16 @@ function MobileProgress({ title, favicon, index, done }: { title: string; favico
         <Box sx={{ minWidth: 0 }}>
           <Typography sx={{ fontWeight: 800 }}>{title || 'MoeShare'}</Typography>
           <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-            {done ? 'Einrichtung abgeschlossen' : `Schritt ${index + 1} von ${STEPS.length}: ${step.label}`}
+            {done
+              ? t('Einrichtung abgeschlossen')
+              : t('Schritt {current} von {total}: {label}', { current: index + 1, total: STEPS.length, label: step.label })}
           </Typography>
         </Box>
       </Box>
       <LinearProgress
         variant="determinate"
         value={done ? 100 : (index / (STEPS.length - 1)) * 100}
-        aria-label="Fortschritt der Einrichtung"
+        aria-label={t('Fortschritt der Einrichtung')}
         sx={{ height: 6, borderRadius: 3 }}
       />
     </Box>
@@ -153,6 +226,7 @@ export function SetupWizard({ boot }: { boot: SetupBoot }) {
   const initialValues = useMemo<Values>(() => {
     const values = { ...setup.settings!.values };
     if (!values['site.baseUrl'] || isLocalOrigin(values['site.baseUrl'])) values['site.baseUrl'] = window.location.origin;
+    if (values['site.language'] === 'de' && language === 'en') values['site.language'] = 'en';
     return values;
   }, [setup.settings]);
 
@@ -166,6 +240,10 @@ export function SetupWizard({ boot }: { boot: SetupBoot }) {
   const [busy, setBusy] = useState(false);
   const [createToken, setCreateToken] = useState(true);
   const [result, setResult] = useState<SetupResult | null>(null);
+  const [database, setDatabase] = useState<DatabaseChoice>(setup.database || FALLBACK_DATABASE);
+  const [dbForm, setDbForm] = useState<DatabaseForm>(() => formOf(setup.database || FALLBACK_DATABASE));
+  const [dbTesting, setDbTesting] = useState(false);
+  const [dbTested, setDbTested] = useState<{ label: string; version: string; accounts: number } | null>(null);
 
   const step = STEPS[index];
   const checks = setup.checks || [];
@@ -232,6 +310,35 @@ export function SetupWizard({ boot }: { boot: SetupBoot }) {
     }
   };
 
+  const testDatabase = async () => {
+    setDbTesting(true);
+    setDbTested(null);
+    setErrors((previous) => ({ ...previous, database: '' }));
+    try {
+      setDbTested(await testSetupDatabase(setup.token, databaseUrl(dbForm)));
+    } catch (error) {
+      fail(error);
+    } finally {
+      setDbTesting(false);
+    }
+  };
+
+  const applyDatabase = async () => {
+    if (!sameDatabase(dbForm, database)) {
+      const switched = await switchSetupDatabase(setup.token, databaseUrl(dbForm));
+      if (!switched.open) {
+        toast(t('In dieser Datenbank gibt es schon ein Konto. Melde dich damit an.'), { variant: 'info' });
+        window.location.assign('/login');
+        return false;
+      }
+      setDatabase(switched);
+      setDbForm(formOf(switched));
+      setDbTested(null);
+      if (switched.switched) toast(t('Verbunden mit {label}', { label: switched.label }), { variant: 'success' });
+    }
+    return true;
+  };
+
   const next = async (event: FormEvent) => {
     event.preventDefault();
     if (busy) return;
@@ -240,8 +347,19 @@ export function SetupWizard({ boot }: { boot: SetupBoot }) {
       await finish();
       return;
     }
+    if (step.key === 'database') {
+      setBusy(true);
+      try {
+        if (await applyDatabase()) goTo(index + 1);
+      } catch (error) {
+        fail(error);
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
     if (step.key === 'account' && !account.password) {
-      setErrors({ password: 'Lege ein Passwort fest.' });
+      setErrors({ password: t('Lege ein Passwort fest.') });
       return;
     }
     setBusy(true);
@@ -260,7 +378,7 @@ export function SetupWizard({ boot }: { boot: SetupBoot }) {
   const testWebhook = async () => {
     try {
       await testSetupWebhook(setup.token, webhookUrl.trim());
-      toast('Testnachricht gesendet. Schau in deinen Discord-Kanal.', { variant: 'success' });
+      toast(t('Testnachricht gesendet. Schau in deinen Discord-Kanal.'), { variant: 'success' });
     } catch (error) {
       fail(error);
     }
@@ -268,6 +386,22 @@ export function SetupWizard({ boot }: { boot: SetupBoot }) {
 
   const content: Record<StepKey, ReactNode> = {
     welcome: <WelcomeStep checks={checks} />,
+    database: (
+      <DatabaseStep
+        current={database}
+        form={dbForm}
+        onChange={(form) => {
+          setDbForm(form);
+          setDbTested(null);
+          setErrors((previous) => (previous.database ? { ...previous, database: '' } : previous));
+        }}
+        error={errors.database}
+        testing={dbTesting}
+        tested={dbTested}
+        onTest={testDatabase}
+        keepsPassword={sameDatabase({ ...dbForm, password: '' }, database) && database.client !== 'sqlite'}
+      />
+    ),
     account: <AccountStep account={account} onChange={setAccount} errors={errors} minLength={setup.passwordMinLength} />,
     site: <SiteStep values={values} set={set} errors={errors} />,
     home: <HomeStep values={values} set={set} errors={errors} />,
@@ -292,11 +426,12 @@ export function SetupWizard({ boot }: { boot: SetupBoot }) {
         createToken={createToken}
         onCreateToken={setCreateToken}
         onEdit={(key) => goTo(STEPS.findIndex((candidate) => candidate.key === key))}
+        database={databaseSummary(dbForm, database)}
       />
     ),
   };
 
-  const submitLabel = step.key === 'welcome' ? 'Los geht’s' : step.key === 'review' ? 'MoeShare einrichten' : 'Weiter';
+  const submitLabel = step.key === 'welcome' ? t('Los geht’s') : step.key === 'review' ? t('MoeShare einrichten') : t('Weiter');
 
   return (
     <Box sx={{ position: 'relative', minHeight: '100dvh', overflow: 'hidden' }}>
@@ -324,7 +459,12 @@ export function SetupWizard({ boot }: { boot: SetupBoot }) {
           <AnimatePresence mode="wait" initial={false} custom={direction}>
             {result ? (
               <m.div key="done" custom={1} variants={stepMotion} initial="initial" animate="animate">
-                <SetupDone result={result} siteTitle={title} homeEnabled={values['home.enabled'] === true} />
+                <SetupDone
+                  result={result}
+                  siteTitle={title}
+                  homeEnabled={values['home.enabled'] === true}
+                  features={{ texts: values['uploads.texts'] !== false, links: values['links.enabled'] !== false }}
+                />
               </m.div>
             ) : (
               <m.form
@@ -345,7 +485,7 @@ export function SetupWizard({ boot }: { boot: SetupBoot }) {
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 4, pt: 3, borderTop: `1px solid ${c.outlineVariant}` }}>
                   {index > 0 && (
                     <Button onClick={() => goTo(index - 1)} disabled={busy} startIcon={<ArrowBackRounded />}>
-                      Zurück
+                      {t('Zurück')}
                     </Button>
                   )}
                   <Box sx={{ flex: 1 }} />

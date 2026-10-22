@@ -119,9 +119,13 @@ function fill(text, values) {
   });
 }
 
-const TYPE_LABELS = { image: 'Bild', video: 'Video', audio: 'Audio', file: 'Datei' };
+const TYPE_LABELS = {
+  de: { image: 'Bild', video: 'Video', audio: 'Audio', text: 'Text', file: 'Datei' },
+  en: { image: 'Image', video: 'Video', audio: 'Audio', text: 'Text', file: 'File' },
+};
 
-function valuesFor(file, siteTitle) {
+function valuesFor(file, siteTitle, language = 'de') {
+  const labels = TYPE_LABELS[language] || TYPE_LABELS.de;
   const dot = file.filename.lastIndexOf('.');
   const hasResolution = file.width > 0 && file.height > 0;
   return {
@@ -136,7 +140,7 @@ function valuesFor(file, siteTitle) {
     resolution: hasResolution ? `${file.width}×${file.height}` : '',
     width: hasResolution ? file.width : '',
     height: hasResolution ? file.height : '',
-    type: TYPE_LABELS[file.type] || 'Datei',
+    type: labels[file.type] || labels.file,
     site: siteTitle,
   };
 }

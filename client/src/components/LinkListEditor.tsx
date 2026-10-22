@@ -9,6 +9,7 @@ import AddRounded from '@mui/icons-material/AddRounded';
 import DeleteOutlineRounded from '@mui/icons-material/DeleteOutlineRounded';
 import type { SiteLink } from '../lib/types';
 import { fonts } from '../theme/tokens';
+import { t } from '../lib/i18n';
 
 export function LinkListEditor({
   links,
@@ -38,23 +39,23 @@ export function LinkListEditor({
         >
           <TextField
             size="small"
-            label="Beschriftung"
+            label={t('Beschriftung')}
             value={link.label}
             onChange={(event) => update(index, { label: event.target.value })}
             slotProps={{ htmlInput: { maxLength: 40 } }}
           />
           <TextField
             size="small"
-            label="Adresse"
+            label={t('Adresse')}
             value={link.url}
             onChange={(event) => update(index, { url: event.target.value })}
             placeholder="https://"
             sx={{ gridColumn: { xs: '1 / 2', sm: 'auto' }, gridRow: { xs: 2, sm: 'auto' } }}
             slotProps={{ htmlInput: { spellCheck: false, style: { fontFamily: fonts.mono } } }}
           />
-          <Tooltip title="Link entfernen">
+          <Tooltip title={t('Link entfernen')}>
             <IconButton
-              aria-label={`${link.label || 'Link'} entfernen`}
+              aria-label={t('{value} entfernen', { value: link.label || 'Link' })}
               onClick={() => onChange(links.filter((_link, position) => position !== index))}
             >
               <DeleteOutlineRounded />
@@ -69,7 +70,7 @@ export function LinkListEditor({
       )}
       <Box>
         <Button startIcon={<AddRounded />} disabled={links.length >= max} onClick={() => onChange([...links, { label: '', url: '' }])}>
-          Link hinzufügen
+          {t('Link hinzufügen')}
         </Button>
       </Box>
     </Stack>

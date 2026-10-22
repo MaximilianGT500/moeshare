@@ -7,13 +7,14 @@ import PhonelinkLockRounded from '@mui/icons-material/PhonelinkLockRounded';
 import FingerprintRounded from '@mui/icons-material/FingerprintRounded';
 import type { AdminUser } from '../../lib/types';
 import { c } from '../../theme/tokens';
+import { t } from '../../lib/i18n';
 
 export function RoleChip({ role }: { role: string }) {
   const admin = role === 'admin';
   return (
     <Chip
       size="small"
-      label={admin ? 'Admin' : 'Mitglied'}
+      label={admin ? t('Admin') : t('Mitglied')}
       sx={{
         fontWeight: 700,
         bgcolor: admin ? c.tertiaryContainer : 'transparent',
@@ -26,22 +27,26 @@ export function RoleChip({ role }: { role: string }) {
 
 export function StatusChip({ user }: { user: Pick<AdminUser, 'status' | 'mustChangePassword'> }) {
   if (user.status === 'suspended') {
-    return <Chip size="small" label="Gesperrt" sx={{ bgcolor: c.errorContainer, color: c.onErrorContainer, fontWeight: 700 }} />;
+    return <Chip size="small" label={t('Gesperrt')} sx={{ bgcolor: c.errorContainer, color: c.onErrorContainer, fontWeight: 700 }} />;
   }
   if (user.mustChangePassword) {
-    return <Chip size="small" label="Wartet auf Passwort" sx={{ bgcolor: c.warningContainer, color: c.onWarningContainer }} />;
+    return <Chip size="small" label={t('Wartet auf Passwort')} sx={{ bgcolor: c.warningContainer, color: c.onWarningContainer }} />;
   }
   return (
-    <Chip size="small" label="Aktiv" sx={{ bgcolor: 'transparent', color: c.onSurfaceVariant, border: `1px solid ${c.outlineVariant}` }} />
+    <Chip
+      size="small"
+      label={t('Aktiv')}
+      sx={{ bgcolor: 'transparent', color: c.onSurfaceVariant, border: `1px solid ${c.outlineVariant}` }}
+    />
   );
 }
 
 export function SecurityBadges({ user }: { user: Pick<AdminUser, 'totp' | 'passkeys' | 'identities'> }) {
   const items = [
-    user.totp && { key: 'totp', title: 'Zwei-Faktor-Anmeldung aktiv', icon: <PhonelinkLockRounded /> },
+    user.totp && { key: 'totp', title: t('Zwei-Faktor-Anmeldung aktiv'), icon: <PhonelinkLockRounded /> },
     user.passkeys > 0 && {
       key: 'pk',
-      title: user.passkeys === 1 ? 'Ein Passkey' : `${user.passkeys} Passkeys`,
+      title: user.passkeys === 1 ? t('Ein Passkey') : t('{passkeys} Passkeys', { passkeys: user.passkeys }),
       icon: <FingerprintRounded />,
     },
     ...(user.identities || []).map((identity) => ({

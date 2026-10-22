@@ -7,14 +7,21 @@ import { CredentialsStep } from './CredentialsStep';
 import { SecondFactorStep } from './SecondFactorStep';
 import { TokenStep } from './TokenStep';
 import { RegisterForm } from './AccountForms';
+import { ForgotStep, ResetForm } from './ResetSteps';
 
-type Step = 'credentials' | 'mfa' | 'token';
+type Step = 'credentials' | 'forgot' | 'mfa' | 'token';
 
-const ORDER: Step[] = ['credentials', 'token', 'mfa'];
+const ORDER: Step[] = ['credentials', 'forgot', 'token', 'mfa'];
+
+function firstStep(boot: LoginBoot): Step {
+  if (boot.mfa) return 'mfa';
+  if (window.location.hash === '#vergessen' && boot.methods.reset) return 'forgot';
+  return 'credentials';
+}
 
 export function LoginPage() {
   const boot = readBoot<LoginBoot>();
-  const [step, setStep] = useState<Step>(boot.mfa ? 'mfa' : 'credentials');
+  const [step, setStep] = useState<Step>(() => firstStep(boot));
   const [direction, setDirection] = useState(1);
   const [challenge, setChallenge] = useState<MfaChallenge | null>(boot.mfa || null);
   const [error, setError] = useState(boot.error || '');
@@ -25,6 +32,14 @@ export function LoginPage() {
   };
 
   const finish = (redirect: string) => window.location.assign(redirect || '/dashboard');
+
+  if (boot.mode === 'reset' && boot.reset) {
+    return (
+      <AuthLayout site={boot.site}>
+        <ResetForm reset={boot.reset} canRequest={!!boot.methods.reset} />
+      </AuthLayout>
+    );
+  }
 
   if (boot.mode === 'register' && boot.registration) {
     return (
@@ -44,6 +59,15 @@ export function LoginPage() {
               methods={boot.methods}
               next={boot.next}
               initialError={error}
+              notice={boot.notice}
+              onForgot={
+                boot.methods.reset
+                  ? () => {
+                      setError('');
+                      go('forgot');
+                    }
+                  : undefined
+              }
               onMfa={(next) => {
                 setChallenge(next);
                 setError('');
@@ -51,6 +75,14 @@ export function LoginPage() {
               }}
               onToken={() => go('token')}
               onSuccess={finish}
+            />
+          )}
+          {step === 'forgot' && (
+            <ForgotStep
+              onBack={() => {
+                if (window.location.hash) window.history.replaceState(null, '', window.location.pathname + window.location.search);
+                go('credentials');
+              }}
             />
           )}
           {step === 'token' && (

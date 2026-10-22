@@ -11,7 +11,8 @@ import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import DownloadRounded from '@mui/icons-material/DownloadRounded';
 import ContentCopyRounded from '@mui/icons-material/ContentCopyRounded';
-import { downloadText, shareXConfig, shareXFilename } from '../lib/sharex';
+import { downloadShareX, shareXKindLabel, shareXKinds, type ShareXFeatures } from '../lib/sharex';
+import { t } from '../lib/i18n';
 import { CopyTextButton } from './CopyButton';
 import { GrowTransition } from './transitions';
 import { c, fonts, radius } from '../theme/tokens';
@@ -20,7 +21,7 @@ export function TokenNameDialog({
   open,
   onClose,
   onCreate,
-  title = 'Neues API-Token',
+  title = t('Neues API-Token'),
 }: {
   open: boolean;
   onClose: () => void;
@@ -54,19 +55,19 @@ export function TokenNameDialog({
         <DialogTitle id="token-name-title">{title}</DialogTitle>
         <DialogContent>
           <TextField
-            label="Name"
+            label={t('Name')}
             value={name}
             onChange={(event) => setName(event.target.value)}
             autoFocus
             fullWidth
-            helperText="Woran du das Token später erkennst, z. B. „ShareX am PC“ oder „Backup-Skript“."
+            helperText={t('Woran du das Token später erkennst, z. B. „ShareX am PC“ oder „Backup-Skript“.')}
             slotProps={{ htmlInput: { maxLength: 60 } }}
             sx={{ mt: 1 }}
           />
         </DialogContent>
         <DialogActions>
           <Button onClick={onClose} disabled={busy}>
-            Abbrechen
+            {t('Abbrechen')}
           </Button>
           <Button
             type="submit"
@@ -74,7 +75,7 @@ export function TokenNameDialog({
             disabled={busy || !name.trim()}
             startIcon={busy ? <CircularProgress size={16} color="inherit" /> : null}
           >
-            Erstellen
+            {t('Erstellen')}
           </Button>
         </DialogActions>
       </Box>
@@ -88,20 +89,27 @@ export function TokenRevealDialog({
   siteTitle,
   baseUrl,
   forUser,
+  features,
 }: {
   token: string | null;
   onClose: () => void;
   siteTitle: string;
   baseUrl: string;
   forUser?: string;
+  features?: ShareXFeatures;
 }) {
+  const kinds = shareXKinds(features);
+  const download = (kind: (typeof kinds)[number]) => token && downloadShareX({ siteTitle, baseUrl, token, kind, features });
   return (
     <Dialog open={!!token} onClose={onClose} maxWidth="sm" fullWidth slots={{ transition: GrowTransition }} aria-labelledby="token-title">
-      <DialogTitle id="token-title">{forUser ? `Token für ${forUser}` : 'Dein neues Token'}</DialogTitle>
+      <DialogTitle id="token-title">{forUser ? t('Token für {forUser}', { forUser }) : t('Dein neues Token')}</DialogTitle>
       <DialogContent>
         <Alert severity="warning" sx={{ mb: 2 }}>
-          Das Token wird nur jetzt angezeigt. Wer es hat, kann {forUser ? `in das Konto von ${forUser}` : 'in dein Konto'} hochladen und
-          Dateien löschen.
+          {forUser
+            ? t('Das Token wird nur jetzt angezeigt. Wer es hat, kann in das Konto von {forUser} hochladen und Dateien löschen.', {
+                forUser,
+              })
+            : t('Das Token wird nur jetzt angezeigt. Wer es hat, kann in dein Konto hochladen und Dateien löschen.')}
         </Alert>
         <Box
           sx={{
@@ -117,25 +125,37 @@ export function TokenRevealDialog({
           {token}
         </Box>
         <Typography variant="body2" sx={{ color: 'text.secondary', mt: 2 }}>
-          Am einfachsten: Lade die ShareX-Konfiguration herunter und öffne die Datei mit einem Doppelklick. ShareX übernimmt Adresse und
-          Token automatisch.
+          {kinds.length > 1
+            ? t(
+                'Am einfachsten: Lade die ShareX-Konfigurationen herunter und öffne sie mit einem Doppelklick. ShareX übernimmt Adresse und Token automatisch.'
+              )
+            : t(
+                'Am einfachsten: Lade die ShareX-Konfiguration herunter und öffne die Datei mit einem Doppelklick. ShareX übernimmt Adresse und Token automatisch.'
+              )}
         </Typography>
+        {kinds.length > 1 && (
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 2 }}>
+            {kinds.map((kind) => (
+              <Button key={kind} variant="tonal" startIcon={<DownloadRounded />} onClick={() => download(kind)}>
+                {shareXKindLabel(kind)}
+              </Button>
+            ))}
+          </Box>
+        )}
       </DialogContent>
       <DialogActions sx={{ flexWrap: 'wrap' }}>
         {token && (
-          <CopyTextButton value={token} message="Token kopiert" icon={<ContentCopyRounded fontSize="inherit" />}>
-            Token kopieren
+          <CopyTextButton value={token} message={t('Token kopiert')} icon={<ContentCopyRounded fontSize="inherit" />}>
+            {t('Token kopieren')}
           </CopyTextButton>
         )}
-        <Button
-          variant="tonal"
-          startIcon={<DownloadRounded />}
-          onClick={() => token && downloadText(shareXFilename(siteTitle), shareXConfig({ siteTitle, baseUrl, token }))}
-        >
-          ShareX-Konfiguration
-        </Button>
+        {kinds.length === 1 && (
+          <Button variant="tonal" startIcon={<DownloadRounded />} onClick={() => download('files')}>
+            {t('ShareX-Konfiguration')}
+          </Button>
+        )}
         <Button variant="contained" onClick={onClose}>
-          Fertig
+          {t('Fertig')}
         </Button>
       </DialogActions>
     </Dialog>
