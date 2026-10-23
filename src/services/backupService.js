@@ -279,6 +279,13 @@ async function* readJsonl(file) {
 
 const plain = (info) => !info || !info.type || info.type === 'File' || info.type === 'Directory' || info.type === 'OldFile';
 
+const insideUploads = (value) => {
+  const clean = String(value || '').replace(/^\.\//, '');
+  return clean.startsWith('uploads/') && !clean.split('/').includes('..');
+};
+
+const uploadEntry = (entry, info) => insideUploads(entry) && (plain(info) || (info.type === 'Link' && insideUploads(info.linkpath)));
+
 async function restore(file, { force = false, uploads = true, onStep = () => {} } = {}) {
   if (!fs.existsSync(file)) throw badRequest(`Die Datei ${file} gibt es nicht.`);
   const work = path.join(directory(), `.restore-${process.pid}-${Date.now()}`);
@@ -322,9 +329,9 @@ async function restore(file, { force = false, uploads = true, onStep = () => {} 
         file,
         cwd: config.paths.root,
         strict: true,
-        filter: (entry, info) => plain(info) && entry.replace(/^\.\//, '').startsWith('uploads/'),
+        filter: uploadEntry,
         onReadEntry: (entry) => {
-          if (entry.type === 'File') restoredFiles += 1;
+          if (entry.type === 'File' || entry.type === 'Link') restoredFiles += 1;
         },
       });
     }

@@ -1,7 +1,7 @@
 {
   "name": "moeshare-ui",
   "private": true,
-  "version": "3.1.0",
+  "version": "3.2.0",
   "description": "Material UI Web-Oberfläche für MoeShare (Dashboard, Admin, Login, Datei-Ansicht).",
   "type": "module",
   "scripts": {

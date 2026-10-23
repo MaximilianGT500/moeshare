@@ -18,7 +18,7 @@ import { LockedScreen } from '../../components/LockedScreen';
 import { OwnerPage } from '../../components/OwnerPage';
 import { PublicGallery } from '../../components/PublicGallery';
 import { UserAvatar } from '../../components/UserAvatar';
-import { ease, radius } from '../../theme/tokens';
+import { c, ease, radius } from '../../theme/tokens';
 
 type AlbumData = NonNullable<AlbumBoot['album']>;
 
@@ -33,7 +33,7 @@ export function AlbumPage() {
   const accent = accentOf(design, meaningfulColor(items.find((item) => item.color)?.color), boot.site.seedColor);
   return (
     <OwnerPage site={boot.site} design={design} css={boot.css} accent={accent} cover={cover} page="album" report={boot.report}>
-      <AlbumView album={boot.album} items={items} owner={!!boot.owner} />
+      <AlbumView album={boot.album} items={items} owner={!!boot.owner} dashboard={boot.dashboard || null} />
     </OwnerPage>
   );
 }
@@ -53,7 +53,16 @@ function Meta({ icon, children, title }: { icon: ReactNode; children: ReactNode;
   );
 }
 
-function AlbumView({ album, items, owner }: { album: AlbumData; items: AlbumItem[]; owner: boolean }) {
+function contributorText(names: string[]) {
+  if (names.length === 1) return t('mit {name}', { name: names[0] });
+  if (names.length === 2) return t('mit {first} und {second}', { first: names[0], second: names[1] });
+  return tn(names.length - 2, 'mit {first}, {second} und einer weiteren Person', 'mit {first}, {second} und {count} weiteren', {
+    first: names[0],
+    second: names[1],
+  });
+}
+
+function AlbumView({ album, items, owner, dashboard }: { album: AlbumData; items: AlbumItem[]; owner: boolean; dashboard: string | null }) {
   const { shows, r } = useDesign();
   const totalBytes = items.reduce((sum, item) => sum + (item.sizeBytes || 0), 0);
   const link = album.url || `${window.location.origin}${window.location.pathname}`;
@@ -98,6 +107,16 @@ function AlbumView({ album, items, owner }: { album: AlbumData; items: AlbumItem
               <Typography variant="body2">{album.owner}</Typography>
             </Box>
           )}
+          {!!album.contributors?.length && shows('owner') && (
+            <Box component="li" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Box sx={{ display: 'flex', '& > *:not(:first-of-type)': { ml: -0.75 }, '& > *': { boxShadow: `0 0 0 2px ${c.surface}` } }}>
+                {album.contributors.slice(0, 3).map((name) => (
+                  <UserAvatar key={name} name={name} size={24} />
+                ))}
+              </Box>
+              <Typography variant="body2">{contributorText(album.contributors)}</Typography>
+            </Box>
+          )}
           <Meta icon={<CollectionsOutlined />}>
             {tn(items.length, '1 Datei', '{count} Dateien')}
             {totalBytes > 0 && shows('size') ? `, ${formatBytes(totalBytes)}` : ''}
@@ -124,8 +143,13 @@ function AlbumView({ album, items, owner }: { album: AlbumData; items: AlbumItem
               {t('Alle als ZIP')}
             </Button>
           )}
-          {owner && (
-            <Button variant="outlined" startIcon={<EditRounded />} href="/dashboard#alben" sx={{ borderRadius: `${r(radius.full)}px` }}>
+          {(owner || dashboard) && (
+            <Button
+              variant="outlined"
+              startIcon={<EditRounded />}
+              href={dashboard || '/dashboard#alben'}
+              sx={{ borderRadius: `${r(radius.full)}px` }}
+            >
               {t('Im Dashboard bearbeiten')}
             </Button>
           )}

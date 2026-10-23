@@ -1,6 +1,6 @@
 {
   "name": "moeshare",
-  "version": "3.1.0",
+  "version": "3.2.0",
   "description": "Selbst gehosteter ShareX-Uploader für Dateien, Texte und Kurzlinks, mit Weboberfläche, Alben, Embed Builder und Benutzerverwaltung.",
   "main": "index.js",
   "engines": {

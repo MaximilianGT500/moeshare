@@ -98,11 +98,41 @@ function lockedTags(record, urls, locale) {
   ].join('\n  ');
 }
 
+const hasWarning = (record) => record.warning !== null && record.warning !== undefined;
+
+function warningTitle(record) {
+  const language = settings.get('site.language');
+  const label = i18n.translate(language, 'Inhaltswarnung');
+  return record.warning ? `⚠️ ${label}: ${record.warning}` : `⚠️ ${label}`;
+}
+
+function warningTags(record, embed, urls, type, locale) {
+  const tag = (attr, key, value) => `<meta ${attr}="${key}" content="${escapeHtml(value)}" />`;
+  const tags = [
+    tag('property', 'og:url', urls.view),
+    tag('property', 'og:locale', locale),
+    tag('property', 'og:type', 'website'),
+    tag('property', 'og:title', warningTitle(record)),
+    tag('property', 'og:description', i18n.translate(settings.get('site.language'), 'Öffne den Link, um den Inhalt zu sehen.')),
+    tag('property', 'og:site_name', (embed.enabled && embed.siteName) || settings.get('site.title')),
+    tag('name', 'theme-color', embed.themeColor),
+  ];
+  if (type === 'image' || type === 'video') {
+    tags.push(
+      tag('property', 'og:image', `${urls.view}/blur.jpg`),
+      tag('name', 'twitter:image', `${urls.view}/blur.jpg`),
+      tag('name', 'twitter:card', 'summary_large_image')
+    );
+  }
+  return tags.join('\n  ');
+}
+
 function metaTags(record, embed, { domain = null, locale = 'de_DE' } = {}) {
   const { type } = files.typeOf(record.filename, record.syntax);
   const ext = extensionOf(record.filename);
   const urls = files.urlsFor(record, { domain });
   if (record.password_hash || record.max_views) return lockedTags(record, urls, locale);
+  if (hasWarning(record)) return warningTags(record, embed, urls, type, locale);
   const width = record.resolution_width || 0;
   const height = record.resolution_height || 0;
   const tag = (attr, key, value) => `<meta ${attr}="${key}" content="${escapeHtml(value)}" />`;
@@ -180,4 +210,15 @@ async function builderData(user) {
   };
 }
 
-module.exports = { embedFor, metaTags, oembedFor, isCrawler, userTemplate, setUserTemplate, localized, builderData };
+module.exports = {
+  embedFor,
+  metaTags,
+  oembedFor,
+  isCrawler,
+  userTemplate,
+  setUserTemplate,
+  localized,
+  builderData,
+  hasWarning,
+  warningTitle,
+};

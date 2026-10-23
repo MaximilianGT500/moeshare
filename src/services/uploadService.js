@@ -12,6 +12,8 @@ const { HttpError, badRequest, badGateway, tooLarge } = require('../lib/errors')
 const { formatBytes } = require('../lib/format');
 const { extensionOf, ensureUserDirs, filePaths } = require('../lib/storage');
 const slugs = require('../lib/slugs');
+const imaging = require('../lib/imaging');
+const { hashFile } = require('../lib/hash');
 const { resolveExpiry } = require('../lib/expiry');
 const db = require('../lib/db');
 const settings = require('./settingsService');
@@ -20,6 +22,11 @@ const preferences = require('./preferenceService');
 const protection = require('./protectionService');
 const storage = require('./storageService');
 const webhook = require('./webhookService');
+const scans = require('./scanService');
+const dedupe = require('./dedupeService');
+const versions = require('./versionService');
+const search = require('./searchService');
+const watermarks = require('./watermarkService');
 
 const log = logger.scope('upload');
 
@@ -69,6 +76,22 @@ const MAX_VIEWS = 1000;
 
 const first = (...values) => values.find((value) => value !== undefined && value !== null && value !== '');
 const truthy = (value) => value === true || ['1', 'true', 'yes', 'ja', 'on'].includes(String(value).trim().toLowerCase());
+const falsy = (value) => value === false || ['0', 'false', 'no', 'nein', 'off'].includes(String(value).trim().toLowerCase());
+const MAX_WARNING = 100;
+
+function switchOf(value) {
+  if (value === undefined || value === null || value === '') return null;
+  if (truthy(value)) return true;
+  if (falsy(value)) return false;
+  return null;
+}
+
+function warningOf(value) {
+  if (value === undefined || value === null || value === '') return null;
+  if (falsy(value)) return null;
+  if (truthy(value)) return '';
+  return String(value).replace(/\s+/g, ' ').trim().slice(0, MAX_WARNING);
+}
 
 function rawOptions(req) {
   const body = req.body || {};
@@ -84,7 +107,18 @@ function rawOptions(req) {
     syntax: first(body.syntax, body.language, header('x-syntax')),
     tags: first(body.tags, header('x-tags')),
     album: first(body.album, header('x-album')),
+    warning: first(body.warning, body.spoiler, header('x-warning'), header('x-spoiler')),
+    optimize: first(body.optimize, header('x-optimize')),
+    watermark: first(body.watermark, header('x-watermark')),
   };
+}
+
+async function albumFor(user, value) {
+  return db.get(
+    `SELECT a.id FROM albums a WHERE (a.code = ? OR a.id = ?) AND (a.user_id = ? OR EXISTS (
+       SELECT 1 FROM album_members m WHERE m.album_id = a.id AND m.user_id = ?))`,
+    [String(value), Number(value) || 0, user.id, user.id]
+  );
 }
 
 async function resolveOptions(user, raw = {}, { kind = 'file' } = {}) {
@@ -123,15 +157,15 @@ async function resolveOptions(user, raw = {}, { kind = 'file' } = {}) {
 
   let album = null;
   if (raw.album !== undefined && raw.album !== null && raw.album !== '') {
-    album = await db.get('SELECT id FROM albums WHERE user_id = ? AND (code = ? OR id = ?)', [
-      user.id,
-      String(raw.album),
-      Number(raw.album) || 0,
-    ]);
+    album = user.id ? await albumFor(user, raw.album) : null;
     if (!album) throw badRequest('Dieses Album gibt es nicht.', { field: 'album' });
   }
 
+  const optimize = switchOf(raw.optimize);
   return {
+    warning: warningOf(raw.warning),
+    optimize: optimize === null ? (prefs.optimize === false ? false : null) : optimize,
+    watermark: switchOf(raw.watermark),
     style,
     expiresAt: expiry.ms ? Date.now() + expiry.ms : null,
     passwordHash: password ? await protection.hashPassword(password) : null,
@@ -146,7 +180,7 @@ async function resolveOptions(user, raw = {}, { kind = 'file' } = {}) {
 
 function linksFor(record, domain = null) {
   const urls = files.urlsFor(record, { domain });
-  const guarded = protection.isProtected(record);
+  const guarded = protection.isProtected(record) || (record.warning !== null && record.warning !== undefined);
   const previewed = !guarded && settings.get('uploads.preview') && files.typeOf(record.filename).type === 'image';
   return {
     success: true,
@@ -159,10 +193,11 @@ function linksFor(record, domain = null) {
     slug: record.slug,
     expiresAt: record.expires_at ? Number(record.expires_at) : null,
     protected: { password: Boolean(record.password_hash), maxViews: record.max_views || null },
+    warning: record.warning === null || record.warning === undefined ? null : record.warning,
   };
 }
 
-function analyzeLater(record, type) {
+function analyzeLater(record, type = files.typeOf(record.filename, record.syntax).type) {
   const { username, filename } = record;
   const options = {
     preview: settings.get('uploads.preview'),
@@ -176,7 +211,8 @@ function analyzeLater(record, type) {
       await files.update(username, filename, result);
       if (storage.activeDriver() === 's3') {
         const fresh = await files.findById(record.id);
-        if (fresh) {
+        if (fresh && fresh.filename === filename) {
+          await storage.offloadVersions(fresh).catch((error) => log.warn('Ältere Versionen bleiben lokal', { file: filename, error }));
           await storage.offload(fresh).catch((error) => {
             log.error('Die Datei konnte nicht nach S3 übertragen werden, sie bleibt lokal', { user: username, file: filename, error });
             webhook.notify('processing', 'Speicher', `Datei: **${filename}**\nS3: ${error.message}`, 'error');
@@ -213,80 +249,201 @@ async function insertWithSlug(details, options) {
   return null;
 }
 
-async function accept(user, filename, { via = 'upload', originalName = null, options = null } = {}) {
-  const username = typeof user === 'string' ? user : user.username;
-  const chosen = options || (await resolveOptions(typeof user === 'string' ? { username } : user, {}));
+async function imagePlan(user, chosen) {
+  const prefs = user.id ? await preferences.get(user.id) : {};
+  const wanted = chosen.optimize === true || (chosen.optimize !== false && prefs.optimize !== false);
+  const optimize =
+    settings.get('images.optimize') && wanted
+      ? {
+          format: settings.get('images.format'),
+          quality: settings.get('images.quality'),
+          maxDimension: settings.get('images.maxDimension'),
+        }
+      : null;
+  const watermark = chosen.watermark === false ? null : await watermarks.forUser(user.id);
+  const keepOriginal = versions.enabled() && ((optimize && settings.get('images.keepOriginal')) || (watermark && watermark.keepOriginal));
+  return { optimize, watermark, keepOriginal: Boolean(keepOriginal) };
+}
+
+const renamed = (name, ext) => (name && extensionOf(name) ? `${name.slice(0, -extensionOf(name).length)}${ext}` : name);
+
+async function prepare(user, filename, { chosen = {}, originalName = null, via = 'upload', process = true } = {}) {
+  const username = user.username;
   const { file } = filePaths(username, filename);
+  const { size } = await fsp.stat(file);
+  const scanStatus = await scans.assertClean(file, { user, name: originalName || filename, size, via });
   const { type } = files.typeOf(filename, chosen.syntax);
   if (type === 'image' && settings.get('uploads.removeMetadata')) {
     await media
       .stripLocation(file)
       .catch((error) => log.warn('Standortdaten konnten nicht entfernt werden', { user: username, file: filename, error }));
   }
-  const { size, birthtime } = await fsp.stat(file);
-  const record = await insertWithSlug(
-    {
-      username,
-      filename,
-      sizeBytes: size,
-      createdAt: birthtime,
-      expiresAt: chosen.expiresAt,
-      passwordHash: chosen.passwordHash,
-      maxViews: chosen.maxViews,
-      originalName,
-      title: chosen.title,
-      syntax: chosen.syntax,
-    },
-    chosen
-  );
+  const result = { filename, originalName, scanStatus, original: null };
+  if (!process || type !== 'image' || !imaging.canProcess(extensionOf(filename))) return result;
+  const plan = await imagePlan(user, chosen);
+  if (!plan.optimize && !plan.watermark) return result;
+  let processed = null;
+  try {
+    processed = await imaging.processImage(file, { ext: extensionOf(filename), optimize: plan.optimize, watermark: plan.watermark });
+  } catch (error) {
+    log.warn('Das Bild ließ sich nicht optimieren, es bleibt unverändert', { user: username, file: filename, error });
+  }
+  if (!processed) return result;
+  const next = newFilename(processed.ext);
+  await fsp.rename(processed.file, filePaths(username, next).file);
+  if (plan.keepOriginal) {
+    result.original = { filename, size, sha256: await hashFile(file), originalName };
+  } else {
+    await fsp.rm(file, { force: true });
+  }
+  log.debug(processed.watermarked ? 'Bild verarbeitet und mit Wasserzeichen versehen' : 'Bild optimiert', {
+    user: username,
+    file: next,
+    before: formatBytes(processed.before),
+    after: formatBytes(processed.after),
+  });
+  return { ...result, filename: next, originalName: renamed(originalName, processed.ext) };
+}
+
+async function discardPrepared(username, prepared) {
+  await fsp.rm(filePaths(username, prepared.filename).file, { force: true });
+  if (prepared.original) await fsp.rm(filePaths(username, prepared.original.filename).file, { force: true });
+}
+
+async function accept(user, filename, { via = 'upload', originalName = null, options = null } = {}) {
+  const account = typeof user === 'string' ? await db.get('SELECT id, username FROM users WHERE username = ?', [user]) : user;
+  const actor = account || { username: user };
+  const username = actor.username;
+  const chosen = options || (await resolveOptions(actor, {}));
+  let prepared;
+  try {
+    prepared = await prepare(actor, filename, { chosen, originalName, via });
+  } catch (error) {
+    await fsp.rm(filePaths(username, filename).file, { force: true });
+    throw error;
+  }
+  let record;
+  let twin = null;
+  try {
+    const { file } = filePaths(username, prepared.filename);
+    const sha256 = await hashFile(file);
+    const { size } = await fsp.stat(file);
+    const link = await dedupe.linkUpload(username, file, sha256, size);
+    twin = link.twin;
+    record = await insertWithSlug(
+      {
+        username,
+        filename: prepared.filename,
+        sizeBytes: size,
+        createdAt: new Date(),
+        expiresAt: chosen.expiresAt,
+        passwordHash: chosen.passwordHash,
+        maxViews: chosen.maxViews,
+        originalName: prepared.originalName,
+        title: chosen.title,
+        syntax: chosen.syntax,
+        sha256,
+        deduped: link.linked,
+        warning: chosen.warning,
+        scanStatus: prepared.scanStatus,
+        version: prepared.original ? 2 : 1,
+      },
+      chosen
+    );
+  } catch (error) {
+    await discardPrepared(username, prepared);
+    throw error;
+  }
+  if (prepared.original) await versions.keepOriginal(record, prepared.original);
   if (chosen.tags && chosen.tags.length) await files.setTags(record, chosen.tags);
   if (chosen.albumId) {
     const order = await db.count('SELECT COALESCE(MAX(sort_order), 0) FROM album_files WHERE album_id = ?', [chosen.albumId]);
-    await db.insertIgnore('album_files', { album_id: chosen.albumId, file_id: record.id, sort_order: order + 1, added_at: Date.now() });
+    await db.insertIgnore('album_files', {
+      album_id: chosen.albumId,
+      file_id: record.id,
+      sort_order: order + 1,
+      added_at: Date.now(),
+      added_by: actor.id || null,
+    });
+    await db.run('UPDATE albums SET updated_at = ? WHERE id = ?', [Date.now(), chosen.albumId]);
   }
-  log.info('Datei hochgeladen', { user: username, file: filename, size: formatBytes(size), via: via === 'upload' ? undefined : via });
+  const { type } = files.typeOf(record.filename, record.syntax);
+  log.info('Datei hochgeladen', {
+    user: username,
+    file: record.filename,
+    size: formatBytes(record.size_bytes),
+    via: via === 'upload' ? undefined : via,
+    duplicate: Number(record.deduped) ? true : undefined,
+  });
+  if (type === 'text') search.indexLater(record);
   analyzeLater(record, type);
   const links = linksFor(record, chosen.domain);
+  if (twin)
+    links.duplicateOf = {
+      id: twin.id,
+      slug: twin.slug || twin.filename,
+      view: files.urlsFor(twin).view,
+      stored: Boolean(Number(record.deduped)),
+    };
   webhook.notify(
     'upload',
     'Neue Datei hochgeladen',
-    `Dateiname: **${filename}**\nURL: **${links.view}**\nBenutzername: **${username}**\nGröße: **${formatBytes(size)}**`
+    `Dateiname: **${record.filename}**\nURL: **${links.view}**\nBenutzername: **${username}**\nGröße: **${formatBytes(record.size_bytes)}**`
   );
   return links;
+}
+
+async function addVersion(user, record, filename, { originalName = null, note = null, process = true, via = 'version' } = {}) {
+  let prepared;
+  try {
+    prepared = await prepare(user, filename, {
+      chosen: { syntax: record.syntax, optimize: null, watermark: null },
+      originalName,
+      via,
+      process,
+    });
+  } catch (error) {
+    await fsp.rm(filePaths(user.username, filename).file, { force: true });
+    throw error;
+  }
+  if (prepared.original) await fsp.rm(filePaths(user.username, prepared.original.filename).file, { force: true });
+  let updated;
+  try {
+    updated = await versions.replace(record, prepared.filename, {
+      originalName: prepared.originalName === null ? undefined : prepared.originalName,
+      note,
+      scanStatus: prepared.scanStatus,
+    });
+  } catch (error) {
+    await fsp.rm(filePaths(user.username, prepared.filename).file, { force: true });
+    throw error;
+  }
+  const { type } = files.typeOf(updated.filename, updated.syntax);
+  if (type === 'text') search.indexLater(updated);
+  else await search.remove(updated.id);
+  analyzeLater(updated, type);
+  webhook.notify(
+    'upload',
+    versions.enabled() ? 'Neue Version hochgeladen' : 'Datei ersetzt',
+    `Datei: **${updated.filename}**\nVorher: **${record.filename}**\nBenutzername: **${user.username}**`
+  );
+  return updated;
 }
 
 const EDITABLE = ['.jpg', '.jpeg', '.png', '.webp'];
 
 async function replaceImage(user, record, filename) {
-  const { file } = filePaths(user.username, filename);
   if (!EDITABLE.includes(extensionOf(filename))) {
-    await fsp.rm(file, { force: true });
+    await fsp.rm(filePaths(user.username, filename).file, { force: true });
     throw badRequest('Gespeichert werden können nur PNG-, JPEG- und WebP-Bilder.');
   }
-  if (settings.get('uploads.removeMetadata')) {
-    await media
-      .stripLocation(file)
-      .catch((error) => log.warn('Standortdaten konnten nicht entfernt werden', { user: user.username, file: filename, error }));
-  }
-  const { size } = await fsp.stat(file);
-  const updated = await files.patch(record, {
-    filename,
-    slug: record.slug || record.filename,
-    size_bytes: size,
-    storage: 'local',
-    variants: null,
-    dominant_color: '#ffffff',
-    resolution_width: 0,
-    resolution_height: 0,
+  const updated = await addVersion(user, record, filename, { note: 'edited', process: false, via: 'editor' });
+  log.info('Bild bearbeitet', {
+    user: user.username,
+    file: updated.filename,
+    previous: record.filename,
+    size: formatBytes(updated.size_bytes),
   });
-  await storage
-    .removeArtifacts(record)
-    .catch((error) =>
-      log.warn('Die alte Fassung ließ sich nicht vollständig löschen', { user: user.username, file: record.filename, error })
-    );
-  log.info('Bild bearbeitet', { user: user.username, file: filename, previous: record.filename, size: formatBytes(size) });
-  analyzeLater(updated, 'image');
-  webhook.notify('upload', 'Bild bearbeitet', `Datei: **${filename}**\nVorher: **${record.filename}**\nBenutzername: **${user.username}**`);
   return updated;
 }
 
@@ -385,4 +542,16 @@ async function fetchRemote(user, value, { limit, message }, raw = {}) {
   }
 }
 
-module.exports = { EDITABLE, newFilename, rawOptions, resolveOptions, linksFor, accept, replaceImage, createText, fetchRemote };
+module.exports = {
+  EDITABLE,
+  newFilename,
+  rawOptions,
+  resolveOptions,
+  linksFor,
+  analyzeLater,
+  accept,
+  addVersion,
+  replaceImage,
+  createText,
+  fetchRemote,
+};

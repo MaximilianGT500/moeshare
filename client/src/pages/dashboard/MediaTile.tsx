@@ -15,8 +15,11 @@ import LooksOneRounded from '@mui/icons-material/LooksOneRounded';
 import CloudOutlined from '@mui/icons-material/CloudOutlined';
 import BlockRounded from '@mui/icons-material/BlockRounded';
 import AccountBoxOutlined from '@mui/icons-material/AccountBoxOutlined';
+import WarningAmberRounded from '@mui/icons-material/WarningAmberRounded';
+import HistoryRounded from '@mui/icons-material/HistoryRounded';
+import FileCopyOutlined from '@mui/icons-material/FileCopyOutlined';
 import type { FileItem } from '../../lib/types';
-import { t } from '../../lib/i18n';
+import { t, tn } from '../../lib/i18n';
 import { syntaxLabel } from '../../lib/syntax';
 import { extensionOf, formatBytes, formatNumber, relativeFromServer, relativeMs } from '../../lib/format';
 import { meaningfulColor, mix } from '../../lib/color';
@@ -55,9 +58,11 @@ const surfaceButton = {
   '&:hover': { bgcolor: c.surfaceContainerHighest },
 };
 
-function MediaImage({ file }: { file: FileItem }) {
+const BLUR = { filter: 'blur(18px) saturate(1.15)', transform: 'scale(1.18)' };
+
+function MediaImage({ file, blurred }: { file: FileItem; blurred: boolean }) {
   const [loaded, setLoaded] = useState(false);
-  const [mode, setMode] = useState<'preview' | 'direct' | 'video'>(file.isGif ? 'direct' : 'preview');
+  const [mode, setMode] = useState<'preview' | 'direct' | 'video'>(file.isGif && !blurred ? 'direct' : 'preview');
 
   if (mode === 'video') {
     return (
@@ -68,7 +73,7 @@ function MediaImage({ file }: { file: FileItem }) {
         playsInline
         preload="metadata"
         onLoadedData={() => setLoaded(true)}
-        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', opacity: loaded ? 1 : 0 }}
+        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', opacity: loaded ? 1 : 0, ...(blurred ? BLUR : {}) }}
       />
     );
   }
@@ -86,8 +91,53 @@ function MediaImage({ file }: { file: FileItem }) {
         if (file.type === 'video') setMode('video');
         else if (mode === 'preview') setMode('direct');
       }}
-      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', opacity: loaded ? 1 : 0 }}
+      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', opacity: loaded ? 1 : 0, ...(blurred ? BLUR : {}) }}
     />
+  );
+}
+
+export const hasWarning = (file: Pick<FileItem, 'warning'>) => typeof file.warning === 'string';
+
+const warningLabel = (file: Pick<FileItem, 'warning'>) =>
+  file.warning ? t('Inhaltswarnung: {label}', { label: file.warning }) : t('Inhaltswarnung');
+
+function WarningVeil({ file, compact }: { file: FileItem; compact: boolean }) {
+  return (
+    <Box
+      aria-hidden
+      sx={{
+        position: 'absolute',
+        inset: 0,
+        display: 'grid',
+        placeItems: 'center',
+        pointerEvents: 'none',
+        p: 1,
+        background: 'rgb(12 10 16 / 0.18)',
+      }}
+    >
+      <Box
+        sx={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 0.75,
+          maxWidth: '100%',
+          px: compact ? 0.75 : 1.25,
+          py: compact ? 0.5 : 0.625,
+          borderRadius: `${radius.full}px`,
+          fontSize: '0.75rem',
+          fontWeight: 700,
+          ...glass,
+          '& svg': { fontSize: compact ? 16 : 18, flexShrink: 0 },
+        }}
+      >
+        <WarningAmberRounded />
+        {!compact && (
+          <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {file.warning || t('Inhaltswarnung')}
+          </Box>
+        )}
+      </Box>
+    </Box>
   );
 }
 
@@ -172,11 +222,35 @@ function TextArt({ file, compact }: { file: FileItem; compact: boolean }) {
         color: c.onSurface,
       }}
     >
-      <Box aria-hidden sx={{ display: 'grid', gap: compact ? 0.6 : 0.8, mt: compact ? 3 : 4, opacity: 0.5 }}>
-        {[86, 64, 92, 48].map((width, index) => (
-          <Box key={index} sx={{ height: compact ? 4 : 6, width: `${width}%`, borderRadius: 3, bgcolor: c.onSurfaceVariant }} />
-        ))}
-      </Box>
+      {file.match && !compact ? (
+        <Typography
+          component="p"
+          sx={{
+            mt: 4,
+            fontSize: '0.75rem',
+            lineHeight: 1.45,
+            color: c.onSurfaceVariant,
+            overflow: 'hidden',
+            display: '-webkit-box',
+            WebkitLineClamp: 4,
+            WebkitBoxOrient: 'vertical',
+            wordBreak: 'break-word',
+          }}
+          title={t('Treffer in Zeile {line}', { line: file.match.line })}
+        >
+          {file.match.before}
+          <Box component="mark" sx={{ bgcolor: c.tertiaryContainer, color: c.onTertiaryContainer, borderRadius: '3px', px: '2px' }}>
+            {file.match.match}
+          </Box>
+          {file.match.after}
+        </Typography>
+      ) : (
+        <Box aria-hidden sx={{ display: 'grid', gap: compact ? 0.6 : 0.8, mt: compact ? 3 : 4, opacity: 0.5 }}>
+          {[86, 64, 92, 48].map((width, index) => (
+            <Box key={index} sx={{ height: compact ? 4 : 6, width: `${width}%`, borderRadius: 3, bgcolor: c.onSurfaceVariant }} />
+          ))}
+        </Box>
+      )}
       <Box sx={{ flex: 1 }} />
       <Typography
         component="p"
@@ -200,6 +274,25 @@ function StatusBadges({ file, compact, onMedia }: { file: FileItem; compact: boo
     file.maxViews ? { key: 'once', icon: <LooksOneRounded />, label: t('Nur einmal abrufbar') } : null,
     file.expiresAt ? { key: 'timer', icon: <TimerOutlined />, label: t('Läuft ab: {when}', { when: relativeMs(file.expiresAt) }) } : null,
     file.storage === 's3' && !compact ? { key: 's3', icon: <CloudOutlined />, label: t('Liegt in S3') } : null,
+    hasWarning(file) && file.type !== 'image' && file.type !== 'video'
+      ? { key: 'warning', icon: <WarningAmberRounded />, label: warningLabel(file) }
+      : null,
+    file.twins
+      ? {
+          key: 'twins',
+          icon: <FileCopyOutlined />,
+          label: tn(file.twins, 'Diese Datei hast du noch einmal hochgeladen', 'Diese Datei hast du noch {count}-mal hochgeladen'),
+        }
+      : null,
+    file.versions && !compact
+      ? {
+          key: 'versions',
+          icon: <HistoryRounded />,
+          label: tn(file.versions, 'Version {version}, dazu 1 ältere Fassung', 'Version {version}, dazu {count} ältere Fassungen', {
+            version: file.version,
+          }),
+        }
+      : null,
   ].filter(Boolean) as Array<{ key: string; icon: ReactElement; label: string; alert?: boolean }>;
   if (!items.length) return null;
   return (
@@ -288,6 +381,7 @@ function MediaTileImpl({ file, selected, selecting, hidden, fresh, compact, onOp
   const frameRef = useRef<HTMLDivElement | null>(null);
   const longPress = useRef<{ timer: number; x: number; y: number; fired: boolean }>({ timer: 0, x: 0, y: 0, fired: false });
   const visual = file.type === 'image' || file.type === 'video';
+  const veiled = visual && hasWarning(file);
   const color = meaningfulColor(file.color);
   const glow = color ?? (file.type === 'audio' ? fileTypeColor.audio : c.primary);
 
@@ -395,7 +489,8 @@ function MediaTileImpl({ file, selected, selecting, hidden, fresh, compact, onOp
             transition: `inset 240ms ${css.standard}, border-radius 240ms ${css.standard}`,
           }}
         >
-          {visual && <MediaImage file={file} />}
+          {visual && <MediaImage key={veiled ? 'veiled' : 'clear'} file={file} blurred={veiled} />}
+          {veiled && <WarningVeil file={file} compact={compact} />}
           {file.type === 'audio' && <AudioArt file={file} compact={compact} />}
           {file.type === 'file' && <FileArt file={file} compact={compact} />}
           {file.type === 'text' && <TextArt file={file} compact={compact} />}
@@ -406,7 +501,7 @@ function MediaTileImpl({ file, selected, selecting, hidden, fresh, compact, onOp
 
       {file.type === 'audio' && !selecting && <AudioPlayButton file={file} compact={compact} />}
 
-      {file.type === 'video' && !selecting && (
+      {file.type === 'video' && !selecting && !veiled && (
         <Box
           aria-hidden
           sx={{
@@ -428,7 +523,7 @@ function MediaTileImpl({ file, selected, selecting, hidden, fresh, compact, onOp
         </Box>
       )}
 
-      {file.isGif && (
+      {file.isGif && !veiled && (
         <Box
           aria-hidden
           sx={{

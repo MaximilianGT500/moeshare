@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type DragEvent as ReactDragEvent, type CSSProperties } from 'react';
+import { useCallback, useEffect, useRef, useState, type DragEvent as ReactDragEvent, type CSSProperties } from 'react';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import ButtonBase from '@mui/material/ButtonBase';
@@ -35,18 +35,27 @@ import DragIndicatorRounded from '@mui/icons-material/DragIndicatorRounded';
 import LinkRounded from '@mui/icons-material/LinkRounded';
 import BarChartRounded from '@mui/icons-material/BarChartRounded';
 import FolderZipOutlined from '@mui/icons-material/FolderZipOutlined';
+import GroupOutlined from '@mui/icons-material/GroupOutlined';
+import PersonAddAlt1Outlined from '@mui/icons-material/PersonAddAlt1Outlined';
+import LogoutRounded from '@mui/icons-material/LogoutRounded';
+import CloudUploadRounded from '@mui/icons-material/CloudUploadRounded';
+import CloseRounded from '@mui/icons-material/CloseRounded';
 import Alert from '@mui/material/Alert';
+import Chip from '@mui/material/Chip';
 import {
   ApiError,
+  addAlbumMember,
   addToAlbum,
+  albumZipUrl,
   createAlbum,
   deleteAlbum,
   fetchAlbum,
+  leaveAlbum,
   listAlbums,
+  removeAlbumMember,
   removeFromAlbum,
   reorderAlbum,
   updateAlbum,
-  zipUrl,
 } from '../../lib/api';
 import type { Album, AlbumVisibility, FileItem, UploadOptionsInfo } from '../../lib/types';
 import { relativeMs } from '../../lib/format';
@@ -59,7 +68,9 @@ import { PasswordField } from '../../components/PasswordField';
 import { GrowTransition } from '../../components/transitions';
 import { StatsDialog, type StatsTarget } from '../../components/StatsView';
 import { fileIcon } from '../../components/FileIcons';
-import { displayName } from './MediaTile';
+import { UserAvatar } from '../../components/UserAvatar';
+import { displayName, hasWarning } from './MediaTile';
+import { useUploads } from './uploads';
 import { c, css, radius } from '../../theme/tokens';
 
 export function AlbumEditorDialog({
@@ -408,15 +419,18 @@ function AlbumThumb({
   onRemove,
   onCover,
   dragProps,
+  contributor,
 }: {
   file: FileItem;
   isCover: boolean;
-  onRemove: () => void;
-  onCover: () => void;
-  dragProps: DragProps;
+  onRemove?: () => void;
+  onCover?: () => void;
+  dragProps?: DragProps;
+  contributor?: string;
 }) {
   const [failed, setFailed] = useState(false);
   const visual = (file.type === 'image' || file.type === 'video') && !failed;
+  const veiled = visual && hasWarning(file);
   return (
     <Box
       {...dragProps}
@@ -438,7 +452,13 @@ function AlbumThumb({
           alt=""
           loading="lazy"
           onError={() => setFailed(true)}
-          sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+          sx={{
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            display: 'block',
+            ...(veiled ? { filter: 'blur(16px)', transform: 'scale(1.15)' } : {}),
+          }}
         />
       ) : (
         <Box
@@ -471,43 +491,193 @@ function AlbumThumb({
           transition: `opacity 160ms ${css.standard}`,
         }}
       >
-        <Box
-          sx={{
-            display: { xs: 'none', md: 'grid' },
-            placeItems: 'center',
-            width: 30,
-            height: 30,
-            borderRadius: '50%',
-            bgcolor: 'rgb(12 10 16 / 0.5)',
-            color: '#fff',
-            cursor: 'grab',
-          }}
-        >
-          <DragIndicatorRounded fontSize="small" />
-        </Box>
+        {dragProps?.draggable && (
+          <Box
+            sx={{
+              display: { xs: 'none', md: 'grid' },
+              placeItems: 'center',
+              width: 30,
+              height: 30,
+              borderRadius: '50%',
+              bgcolor: 'rgb(12 10 16 / 0.5)',
+              color: '#fff',
+              cursor: 'grab',
+            }}
+          >
+            <DragIndicatorRounded fontSize="small" />
+          </Box>
+        )}
         <Box sx={{ display: 'flex', gap: 0.5, ml: 'auto' }}>
-          <Tooltip title={t('Als Titelbild')}>
-            <IconButton
-              size="small"
-              onClick={onCover}
-              aria-label={t('Als Titelbild')}
-              sx={{ bgcolor: 'rgb(12 10 16 / 0.5)', color: '#fff', '&:hover': { bgcolor: 'rgb(12 10 16 / 0.7)' } }}
-            >
-              <WallpaperRounded fontSize="small" />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title={t('Aus dem Album entfernen')}>
-            <IconButton
-              size="small"
-              onClick={onRemove}
-              aria-label={t('Aus dem Album entfernen')}
-              sx={{ bgcolor: 'rgb(12 10 16 / 0.5)', color: '#fff', '&:hover': { bgcolor: 'rgb(12 10 16 / 0.7)' } }}
-            >
-              <RemoveCircleOutlineRounded fontSize="small" />
-            </IconButton>
-          </Tooltip>
+          {onCover && (
+            <Tooltip title={t('Als Titelbild')}>
+              <IconButton
+                size="small"
+                onClick={onCover}
+                aria-label={t('Als Titelbild')}
+                sx={{ bgcolor: 'rgb(12 10 16 / 0.5)', color: '#fff', '&:hover': { bgcolor: 'rgb(12 10 16 / 0.7)' } }}
+              >
+                <WallpaperRounded fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
+          {onRemove && (
+            <Tooltip title={t('Aus dem Album entfernen')}>
+              <IconButton
+                size="small"
+                onClick={onRemove}
+                aria-label={t('Aus dem Album entfernen')}
+                sx={{ bgcolor: 'rgb(12 10 16 / 0.5)', color: '#fff', '&:hover': { bgcolor: 'rgb(12 10 16 / 0.7)' } }}
+              >
+                <RemoveCircleOutlineRounded fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
         </Box>
       </Box>
+      {contributor && (
+        <Box
+          sx={{
+            position: 'absolute',
+            left: 6,
+            bottom: 6,
+            maxWidth: 'calc(100% - 12px)',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 0.5,
+            pl: 0.25,
+            pr: 1,
+            py: 0.25,
+            borderRadius: `${radius.full}px`,
+            bgcolor: 'rgb(12 10 16 / 0.55)',
+            color: '#fff',
+            fontSize: '0.6875rem',
+            fontWeight: 600,
+            pointerEvents: 'none',
+          }}
+        >
+          <UserAvatar name={contributor} size={18} />
+          <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {contributor}
+          </Box>
+        </Box>
+      )}
+    </Box>
+  );
+}
+
+function MembersPanel({ album, onChange }: { album: Album; onChange: (album: Album) => void }) {
+  const toast = useToast();
+  const confirm = useConfirm();
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const owner = album.role !== 'member';
+  const members = album.memberList || [];
+
+  const add = async () => {
+    const value = name.trim();
+    if (!value) return;
+    setBusy(true);
+    setError('');
+    try {
+      const { album: updated } = await addAlbumMember(album.id, value);
+      onChange(updated);
+      setName('');
+      toast(t('{name} kann jetzt Dateien zu „{album}“ hinzufügen', { name: value, album: album.title }), { variant: 'success' });
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t('Das hat nicht geklappt.'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async (id: number, username: string) => {
+    const ok = await confirm({
+      title: t('{name} aus dem Album nehmen?', { name: username }),
+      message: t('Die Dateien, die {name} hinzugefügt hat, verschwinden aus dem Album. Sie bleiben aber im Konto von {name}.', {
+        name: username,
+      }),
+      confirmLabel: t('Entfernen'),
+    });
+    if (!ok) return;
+    try {
+      const { album: updated } = await removeAlbumMember(album.id, id);
+      onChange(updated);
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : t('Das hat nicht geklappt.'), { variant: 'error' });
+    }
+  };
+
+  if (!owner && !members.length) return null;
+
+  return (
+    <Box sx={{ mb: 3, p: 2, borderRadius: `${radius.md}px`, bgcolor: c.surfaceContainer }}>
+      <Typography variant="subtitle2" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <GroupOutlined fontSize="small" />
+        {t('Gemeinsames Album')}
+      </Typography>
+      <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5, mb: 1.5, maxWidth: 640 }}>
+        {owner
+          ? t(
+              'Wen du einlädst, kann eigene Dateien hinzufügen und die eigenen wieder herausnehmen. Bearbeiten, sortieren und löschen kannst nur du.'
+            )
+          : t('{owner} hat dich eingeladen. Du kannst eigene Dateien hinzufügen und deine wieder herausnehmen.', {
+              owner: album.owner || '',
+            })}
+      </Typography>
+      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+        {!owner && album.owner && (
+          <Chip avatar={<UserAvatar name={album.owner} size={24} />} label={t('{name} (Besitzer)', { name: album.owner })} />
+        )}
+        {members.map((member) => (
+          <Chip
+            key={member.id}
+            avatar={<UserAvatar name={member.username} size={24} />}
+            label={member.username}
+            onDelete={owner ? () => remove(member.id, member.username) : undefined}
+            deleteIcon={<CloseRounded />}
+          />
+        ))}
+        {owner && members.length === 0 && (
+          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+            {t('Noch niemand eingeladen.')}
+          </Typography>
+        )}
+      </Box>
+      {owner && (
+        <Box
+          component="form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            add();
+          }}
+          sx={{ display: 'flex', gap: 1, mt: 2, flexWrap: 'wrap', alignItems: 'flex-start' }}
+        >
+          <TextField
+            size="small"
+            label={t('Benutzername')}
+            value={name}
+            onChange={(event) => {
+              setName(event.target.value);
+              if (error) setError('');
+            }}
+            error={!!error}
+            helperText={error || undefined}
+            disabled={busy}
+            sx={{ flex: '1 1 220px', maxWidth: 360 }}
+            slotProps={{ htmlInput: { autoCapitalize: 'none', spellCheck: false, maxLength: 64 } }}
+          />
+          <Button
+            type="submit"
+            variant="tonal"
+            disabled={busy || !name.trim()}
+            startIcon={busy ? <CircularProgress size={16} color="inherit" /> : <PersonAddAlt1Outlined />}
+            sx={{ height: 40 }}
+          >
+            {t('Einladen')}
+          </Button>
+        </Box>
+      )}
     </Box>
   );
 }
@@ -515,20 +685,24 @@ function AlbumThumb({
 function AlbumDetail({
   albumId,
   info,
+  refreshKey,
   onBack,
   onChanged,
 }: {
   albumId: number;
   info?: UploadOptionsInfo;
+  refreshKey: number;
   onBack: () => void;
   onChanged: () => void;
 }) {
   const toast = useToast();
   const confirm = useConfirm();
+  const { enqueue } = useUploads();
   const [album, setAlbum] = useState<Album | null>(null);
   const [statsTarget, setStatsTarget] = useState<StatsTarget | null>(null);
   const [editing, setEditing] = useState(false);
   const [dragging, setDragging] = useState<number | null>(null);
+  const picker = useRef<HTMLInputElement>(null);
 
   const load = useCallback(() => {
     fetchAlbum(albumId)
@@ -539,7 +713,7 @@ function AlbumDetail({
       });
   }, [albumId, toast, onBack]);
 
-  useEffect(load, [load]);
+  useEffect(load, [load, refreshKey]);
 
   if (!album) {
     return (
@@ -555,6 +729,8 @@ function AlbumDetail({
   }
 
   const items = album.items || [];
+  const owner = album.role !== 'member';
+  const shared = (album.members ?? album.memberList?.length ?? 0) > 0 || !owner;
 
   const remove = async (file: FileItem) => {
     try {
@@ -598,13 +774,32 @@ function AlbumDetail({
   const remove_ = async () => {
     const ok = await confirm({
       title: t('Album löschen?'),
-      message: t('„{album}“ wird gelöscht. Die Dateien darin bleiben erhalten.', { album: album.title }),
+      message: shared
+        ? t('„{album}“ wird für alle gelöscht, mit denen du es teilst. Die Dateien darin bleiben erhalten.', { album: album.title })
+        : t('„{album}“ wird gelöscht. Die Dateien darin bleiben erhalten.', { album: album.title }),
       confirmLabel: t('Löschen'),
     });
     if (!ok) return;
     try {
       await deleteAlbum(album.id);
       toast(t('Album gelöscht'), { variant: 'success' });
+      onChanged();
+      onBack();
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : t('Das hat nicht geklappt.'), { variant: 'error' });
+    }
+  };
+
+  const leave = async () => {
+    const ok = await confirm({
+      title: t('Album verlassen?'),
+      message: t('Deine Dateien verschwinden aus „{album}“, bleiben aber in deinem Konto.', { album: album.title }),
+      confirmLabel: t('Verlassen'),
+    });
+    if (!ok) return;
+    try {
+      await leaveAlbum(album.id);
+      toast(t('Du bist nicht mehr dabei'), { variant: 'success' });
       onChanged();
       onBack();
     } catch (err) {
@@ -628,7 +823,13 @@ function AlbumDetail({
             </Box>
           </Typography>
           <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
-            {[tn(items.length, '1 Datei', '{count} Dateien'), t('geändert {when}', { when: relativeMs(album.updatedAt) })].join(' · ')}
+            {[
+              tn(items.length, '1 Datei', '{count} Dateien'),
+              t('geändert {when}', { when: relativeMs(album.updatedAt) }),
+              !owner && album.owner ? t('von {name}', { name: album.owner }) : '',
+            ]
+              .filter(Boolean)
+              .join(' · ')}
           </Typography>
           {album.description && (
             <Typography variant="body1" sx={{ mt: 1, maxWidth: 720, whiteSpace: 'pre-line' }}>
@@ -647,32 +848,48 @@ function AlbumDetail({
               </Button>
             </>
           )}
-          <Button startIcon={<EditOutlined />} onClick={() => setEditing(true)}>
-            {t('Bearbeiten')}
+          <Button startIcon={<CloudUploadRounded />} onClick={() => picker.current?.click()}>
+            {t('Hochladen')}
           </Button>
+          {owner && (
+            <Button startIcon={<EditOutlined />} onClick={() => setEditing(true)}>
+              {t('Bearbeiten')}
+            </Button>
+          )}
           {info?.stats && album.visibility !== 'private' && (
             <Button startIcon={<BarChartRounded />} onClick={() => setStatsTarget({ kind: 'album', id: album.id, title: album.title })}>
               {t('Statistik')}
             </Button>
           )}
           {info?.zip && items.length > 0 && (
-            <Button
-              component="a"
-              href={zipUrl(
-                items.map((file) => file.id),
-                album.title
-              )}
-              download
-              startIcon={<FolderZipOutlined />}
-            >
+            <Button component="a" href={albumZipUrl(album.id)} download startIcon={<FolderZipOutlined />}>
               {t('ZIP')}
             </Button>
           )}
-          <Button color="error" startIcon={<DeleteOutlineRounded />} onClick={remove_}>
-            {t('Löschen')}
-          </Button>
+          {owner ? (
+            <Button color="error" startIcon={<DeleteOutlineRounded />} onClick={remove_}>
+              {t('Löschen')}
+            </Button>
+          ) : (
+            <Button color="error" startIcon={<LogoutRounded />} onClick={leave}>
+              {t('Verlassen')}
+            </Button>
+          )}
         </Box>
+        <input
+          ref={picker}
+          type="file"
+          multiple
+          hidden
+          onChange={(event) => {
+            const picked = Array.from(event.target.files || []);
+            event.target.value = '';
+            if (picked.length) enqueue(picked, { album: album.id });
+          }}
+        />
       </Box>
+
+      <MembersPanel album={album} onChange={(updated) => setAlbum(updated)} />
 
       {album.blocked && (
         <Alert severity="error" sx={{ mb: 2 }}>
@@ -685,7 +902,7 @@ function AlbumDetail({
         <Box sx={{ textAlign: 'center', py: 8, color: 'text.secondary' }}>
           <CollectionsOutlined sx={{ fontSize: 48, opacity: 0.6 }} />
           <Typography variant="body1" sx={{ mt: 1.5 }}>
-            {t('Noch leer. Wähle im Bereich „Dateien“ Dateien aus und lege sie in dieses Album.')}
+            {t('Noch leer. Lade Dateien direkt hier hoch oder wähle im Bereich „Dateien“ welche aus und lege sie in dieses Album.')}
           </Typography>
         </Box>
       ) : (
@@ -695,19 +912,24 @@ function AlbumDetail({
               key={file.id}
               file={file}
               isCover={album.coverFileId === file.id}
-              onRemove={() => remove(file)}
-              onCover={() => setCover(file)}
-              dragProps={{
-                draggable: true,
-                onDragStart: () => setDragging(index),
-                onDragOver: (event: ReactDragEvent<HTMLDivElement>) => event.preventDefault(),
-                onDrop: () => {
-                  if (dragging !== null) move(dragging, index);
-                  setDragging(null);
-                },
-                onDragEnd: () => setDragging(null),
-                style: { opacity: dragging === index ? 0.4 : 1 },
-              }}
+              onRemove={owner || file.mine ? () => remove(file) : undefined}
+              onCover={owner ? () => setCover(file) : undefined}
+              contributor={shared && file.username !== album.owner ? file.username : undefined}
+              dragProps={
+                owner
+                  ? {
+                      draggable: true,
+                      onDragStart: () => setDragging(index),
+                      onDragOver: (event: ReactDragEvent<HTMLDivElement>) => event.preventDefault(),
+                      onDrop: () => {
+                        if (dragging !== null) move(dragging, index);
+                        setDragging(null);
+                      },
+                      onDragEnd: () => setDragging(null),
+                      style: { opacity: dragging === index ? 0.4 : 1 },
+                    }
+                  : undefined
+              }
             />
           ))}
         </Box>
@@ -731,10 +953,12 @@ export function AlbumsView({
   openId,
   onOpen,
   info,
+  refreshKey = 0,
 }: {
   openId: number | null;
   onOpen: (id: number | null) => void;
   info?: UploadOptionsInfo;
+  refreshKey?: number;
 }) {
   const [albums, setAlbums] = useState<Album[] | null>(null);
   const [creating, setCreating] = useState(false);
@@ -749,9 +973,9 @@ export function AlbumsView({
       });
   }, [toast]);
 
-  useEffect(load, [load]);
+  useEffect(load, [load, refreshKey]);
 
-  if (openId) return <AlbumDetail albumId={openId} info={info} onBack={() => onOpen(null)} onChanged={load} />;
+  if (openId) return <AlbumDetail albumId={openId} info={info} refreshKey={refreshKey} onBack={() => onOpen(null)} onChanged={load} />;
 
   return (
     <Box>
@@ -819,8 +1043,22 @@ export function AlbumsView({
                     <VisibilityIcon album={album} />
                   </Box>
                 </Typography>
-                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                  {tn(album.files, '1 Datei', '{count} Dateien')}
+                <Typography variant="body2" sx={{ color: 'text.secondary', display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0 }}>
+                  <Box component="span" sx={{ flexShrink: 0 }}>
+                    {tn(album.files, '1 Datei', '{count} Dateien')}
+                  </Box>
+                  {album.role === 'member' && album.owner ? (
+                    <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {t('von {name}', { name: album.owner })}
+                    </Box>
+                  ) : album.members ? (
+                    <Tooltip title={tn(album.members, 'Mit 1 Person geteilt', 'Mit {count} Personen geteilt')}>
+                      <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.25 }}>
+                        <GroupOutlined sx={{ fontSize: 16 }} />
+                        {album.members}
+                      </Box>
+                    </Tooltip>
+                  ) : null}
                 </Typography>
               </Box>
             </ButtonBase>

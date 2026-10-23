@@ -12,7 +12,8 @@ const encode = (value) => {
   return value;
 };
 
-const decode = (value) => (value && typeof value === 'object' && typeof value.$b64 === 'string' ? Buffer.from(value.$b64, 'base64') : value);
+const decode = (value) =>
+  value && typeof value === 'object' && typeof value.$b64 === 'string' ? Buffer.from(value.$b64, 'base64') : value;
 
 const columnsOf = (table) => table.columns.map((column) => column.name);
 const keyOf = (table) => (SINGLE_KEY.has(table.name) ? ['id'] : table.primaryKey);
@@ -67,6 +68,13 @@ function guard() {
     ],
     file_tags: [['file_id', 'file_data']],
     user_domains: [['user_id', 'users']],
+    file_versions: [['file_id', 'file_data']],
+    album_members: [
+      ['album_id', 'albums'],
+      ['user_id', 'users'],
+    ],
+    upload_sessions: [['user_id', 'users']],
+    file_search: [['file_id', 'file_data']],
   };
   return {
     accept(tableName, row) {
@@ -76,7 +84,12 @@ function guard() {
       if (tableName === 'invites' && row.created_by !== null && row.created_by !== undefined && !known.users.has(Number(row.created_by))) {
         row.created_by = null;
       }
-      if (tableName === 'albums' && row.cover_file_id !== null && row.cover_file_id !== undefined && !known.file_data.has(Number(row.cover_file_id))) {
+      if (
+        tableName === 'albums' &&
+        row.cover_file_id !== null &&
+        row.cover_file_id !== undefined &&
+        !known.file_data.has(Number(row.cover_file_id))
+      ) {
         row.cover_file_id = null;
       }
       if (known[tableName]) known[tableName].add(Number(row.id));
@@ -108,9 +121,7 @@ async function writeRows(tx, table, rows) {
 async function resetSequences(db) {
   if (db.client !== 'postgres') return;
   for (const name of SINGLE_KEY) {
-    await db.get(
-      `SELECT setval(pg_get_serial_sequence('${name}', 'id'), COALESCE((SELECT MAX(id) FROM ${name}), 0) + 1, false) AS value`
-    );
+    await db.get(`SELECT setval(pg_get_serial_sequence('${name}', 'id'), COALESCE((SELECT MAX(id) FROM ${name}), 0) + 1, false) AS value`);
   }
 }
 

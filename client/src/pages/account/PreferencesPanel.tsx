@@ -2,11 +2,13 @@ import { useEffect, useState } from 'react';
 import Box from '@mui/material/Box';
 import MenuItem from '@mui/material/MenuItem';
 import Stack from '@mui/material/Stack';
+import Switch from '@mui/material/Switch';
 import TextField from '@mui/material/TextField';
 import TranslateRounded from '@mui/icons-material/TranslateRounded';
 import LinkRounded from '@mui/icons-material/LinkRounded';
 import TimerOutlined from '@mui/icons-material/TimerOutlined';
 import LanguageRounded from '@mui/icons-material/LanguageRounded';
+import PhotoSizeSelectLargeRounded from '@mui/icons-material/PhotoSizeSelectLargeRounded';
 import type { AccountOverview, ExpiryChoice, Preferences, UrlStyle } from '../../lib/types';
 import { errorMessage, savePreferences } from '../../lib/api';
 import { t } from '../../lib/i18n';
@@ -128,6 +130,23 @@ export function PreferencesPanel({ account, onSaved }: { account: AccountOvervie
             />
           </Box>
         </SettingRow>
+        {choices.optimize && (
+          <SettingRow
+            icon={<PhotoSizeSelectLargeRounded />}
+            label={t('Bilder optimieren')}
+            description={t(
+              'Bilder werden beim Hochladen kleiner gespeichert. Sichtbar ändert sich nichts, deine Links laden aber schneller.'
+            )}
+            htmlFor="pref-optimize"
+          >
+            <Switch
+              id="pref-optimize"
+              checked={prefs.optimize !== false}
+              disabled={busy}
+              onChange={(event) => save('optimize', event.target.checked ? null : false)}
+            />
+          </SettingRow>
+        )}
         {choices.domains.length > 1 && (
           <SettingRow
             icon={<LanguageRounded />}

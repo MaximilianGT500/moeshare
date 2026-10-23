@@ -11,6 +11,7 @@ const files = require('../services/fileService');
 const quota = require('../services/quotaService');
 const settings = require('../services/settingsService');
 const uploads = require('../services/uploadService');
+const resumable = require('../services/resumableService');
 const links = require('../services/linkService');
 const webhook = require('../services/webhookService');
 
@@ -131,6 +132,57 @@ router.post('/api/files/:id/replace', requireApi(), async (req, res) => {
   const updated = await uploads.replaceImage(req.user, record, file.filename);
   const [result] = await files.withTags([updated]);
   res.json({ ok: true, file: result });
+});
+
+router.post('/api/files/:id/versions', apiAuth, async (req, res) => {
+  const record = await files.findOwned(req.user.username, req.params.id);
+  if (!record) throw notFound('Diese Datei gibt es nicht (mehr).');
+  const limits = await quota.limitsFor(req.user);
+  if (limits.remaining === 0) throw tooLarge(limits.message);
+  let file;
+  try {
+    file = await receive(req, res, limits.limit);
+  } catch (error) {
+    if (error.code === 'LIMIT_FILE_SIZE') throw tooLarge(limits.message);
+    throw error;
+  }
+  if (!file) throw badRequest('Keine Datei hochgeladen!');
+  const updated = await uploads.addVersion(req.user, record, file.filename, { originalName: originalNameOf(file) });
+  const [result] = await files.withTags([updated]);
+  res.json({ ok: true, file: result });
+});
+
+router.post('/api/uploads', apiAuth, async (req, res) => {
+  res.status(201).json(await resumable.create(req.user, req.body || {}, uploads.rawOptions(req)));
+});
+
+router.get('/api/uploads', apiAuth, async (req, res) => {
+  res.json({ uploads: await resumable.list(req.user) });
+});
+
+router.get('/api/uploads/:id', apiAuth, async (req, res) => {
+  const session = await resumable.get(req.user, req.params.id);
+  res.set('Upload-Offset', String(session.received));
+  res.set('Upload-Length', String(session.size));
+  res.json(session);
+});
+
+router.patch('/api/uploads/:id', apiAuth, async (req, res) => {
+  const result = await resumable.append(req.user, req.params.id, req);
+  res.set('Upload-Offset', String(result.received));
+  res.json(result);
+});
+
+router.post('/api/uploads/:id/complete', apiAuth, async (req, res) => {
+  const result = await resumable.complete(req.user, req.params.id);
+  if (result.links) return res.json(result.links);
+  const [file] = await files.withTags([result.version]);
+  return res.json({ ok: true, version: true, file });
+});
+
+router.delete('/api/uploads/:id', apiAuth, async (req, res) => {
+  await resumable.cancel(req.user, req.params.id);
+  res.json({ ok: true });
 });
 
 router.get('/files', apiAuth, async (req, res) => {

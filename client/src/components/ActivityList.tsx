@@ -27,6 +27,11 @@ import MailOutlineRounded from '@mui/icons-material/MailOutlineRounded';
 import LanguageRounded from '@mui/icons-material/LanguageRounded';
 import FlagOutlined from '@mui/icons-material/FlagOutlined';
 import PaletteOutlined from '@mui/icons-material/PaletteOutlined';
+import CollectionsOutlined from '@mui/icons-material/CollectionsOutlined';
+import CoronavirusOutlined from '@mui/icons-material/CoronavirusOutlined';
+import DownloadRounded from '@mui/icons-material/DownloadRounded';
+import MoveDownRounded from '@mui/icons-material/MoveDownRounded';
+import NotificationsRounded from '@mui/icons-material/NotificationsRounded';
 import type { AuditEvent } from '../lib/types';
 import { formatDateTime, formatNumber, formatRelative } from '../lib/format';
 import { providerIcon, providerLabel } from '../lib/providers';
@@ -63,6 +68,16 @@ const SETTING_GROUPS: Record<string, string> = {
   zip: t('ZIP-Download'),
   reports: t('Melden'),
   mail: t('E-Mail'),
+  images: t('Bilder'),
+  clamav: t('Virenscan'),
+  search: t('Suche'),
+  export: t('Datenexport'),
+};
+
+const WEBHOOK_CHANGES: Record<string, string> = {
+  created: t('Benachrichtigungsziel hinzugefügt'),
+  updated: t('Benachrichtigungsziel geändert'),
+  removed: t('Benachrichtigungsziel entfernt'),
 };
 
 const KIND_LABELS: Record<string, string> = { file: t('Datei'), album: t('Album'), link: t('Kurzlink'), profile: t('Profil') };
@@ -259,6 +274,46 @@ function describeEvent(event: AuditEvent): Described {
       return { icon: <BlockRounded />, title: t('Inhalt gesperrt'), detail: KIND_LABELS[str(d.kind)] || undefined, tone: 'bad' };
     case 'content_unblocked':
       return { icon: <LockOpenRounded />, title: t('Sperre aufgehoben'), detail: KIND_LABELS[str(d.kind)] || undefined, tone: 'good' };
+    case 'album_shared':
+      return {
+        icon: <CollectionsOutlined />,
+        title: t('Zu einem gemeinsamen Album eingeladen'),
+        detail: d.owner ? t('„{album}“ von {owner}', { album: str(d.album), owner: str(d.owner) }) : str(d.album) || undefined,
+        tone: 'good',
+      };
+    case 'album_left':
+      return { icon: <CollectionsOutlined />, title: t('Gemeinsames Album verlassen'), detail: str(d.album) || undefined, tone: 'neutral' };
+    case 'virus_found':
+      return {
+        icon: <CoronavirusOutlined />,
+        title: t('Schadsoftware abgewiesen'),
+        detail: [str(d.name), str(d.signature)].filter(Boolean).join(', ') || undefined,
+        tone: 'bad',
+      };
+    case 'data_exported':
+      return {
+        icon: <DownloadRounded />,
+        title: t('Daten exportiert'),
+        detail: d.files === false ? t('ohne Dateien') : t('mit allen Dateien'),
+        tone: 'neutral',
+      };
+    case 'import_finished':
+      return {
+        icon: <MoveDownRounded />,
+        title: t('Import aus {source} abgeschlossen', { source: str(d.source) }),
+        detail: t('{files} Dateien, {users} neue Konten', {
+          files: formatNumber(Number(d.files) || 0),
+          users: formatNumber(Number(d.users) || 0),
+        }),
+        tone: 'good',
+      };
+    case 'webhook_changed':
+      return {
+        icon: <NotificationsRounded />,
+        title: WEBHOOK_CHANGES[str(d.change)] || t('Benachrichtigungen geändert'),
+        detail: str(d.name) || undefined,
+        tone: 'neutral',
+      };
     default:
       return { icon: <HistoryRounded />, title: event.action, tone: 'neutral' };
   }

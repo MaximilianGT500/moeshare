@@ -31,13 +31,18 @@ import LanguageRounded from '@mui/icons-material/LanguageRounded';
 import MailOutlineRounded from '@mui/icons-material/MailOutlineRounded';
 import AppsRounded from '@mui/icons-material/AppsRounded';
 import PaletteOutlined from '@mui/icons-material/PaletteOutlined';
-import type { BackupInfo, ExpiryChoice, SettingsPayload, SettingValue, SiteLink, StorageInfo, UrlStyle } from '../../lib/types';
+import PhotoSizeSelectLargeRounded from '@mui/icons-material/PhotoSizeSelectLargeRounded';
+import CoronavirusOutlined from '@mui/icons-material/CoronavirusOutlined';
+import MoveDownRounded from '@mui/icons-material/MoveDownRounded';
+import type { AdminBoot, BackupInfo, ExpiryChoice, SettingsPayload, SettingValue, SiteLink, StorageInfo, UrlStyle } from '../../lib/types';
 import { EXPIRY_CHOICES, URL_STYLES, expiryLabel, urlStyleExample, urlStyleLabel } from '../../components/ShareOptions';
 import { StorageTools } from './StorageTools';
 import { BackupTools } from './BackupTools';
 import { LinkListEditor } from '../../components/LinkListEditor';
 import { providerIcon } from '../../lib/providers';
-import { ApiError, errorMessage, saveSettings, testMail, testWebhook } from '../../lib/api';
+import { ApiError, errorMessage, saveSettings, testClamav, testMail } from '../../lib/api';
+import { WebhookTargets } from './WebhookTools';
+import { ImportTools } from './ImportTools';
 import { CaddyHint, DomainList } from './DomainTools';
 import { SaveBar, SettingRow, SettingsSection, SwitchRow } from '../../components/SettingsKit';
 import { BytesField, ColorField } from '../../components/Fields';
@@ -55,7 +60,10 @@ type Values = Record<string, SettingValue>;
 type SectionKey =
   | 'allgemein'
   | 'uploads'
+  | 'bilder'
   | 'funktionen'
+  | 'virenscan'
+  | 'import'
   | 'domains'
   | 'speicher'
   | 'sicherungen'
@@ -69,12 +77,14 @@ type SectionKey =
 const SECTIONS: Array<{ key: SectionKey; label: string; icon: ReactNode; prefixes: string[] }> = [
   { key: 'allgemein', label: t('Allgemein'), icon: <TuneRounded />, prefixes: ['site.'] },
   { key: 'uploads', label: t('Uploads'), icon: <CloudUploadRounded />, prefixes: ['uploads.'] },
+  { key: 'bilder', label: t('Bilder'), icon: <PhotoSizeSelectLargeRounded />, prefixes: ['images.'] },
   {
     key: 'funktionen',
     label: t('Funktionen'),
     icon: <AppsRounded />,
-    prefixes: ['links.', 'albums.', 'trash.', 'stats.', 'zip.', 'reports.', 'profiles.'],
+    prefixes: ['links.', 'albums.', 'trash.', 'stats.', 'zip.', 'reports.', 'profiles.', 'search.', 'export.'],
   },
+  { key: 'virenscan', label: t('Virenscan'), icon: <CoronavirusOutlined />, prefixes: ['clamav.'] },
   { key: 'domains', label: t('Eigene Domains'), icon: <LanguageRounded />, prefixes: ['domains.'] },
   { key: 'speicher', label: t('Speicherort'), icon: <CloudRounded />, prefixes: ['storage.'] },
   { key: 'sicherungen', label: t('Sicherungen'), icon: <BackupRounded />, prefixes: ['backup.'] },
@@ -93,6 +103,7 @@ const SECTIONS: Array<{ key: SectionKey; label: string; icon: ReactNode; prefixe
   },
   { key: 'rechtliches', label: t('Rechtliches und Links'), icon: <GavelRounded />, prefixes: ['legal.', 'site.links'] },
   { key: 'benachrichtigungen', label: t('Benachrichtigungen'), icon: <NotificationsRounded />, prefixes: ['webhook.'] },
+  { key: 'import', label: t('Import'), icon: <MoveDownRounded />, prefixes: [] },
   { key: 'system', label: t('System'), icon: <DnsRounded />, prefixes: ['system.'] },
 ];
 
@@ -149,15 +160,6 @@ const PROVIDERS: Array<{ key: ProviderKey; label: string; steps: string; console
       'Für Authentik, Keycloak, Authelia, Zitadel, Pocket ID und andere OpenID-Connect-Anbieter. Lege dort einen vertraulichen Client (Authorization Code) mit der Redirect-Adresse an.'
     ),
   },
-];
-
-const WEBHOOK_EVENTS = [
-  { key: 'upload', label: t('Uploads') },
-  { key: 'delete', label: t('Löschungen') },
-  { key: 'user', label: t('Benutzer') },
-  { key: 'security', label: t('Sicherheit') },
-  { key: 'processing', label: t('Verarbeitung') },
-  { key: 'system', label: t('Systemfehler') },
 ];
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
@@ -226,6 +228,8 @@ export function SettingsPanel({
   onSaved,
   storage,
   backups,
+  webhooks,
+  imports,
 }: {
   initial: SettingsPayload;
   currentUserTotp: boolean;
@@ -233,6 +237,8 @@ export function SettingsPanel({
   onSaved: (payload: SettingsPayload) => void;
   storage: StorageInfo;
   backups: BackupInfo;
+  webhooks: AdminBoot['webhooks'];
+  imports: AdminBoot['imports'];
 }) {
   const toast = useToast();
   const sudo = useSudo();
@@ -249,7 +255,8 @@ export function SettingsPanel({
     () => PROVIDERS.find(({ key }) => initial.values[`auth.${key}.enabled`] === true)?.key || 'discord'
   );
   const [busy, setBusy] = useState(false);
-  const [testing, setTesting] = useState(false);
+  const [clamTesting, setClamTesting] = useState(false);
+  const [clamResult, setClamResult] = useState<{ ok: boolean; text: string } | null>(null);
   const [mailTo, setMailTo] = useState('');
   const [mailTesting, setMailTesting] = useState(false);
 
@@ -591,15 +598,27 @@ export function SettingsPanel({
     );
   };
 
-  const runWebhookTest = async () => {
-    setTesting(true);
+  const runClamTest = async () => {
+    setClamTesting(true);
+    setClamResult(null);
     try {
-      await testWebhook(secrets['webhook.url'] || undefined);
-      toast(t('Testnachricht gesendet. Schau in deinen Discord-Kanal.'), { variant: 'success' });
+      const result = await testClamav({
+        host: String(v<string>('clamav.host') || ''),
+        port: v<number>('clamav.port'),
+        socket: String(v<string>('clamav.socket') || ''),
+      });
+      setClamResult({
+        ok: result.detects,
+        text: result.detects
+          ? t('{version} antwortet nach {ms} ms und erkennt die Testsignatur.', { version: result.version, ms: formatNumber(result.ms) })
+          : t('{version} antwortet, hat die Testsignatur aber nicht erkannt. Prüfe die Signaturen von ClamAV.', {
+              version: result.version,
+            }),
+      });
     } catch (failure) {
-      toast(errorMessage(failure), { variant: 'error' });
+      setClamResult({ ok: false, text: errorMessage(failure) });
     } finally {
-      setTesting(false);
+      setClamTesting(false);
     }
   };
 
@@ -807,12 +826,170 @@ export function SettingsPanel({
           )}
         </SettingsSection>
         <SettingsSection
+          title={t('Große Dateien')}
+          description={t('Im Browser gehen große Dateien in Teilen hoch. Bricht die Verbindung ab, geht es an derselben Stelle weiter.')}
+        >
+          {toggle(
+            'uploads.chunked',
+            t('Fortsetzbare Uploads'),
+            t('Gilt im Dashboard und über die API unter /api/uploads. ShareX lädt weiter in einem Stück hoch.')
+          )}
+          {number(
+            'uploads.resumeHours',
+            t('Unfertige Uploads aufbewahren'),
+            t('So lange lässt sich ein abgebrochener Upload fortsetzen. Danach räumt MoeShare die Teile weg.'),
+            { min: 1, max: 168, unit: t('Stunden') }
+          )}
+        </SettingsSection>
+        <SettingsSection
+          title={t('Versionen und Duplikate')}
+          description={t('Neue Fassungen ersetzen eine Datei, ohne dass sich ihre Links ändern.')}
+        >
+          {toggle(
+            'uploads.versions',
+            t('Ältere Fassungen aufbewahren'),
+            t('Wer eine Datei ersetzt oder im Editor bearbeitet, kann zur vorherigen Fassung zurück. Alte Fassungen zählen zum Speicher.')
+          )}
+          {number('uploads.versionsKeep', t('Fassungen pro Datei'), t('Ältere werden automatisch gelöscht. Originale bleiben.'), {
+            min: 1,
+            max: 100,
+            unit: t('Stück'),
+          })}
+          {toggle(
+            'uploads.deduplicate',
+            t('Gleiche Dateien nur einmal speichern'),
+            t(
+              'Lädt jemand dieselbe Datei mehrmals hoch, liegt sie nur einmal auf der Festplatte und zählt nur einmal. Gilt für Dateien auf dem Server, nicht in S3.'
+            )
+          )}
+        </SettingsSection>
+        <SettingsSection
           title={t('Dateitypen')}
           description={t('Bestimmt, welche Endungen als Bild, Video oder Audio gelten. Andere Dateien werden als Datei gespeichert.')}
         >
           {list('uploads.formats.image', t('Bilder'), t('GIFs sind immer dabei.'), t('Endung, z. B. .avif'))}
           {list('uploads.formats.video', t('Videos'), undefined, t('Endung, z. B. .m4v'))}
           {list('uploads.formats.audio', t('Audio'), undefined, t('Endung, z. B. .opus'))}
+        </SettingsSection>
+      </Stack>
+    ),
+
+    bilder: (
+      <Stack spacing={4}>
+        <SettingsSection
+          title={t('Bilder optimieren')}
+          description={t(
+            'Rechnet hochgeladene Bilder in ein sparsameres Format um. Sichtbar ändert sich nichts, die Dateien werden aber deutlich kleiner.'
+          )}
+        >
+          {toggle(
+            'images.optimize',
+            t('Beim Hochladen optimieren'),
+            t('Gilt für JPEG, PNG, WebP, AVIF und TIFF. GIFs bleiben, wie sie sind. Jeder kann es im Konto für sich abschalten.')
+          )}
+          {choice('images.format', t('Format'), t('WebP klappt überall, AVIF ist noch kleiner, braucht aber mehr Rechenzeit.'), [
+            { value: 'keep', label: t('Beibehalten') },
+            { value: 'webp', label: 'WebP' },
+            { value: 'avif', label: 'AVIF' },
+          ])}
+          {number('images.quality', t('Qualität'), t('82 ist ein guter Mittelweg. PNG-Grafiken werden immer verlustfrei gespeichert.'), {
+            min: 40,
+            max: 100,
+            unit: '%',
+          })}
+          {number('images.maxDimension', t('Größte Kantenlänge'), t('Größere Bilder werden verkleinert. 0 heißt: nie verkleinern.'), {
+            min: 0,
+            max: 30000,
+            unit: 'px',
+          })}
+          {toggle(
+            'images.keepOriginal',
+            t('Original aufheben'),
+            t('Das unveränderte Bild bleibt als ältere Fassung erhalten. Braucht eingeschaltete Versionen unter Uploads.')
+          )}
+        </SettingsSection>
+        <SettingsSection title={t('Wasserzeichen')}>
+          {toggle(
+            'images.watermarks',
+            t('Wasserzeichen erlauben'),
+            t('Jeder kann unter Gestalten einen Text oder ein Logo festlegen, das in neue Bilder geschrieben wird.')
+          )}
+        </SettingsSection>
+      </Stack>
+    ),
+
+    virenscan: (
+      <Stack spacing={4}>
+        <SettingsSection
+          title={t('ClamAV')}
+          description={t(
+            'Prüft jede hochgeladene Datei mit einem ClamAV-Daemon (clamd). Gefundene Schadsoftware wird abgewiesen und nicht gespeichert.'
+          )}
+        >
+          {toggle('clamav.enabled', t('Uploads prüfen'), t('Erst einschalten, wenn der Test unten klappt.'))}
+          {text('clamav.host', t('Host'), t('Wo clamd läuft. Im Docker-Stack heißt der Dienst clamav.'), {
+            mono: true,
+            placeholder: '127.0.0.1',
+          })}
+          {number('clamav.port', t('Port'), t('Meist 3310.'), { min: 1, max: 65535, unit: '' })}
+          {text(
+            'clamav.socket',
+            t('Socket'),
+            t('Statt Host und Port: Pfad zum Unix-Socket oder zur Named Pipe unter Windows. Hat Vorrang, wenn ausgefüllt.'),
+            { mono: true, placeholder: '/run/clamav/clamd.ctl' }
+          )}
+          <SettingRow
+            label={t('Größte geprüfte Datei')}
+            description={t('Größere Dateien werden ungeprüft angenommen. Sollte zu StreamMaxLength in clamd.conf passen.')}
+            stacked
+          >
+            <BytesField
+              label={t('Dateigröße')}
+              value={v<number | null>('clamav.maxBytes')}
+              onChange={(value) => set('clamav.maxBytes', value)}
+              nullLabel={t('Alles prüfen')}
+              error={!!errors['clamav.maxBytes']}
+              helperText={errors['clamav.maxBytes']}
+            />
+          </SettingRow>
+          {choice('clamav.onError', t('Wenn ClamAV nicht antwortet'), t('Abweisen ist sicherer, Annehmen hält Uploads am Laufen.'), [
+            { value: 'reject', label: t('Upload abweisen') },
+            { value: 'allow', label: t('Ungeprüft annehmen') },
+          ])}
+        </SettingsSection>
+        <SettingsSection title={t('Test')}>
+          <SettingRow
+            label={t('Verbindung prüfen')}
+            description={t('Schickt die harmlose EICAR-Testsignatur an ClamAV. Nutzt die Werte oben, auch ungespeichert.')}
+            stacked
+          >
+            <Box sx={{ display: 'grid', gap: 1.5 }}>
+              <Box>
+                <Button
+                  variant="tonal"
+                  onClick={runClamTest}
+                  disabled={clamTesting}
+                  startIcon={clamTesting ? <CircularProgress size={16} color="inherit" /> : <SendRounded />}
+                >
+                  {t('Testen')}
+                </Button>
+              </Box>
+              {clamResult && <Alert severity={clamResult.ok ? 'success' : 'warning'}>{clamResult.text}</Alert>}
+            </Box>
+          </SettingRow>
+        </SettingsSection>
+      </Stack>
+    ),
+
+    import: (
+      <Stack spacing={4}>
+        <SettingsSection
+          title={t('Aus einem anderen Uploader übernehmen')}
+          description={t(
+            'Holt Konten, Dateien, Alben, Texte und Kurzlinks aus Zipline, XBackBone oder Chibisafe. Alte Links leiten danach auf MoeShare weiter.'
+          )}
+        >
+          <ImportTools sources={imports.sources} argon2={imports.argon2} redirects={imports.redirects} />
         </SettingsSection>
       </Stack>
     ),
@@ -854,6 +1031,18 @@ export function SettingsPanel({
             max: 1825,
             unit: t('Tage'),
           })}
+        </SettingsSection>
+        <SettingsSection title={t('Suche und Daten')}>
+          {toggle(
+            'search.content',
+            t('In Texten suchen'),
+            t('Die Suche im Dashboard findet auch Wörter in Texten, Code und anderen Textdateien bis 512 KB.')
+          )}
+          {toggle(
+            'export.enabled',
+            t('Datenexport'),
+            t('Jeder kann unter Konto alle eigenen Dateien und Angaben als ZIP-Archiv herunterladen.')
+          )}
         </SettingsSection>
         <SettingsSection title={t('Öffentliche Seiten')}>
           {toggle(
@@ -1239,50 +1428,11 @@ export function SettingsPanel({
 
     benachrichtigungen: (
       <Stack spacing={4}>
-        <SettingsSection title={t('Discord-Webhook')} description={t('MoeShare meldet ausgewählte Ereignisse in einen Discord-Kanal.')}>
-          {secret('webhook.url', t('Webhook-Adresse'), t('In Discord unter Kanal bearbeiten › Integrationen › Webhooks.'))}
-          <SettingRow label={t('Test')} description={t('Schickt eine Testnachricht an die eingetragene Adresse.')}>
-            <Button
-              variant="tonal"
-              startIcon={testing ? <CircularProgress size={16} color="inherit" /> : <SendRounded />}
-              disabled={testing || (!secretSet['webhook.url'] && !secrets['webhook.url'])}
-              onClick={runWebhookTest}
-            >
-              {t('Testnachricht senden')}
-            </Button>
-          </SettingRow>
-          {toggle('webhook.enabled', t('Benachrichtigungen senden'), t('Schickt die gewählten Ereignisse an den Webhook.'))}
-          {text('webhook.name', t('Absendername'), t('Name, unter dem die Nachrichten erscheinen.'))}
-          <SettingRow label={t('Farben')} description={t('Rand der Nachrichten für Erfolg und Fehler.')} stacked>
-            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-              <ColorField
-                label={t('Erfolg')}
-                value={v<string>('webhook.successColor')}
-                onChange={(hex) => set('webhook.successColor', hex)}
-              />
-              <ColorField label={t('Fehler')} value={v<string>('webhook.errorColor')} onChange={(hex) => set('webhook.errorColor', hex)} />
-            </Box>
-          </SettingRow>
-          <SettingRow label={t('Ereignisse')} stacked>
-            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-              {WEBHOOK_EVENTS.map((event) => {
-                const selected = ((v<string[]>('webhook.events') || []) as string[]).includes(event.key);
-                return (
-                  <Chip
-                    key={event.key}
-                    label={event.label}
-                    onClick={() => {
-                      const current = (v<string[]>('webhook.events') || []) as string[];
-                      set('webhook.events', selected ? current.filter((k) => k !== event.key) : [...current, event.key]);
-                    }}
-                    variant={selected ? 'filled' : 'outlined'}
-                    aria-pressed={selected}
-                    sx={selected ? { bgcolor: c.secondaryContainer, color: c.onSecondaryContainer } : undefined}
-                  />
-                );
-              })}
-            </Box>
-          </SettingRow>
+        <SettingsSection
+          title={t('Benachrichtigungen')}
+          description={t('MoeShare meldet Ereignisse wie neue Konten, Anmeldungen oder Virenfunde an die Dienste, die du hier einträgst.')}
+        >
+          <WebhookTargets initial={webhooks.targets} kinds={webhooks.kinds} events={webhooks.events} />
         </SettingsSection>
       </Stack>
     ),

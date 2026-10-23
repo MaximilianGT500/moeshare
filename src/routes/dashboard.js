@@ -22,6 +22,13 @@ const webhook = require('../services/webhookService');
 const stats = require('../services/statsService');
 const storage = require('../services/storageService');
 const zips = require('../services/zipService');
+const versions = require('../services/versionService');
+const resumable = require('../services/resumableService');
+const watermarks = require('../services/watermarkService');
+const clips = require('../services/clipService');
+const jobs = require('../services/jobService');
+const search = require('../services/searchService');
+const media = require('../lib/media');
 
 const router = express.Router();
 const signedIn = requireApi();
@@ -30,8 +37,20 @@ const GALLERY_PAGE_SIZE = 40;
 
 const quotaInfo = (limits) => ({ quotaBytes: limits.quotaBytes, usedBytes: limits.used });
 
-function uploadOptions(prefs, user) {
+function uploadOptions(prefs, user, watermark) {
   return {
+    chunked: resumable.enabled(),
+    chunkSize: resumable.CHUNK_BYTES,
+    versions: versions.enabled(),
+    versionsKeep: settings.get('uploads.versionsKeep'),
+    optimize: settings.get('images.optimize'),
+    optimizeFormat: settings.get('images.format'),
+    optimizePreference: prefs.optimize !== false,
+    watermark: Boolean(watermark),
+    watermarks: watermarks.allowed(),
+    contentSearch: search.enabled(),
+    deduplicate: settings.get('uploads.deduplicate'),
+    clips: media.ffmpegAvailable,
     urlStyle: prefs.urlStyle || settings.get('uploads.urlStyle'),
     expiry: prefs.expiry || settings.get('uploads.defaultExpiry'),
     maxExpiry: settings.get('uploads.maxExpiry'),
@@ -54,11 +73,12 @@ const displayDomain = (prefs, username) => (prefs.domain && prefs.domain !== 'ra
 
 router.get('/dashboard', requirePage(), async (req, res) => {
   const prefs = await preferences.get(req.user.id);
-  const [userStats, list, limits, tags] = await Promise.all([
+  const [userStats, list, limits, tags, watermark] = await Promise.all([
     files.userStats(req.user.username),
     files.listForUser(req.user.username, { page: 1, limit: GALLERY_PAGE_SIZE, domain: displayDomain(prefs, req.user.username) }),
     quota.limitsFor(req.user),
     files.tagsFor(req.user.username),
+    watermarks.forUser(req.user.id),
   ]);
   renderPage(res, {
     page: 'dashboard',
@@ -71,7 +91,7 @@ router.get('/dashboard', requirePage(), async (req, res) => {
       maxUploadBytes: limits.maxFileBytes || null,
       quota: quotaInfo(limits),
       urlFetch: settings.get('uploads.urlFetch'),
-      options: uploadOptions(prefs, req.user),
+      options: uploadOptions(prefs, req.user, watermark),
       tags,
     },
   });
@@ -117,6 +137,10 @@ router.get('/api/files/zip', signedIn, async (req, res) => {
     records,
     req.query.name ? text(req.query.name, 80) : `${req.user.username}-${new Date().toISOString().slice(0, 10)}`
   );
+});
+
+router.get('/api/files/duplicates', signedIn, async (req, res) => {
+  res.json(await files.duplicates(req.user.username));
 });
 
 router.get('/api/stats/overview', signedIn, async (req, res) => {
@@ -179,6 +203,64 @@ router.get('/api/files/:id/stats', signedIn, async (req, res) => {
   res.json(await stats.series('f', record.id, { days: req.query.days }));
 });
 
+router.get('/api/files/:id/versions', signedIn, async (req, res) => {
+  const record = await ownedFile(req);
+  const [file] = await files.withTags([record]);
+  res.json({ file, versions: await versions.list(record), enabled: versions.enabled(), keep: settings.get('uploads.versionsKeep') });
+});
+
+async function ownedVersion(req) {
+  const record = await ownedFile(req);
+  return { record, version: await versions.find(record, req.params.versionId) };
+}
+
+router.post('/api/files/:id/versions/:versionId/restore', signedIn, async (req, res) => {
+  const { record } = await ownedVersion(req);
+  const updated = await versions.restore(record, req.params.versionId);
+  const { type } = files.typeOf(updated.filename, updated.syntax);
+  if (type === 'text') search.indexLater(updated);
+  if (!Number(updated.resolution_width) && (type === 'image' || type === 'video')) uploads.analyzeLater(updated, type);
+  const [file] = await files.withTags([updated]);
+  res.json({ ok: true, file, versions: await versions.list(updated) });
+});
+
+router.delete('/api/files/:id/versions/:versionId', signedIn, async (req, res) => {
+  const { record } = await ownedVersion(req);
+  await versions.remove(record, req.params.versionId);
+  const [file] = await files.withTags([await files.findById(record.id)]);
+  res.json({ ok: true, file, versions: await versions.list(record) });
+});
+
+router.get('/api/files/:id/versions/:versionId/content', signedIn, async (req, res) => {
+  const { record, version } = await ownedVersion(req);
+  const relative = `${record.username}/${version.filename}`;
+  const local = path.join(config.paths.uploads, relative);
+  const name = version.original_name || version.filename;
+  if (version.storage === 's3' && !fs.existsSync(local)) {
+    return storage.sendRemote(req, res, relative, {
+      cacheControl: 'private, no-store',
+      proxy: true,
+      downloadName: req.query.download ? name : null,
+    });
+  }
+  if (!fs.existsSync(local)) throw notFound('Diese Version gibt es nicht (mehr).');
+  res.set('Cache-Control', 'private, no-store');
+  res.set('Content-Security-Policy', "default-src 'none'; img-src 'self' data:; media-src 'self'; style-src 'unsafe-inline'; sandbox");
+  if (req.query.download) return res.download(local, name);
+  return res.sendFile(local, { dotfiles: 'deny', cacheControl: false });
+});
+
+router.post('/api/files/:id/clip', signedIn, async (req, res) => {
+  const record = await ownedFile(req);
+  res.status(202).json({ job: await clips.start(req.user, record, req.body || {}) });
+});
+
+router.get('/api/jobs/:id', signedIn, async (req, res) => {
+  const job = await jobs.get(req.user, req.params.id, { admin: req.user.isAdmin });
+  if (job.error) job.error = { ...job.error, message: tr(req, job.error.message) };
+  res.json({ job });
+});
+
 router.get('/api/files/:id/content', signedIn, async (req, res) => {
   const record = await ownedFile(req);
   const relative = `${record.username}/${record.filename}`;
@@ -221,6 +303,7 @@ router.patch('/api/files/:id', signedIn, async (req, res) => {
     if (typeof body.listed !== 'boolean') throw badRequest('Erwartet wird an oder aus.', { field: 'listed' });
     fields.listed = body.listed ? 1 : 0;
   }
+  if (body.warning !== undefined) fields.warning = warningValue(body.warning);
   let updated = await files.patch(record, fields);
   if (body.tags !== undefined) {
     await files.setTags(updated, body.tags);
@@ -230,7 +313,14 @@ router.patch('/api/files/:id', signedIn, async (req, res) => {
   res.json({ file });
 });
 
-const BULK_ACTIONS = ['delete', 'tag', 'untag', 'expire', 'protect', 'unprotect', 'list', 'unlist', 'restore', 'purge'];
+function warningValue(value) {
+  if (value === null || value === false) return null;
+  if (value === true) return '';
+  if (typeof value !== 'string') throw badRequest('Ungültige Inhaltswarnung.', { field: 'warning' });
+  return value.replace(/\s+/g, ' ').trim().slice(0, 100);
+}
+
+const BULK_ACTIONS = ['delete', 'tag', 'untag', 'expire', 'protect', 'unprotect', 'list', 'unlist', 'restore', 'purge', 'warn', 'unwarn'];
 const TRASH_ACTIONS = ['restore', 'purge'];
 
 router.post('/api/files/bulk', signedIn, async (req, res) => {
@@ -250,6 +340,7 @@ router.post('/api/files/bulk', signedIn, async (req, res) => {
     passwordHash = await protection.hashPassword(req.body.password);
     if (!passwordHash || passwordHash.error) throw badRequest('Gib ein Passwort ein.', { field: 'password' });
   }
+  const warning = action === 'warn' ? warningValue(req.body.warning === undefined ? true : req.body.warning) : null;
   let trashed = false;
   for (const record of records) {
     if (action === 'delete') trashed = (await files.discard(record, { actorId: req.user.id })).trashed || trashed;
@@ -262,6 +353,8 @@ router.post('/api/files/bulk', signedIn, async (req, res) => {
     else if (action === 'expire') await files.patch(record, { expires_at: expiresAt });
     else if (action === 'protect') await files.patch(record, { password_hash: passwordHash });
     else if (action === 'unprotect') await files.patch(record, { password_hash: null, max_views: null });
+    else if (action === 'warn') await files.patch(record, { warning });
+    else if (action === 'unwarn') await files.patch(record, { warning: null });
   }
   if (action === 'delete' && records.length) {
     webhook.notify(

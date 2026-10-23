@@ -249,6 +249,7 @@ function LinkRow({ link, onDelete, onStats }: { link: ShortLink; onDelete: () =>
         display: 'flex',
         alignItems: 'center',
         gap: 1.5,
+        minWidth: 0,
         px: { xs: 1.5, sm: 2 },
         py: 1.5,
         borderRadius: `${radius.md}px`,

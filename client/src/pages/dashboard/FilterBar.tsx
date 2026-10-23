@@ -17,6 +17,8 @@ import TuneRounded from '@mui/icons-material/TuneRounded';
 import NoteAddOutlined from '@mui/icons-material/NoteAddOutlined';
 import SellOutlined from '@mui/icons-material/SellOutlined';
 import CloseRounded from '@mui/icons-material/CloseRounded';
+import DriveFolderUploadOutlined from '@mui/icons-material/DriveFolderUploadOutlined';
+import FileCopyOutlined from '@mui/icons-material/FileCopyOutlined';
 import Badge from '@mui/material/Badge';
 import Chip from '@mui/material/Chip';
 import type { SortKey, TypeFilter } from '../../lib/api';
@@ -113,6 +115,9 @@ export function FilterBar({
   counts,
   onUrl,
   onText,
+  onFolder,
+  duplicates = 0,
+  onDuplicates,
   onOptions,
   optionsActive = false,
   tags = [],
@@ -128,6 +133,9 @@ export function FilterBar({
   counts: TypeCounts;
   onUrl?: () => void;
   onText?: () => void;
+  onFolder?: () => void;
+  duplicates?: number;
+  onDuplicates?: () => void;
   onOptions?: () => void;
   optionsActive?: boolean;
   tags?: TagCount[];
@@ -175,6 +183,33 @@ export function FilterBar({
             deleteIcon={<CloseRounded />}
             sx={{ bgcolor: c.tertiaryContainer, color: c.onTertiaryContainer, fontWeight: 600, flexShrink: 0 }}
           />
+        )}
+        {duplicates > 0 && onDuplicates && (
+          <m.div layout="position" transition={{ type: 'spring', stiffness: 500, damping: 40 }}>
+            <ButtonBase
+              onClick={onDuplicates}
+              aria-haspopup="dialog"
+              sx={{
+                height: 32,
+                px: 1.5,
+                gap: 0.75,
+                borderRadius: `${radius.sm}px`,
+                border: `1px dashed ${c.outline}`,
+                color: c.onSurfaceVariant,
+                fontSize: '0.875rem',
+                fontWeight: 500,
+                whiteSpace: 'nowrap',
+                '&:hover': { bgcolor: mix(c.onSurface, 8) },
+                '& svg': { fontSize: 16 },
+              }}
+            >
+              <FileCopyOutlined />
+              <span>{t('Duplikate')}</span>
+              <Box component="span" sx={{ opacity: 0.72, fontWeight: 700 }}>
+                {formatNumber(duplicates)}
+              </Box>
+            </ButtonBase>
+          </m.div>
         )}
       </Box>
 
@@ -249,6 +284,13 @@ export function FilterBar({
         <Tooltip title={t('Neuer Text')}>
           <IconButton aria-label={t('Neuer Text')} onClick={onText}>
             <NoteAddOutlined />
+          </IconButton>
+        </Tooltip>
+      )}
+      {onFolder && (
+        <Tooltip title={t('Ordner hochladen')}>
+          <IconButton aria-label={t('Ordner hochladen')} onClick={onFolder} sx={{ display: { xs: 'none', sm: 'inline-flex' } }}>
+            <DriveFolderUploadOutlined />
           </IconButton>
         </Tooltip>
       )}

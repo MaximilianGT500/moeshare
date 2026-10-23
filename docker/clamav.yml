@@ -1,0 +1,22 @@
+services:
+  moeshare:
+    depends_on:
+      - clamav
+
+  clamav:
+    image: clamav/clamav:stable
+    container_name: moeshare-clamav
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-Europe/Berlin}
+    volumes:
+      - clamav-data:/var/lib/clamav
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+volumes:
+  clamav-data:

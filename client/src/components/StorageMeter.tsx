@@ -9,6 +9,7 @@ import { c, ease, fileTypeColor, radius } from '../theme/tokens';
 import { t } from '../lib/i18n';
 
 const trashFill = `repeating-linear-gradient(135deg, ${c.outline} 0 2px, ${mix(c.outline, 30)} 2px 5px)`;
+const versionFill = `repeating-linear-gradient(45deg, ${c.tertiary} 0 2px, ${mix(c.tertiary, 45)} 2px 5px)`;
 
 const SEGMENTS = [
   { key: 'images', label: t('Bilder'), color: fileTypeColor.image },
@@ -22,13 +23,16 @@ export function StorageMeter({
   animate = true,
   capacity = null,
   trash = 0,
+  saved = 0,
 }: {
   breakdown: StorageBreakdown;
   animate?: boolean;
   capacity?: number | null;
   trash?: number;
+  saved?: number;
 }) {
-  const used = SEGMENTS.reduce((sum, s) => sum + (breakdown[s.key] || 0), 0) + trash;
+  const versions = breakdown.versions || 0;
+  const used = SEGMENTS.reduce((sum, s) => sum + (breakdown[s.key] || 0), 0) + versions + trash;
   const total = capacity && capacity > used ? capacity : used;
   const free = capacity ? Math.max(0, capacity - used) : 0;
   const freeLabel = capacity && free < capacity && formatBytes(free) === formatBytes(capacity) ? formatBytes(free, 2) : formatBytes(free);
@@ -39,6 +43,7 @@ export function StorageMeter({
       color: s.color,
       bytes: breakdown[s.key],
     })),
+    ...(versions > 0 ? [{ key: 'versions', label: t('Ältere Fassungen'), color: versionFill, bytes: versions }] : []),
     ...(trash > 0 ? [{ key: 'trash', label: t('Papierkorb'), color: trashFill, bytes: trash }] : []),
   ];
 
@@ -93,6 +98,17 @@ export function StorageMeter({
             </Typography>
           </Box>
         ))}
+        {versions > 0 && (
+          <Box component="li" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Box sx={{ width: 10, height: 10, borderRadius: '3px', background: versionFill, flexShrink: 0 }} />
+            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+              {t('Ältere Fassungen')}
+            </Typography>
+            <Typography variant="body2" sx={{ fontWeight: 700, color: 'text.primary' }}>
+              {formatBytes(versions)}
+            </Typography>
+          </Box>
+        )}
         {trash > 0 && (
           <Box component="li" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Box sx={{ width: 10, height: 10, borderRadius: '3px', background: trashFill, flexShrink: 0 }} />
@@ -103,6 +119,19 @@ export function StorageMeter({
               {formatBytes(trash)}
             </Typography>
           </Box>
+        )}
+        {saved > 0 && (
+          <Tooltip title={t('Gleiche Dateien liegen nur einmal auf dem Server und zählen nur einmal.')}>
+            <Box component="li" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Box sx={{ width: 10, height: 10, borderRadius: '3px', border: `1.5px dashed ${c.outline}`, flexShrink: 0 }} />
+              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                {t('Durch Duplikate gespart')}
+              </Typography>
+              <Typography variant="body2" sx={{ fontWeight: 700, color: 'text.primary' }}>
+                {formatBytes(saved)}
+              </Typography>
+            </Box>
+          </Tooltip>
         )}
         {capacity ? (
           <Box component="li" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>

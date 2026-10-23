@@ -332,6 +332,22 @@ const MIGRATIONS = [
       for (const table of ['users', 'file_data']) await createIndexes(db, table);
     },
   },
+  {
+    version: 8,
+    name: 'Versionen, gemeinsame Alben, fortsetzbare Uploads, Volltextsuche, Webhooks und Import',
+    async up(db) {
+      await addColumns(db, 'users', ['watermark']);
+      await addColumns(db, 'file_data', ['sha256', 'deduped', 'warning', 'scan_status', 'version', 'version_at']);
+      await addColumns(db, 'album_files', ['added_by']);
+      for (const table of ['file_versions', 'album_members', 'upload_sessions', 'file_search', 'webhooks', 'redirects', 'import_map']) {
+        await createTable(db, table);
+      }
+      await createIndexes(db, 'file_data');
+      await db.run(
+        'UPDATE album_files SET added_by = (SELECT a.user_id FROM albums a WHERE a.id = album_files.album_id) WHERE added_by IS NULL'
+      );
+    },
+  },
 ];
 
 const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

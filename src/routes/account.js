@@ -22,6 +22,8 @@ const preferences = require('../services/preferenceService');
 const domains = require('../services/domainService');
 const emails = require('../services/emailService');
 const mail = require('../services/mailService');
+const watermarks = require('../services/watermarkService');
+const exporter = require('../services/exportService');
 const { STYLES } = require('../lib/slugs');
 const { EXPIRY_CHOICES } = require('../lib/expiry');
 
@@ -60,6 +62,10 @@ const OWN_ACTIVITY = [
   'domain_removed',
   'domain_revoked',
   'design_updated',
+  'album_shared',
+  'album_left',
+  'virus_found',
+  'data_exported',
 ];
 
 const mfaRequired = (user) => {
@@ -145,6 +151,8 @@ async function overview(req) {
       texts: settings.get('uploads.texts'),
       links: settings.get('links.enabled'),
       mail: mail.ready(),
+      optimize: settings.get('images.optimize'),
+      export: exporter.enabled(),
     },
   };
 }
@@ -352,6 +360,35 @@ router.get('/api/account/activity', signedIn, async (req, res) => {
     language: req.language,
   });
   res.json({ events });
+});
+
+const watermarkJson = express.json({ limit: '6mb' });
+
+router.get('/api/account/watermark', signedIn, async (req, res) => {
+  res.json({ watermark: watermarks.present(await watermarks.get(req.user.id)) });
+});
+
+router.put('/api/account/watermark', watermarkJson, signedIn, async (req, res) => {
+  const saved = await watermarks.save(req.user.id, req.body || {});
+  res.json({ ok: true, watermark: watermarks.present(saved) });
+});
+
+router.delete('/api/account/watermark', signedIn, async (req, res) => {
+  await watermarks.reset(req.user.id);
+  res.json({ ok: true, watermark: watermarks.present(await watermarks.get(req.user.id)) });
+});
+
+router.post('/api/account/watermark/preview', watermarkJson, signedIn, async (req, res) => {
+  const image = await watermarks.preview(req.user, req.body && Object.keys(req.body).length ? req.body : null);
+  res.set('Cache-Control', 'private, no-store');
+  res.type('image/jpeg').send(image);
+});
+
+router.get('/api/account/export', sudo, async (req, res) => {
+  if (!exporter.enabled()) throw notFound('Der Datenexport ist auf diesem Server abgeschaltet.');
+  if (req.query.probe) return res.json({ ok: true });
+  audit.log('data_exported', { userId: req.user.id, req, details: { files: req.query.files !== '0' } });
+  return exporter.send(res, req.user, { includeFiles: req.query.files !== '0', language: req.language });
 });
 
 router.delete('/api/account', sudo, async (req, res) => {

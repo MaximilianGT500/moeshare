@@ -8,6 +8,14 @@ import type {
   DatabaseInfo,
   DomainCheck,
   DomainState,
+  DuplicateReport,
+  FileVersion,
+  ImportPreview,
+  ImportReport,
+  Job,
+  UploadSession,
+  WatermarkConfig,
+  WebhookTarget,
   EmailState,
   ExpiryChoice,
   FileItem,
@@ -130,6 +138,8 @@ export interface UploadResponse {
   slug: string;
   expiresAt: number | null;
   protected: { password: boolean; maxViews: number | null };
+  warning?: string | null;
+  duplicateOf?: { id: number; slug: string; view: string; stored: boolean };
 }
 
 export interface UploadOptions {
@@ -142,6 +152,9 @@ export interface UploadOptions {
   tags?: string[];
   album?: number | string | null;
   syntax?: string;
+  warning?: string | null;
+  optimize?: boolean;
+  watermark?: boolean;
 }
 
 function optionFields(options: UploadOptions): Array<[string, string]> {
@@ -155,6 +168,9 @@ function optionFields(options: UploadOptions): Array<[string, string]> {
   if (options.tags && options.tags.length) fields.push(['tags', options.tags.join(',')]);
   if (options.album) fields.push(['album', String(options.album)]);
   if (options.syntax) fields.push(['syntax', options.syntax]);
+  if (options.warning !== undefined && options.warning !== null) fields.push(['warning', options.warning.trim() || 'true']);
+  if (typeof options.optimize === 'boolean') fields.push(['optimize', String(options.optimize)]);
+  if (options.watermark === false) fields.push(['watermark', 'false']);
   return fields;
 }
 
@@ -192,7 +208,7 @@ export function uploadFile(file: File, onProgress: (fraction: number) => void, o
       reject(new ApiError(message, xhr.status));
     });
     xhr.addEventListener('error', () => reject(new ApiError(t('Netzwerkfehler beim Hochladen.'), 0)));
-    xhr.addEventListener('abort', () => reject(new ApiError('Abgebrochen.', 0)));
+    xhr.addEventListener('abort', () => reject(new ApiError('Abgebrochen.', 0, { code: 'aborted' })));
 
     const form = new FormData();
     for (const [key, value] of optionFields(options)) form.append(key, value);
@@ -200,6 +216,245 @@ export function uploadFile(file: File, onProgress: (fraction: number) => void, o
     xhr.send(form);
   });
   return { promise, abort: () => xhr.abort() };
+}
+
+export interface VersionUploadResponse {
+  ok: boolean;
+  version?: boolean;
+  file: FileItem;
+}
+
+type ResumableResult = UploadResponse | VersionUploadResponse;
+
+interface ResumableHandle {
+  promise: Promise<ResumableResult>;
+  abort: () => void;
+  pause: () => void;
+  resume: () => void;
+}
+
+const RESUME_KEY = 'moeshare-uploads';
+const RETRY_DELAYS = [1000, 2000, 4000, 8000, 15000, 30000];
+
+export const fingerprintOf = (file: File) => `${file.name}|${file.size}|${file.lastModified}`;
+
+function storedSessions(): Record<string, { id: string; expiresAt: number }> {
+  try {
+    const value = JSON.parse(window.localStorage.getItem(RESUME_KEY) || '{}');
+    return value && typeof value === 'object' ? value : {};
+  } catch {
+    return {};
+  }
+}
+
+function rememberSession(fingerprint: string, session: UploadSession | null) {
+  try {
+    const all = storedSessions();
+    const now = Date.now();
+    for (const [key, value] of Object.entries(all)) if (!value || value.expiresAt < now) delete all[key];
+    if (session) all[fingerprint] = { id: session.id, expiresAt: session.expiresAt };
+    else delete all[fingerprint];
+    window.localStorage.setItem(RESUME_KEY, JSON.stringify(all));
+  } catch {}
+}
+
+const storedSessionFor = (file: File) => storedSessions()[fingerprintOf(file)] || null;
+
+const sessionsInUse = new Set<string>();
+
+export const listUploadSessions = () => api<{ uploads: UploadSession[] }>('/api/uploads');
+const fetchUploadSession = (id: string) => api<UploadSession>(`/api/uploads/${encodeURIComponent(id)}`);
+export const cancelUploadSession = (id: string) => del<{ ok: boolean }>(`/api/uploads/${encodeURIComponent(id)}`);
+
+export async function discardResumable(file: File) {
+  const stored = storedSessionFor(file);
+  if (!stored || sessionsInUse.has(stored.id)) return;
+  rememberSession(fingerprintOf(file), null);
+  await cancelUploadSession(stored.id).catch(() => {});
+}
+
+function sendChunk(id: string, offset: number, blob: Blob, onProgress: (bytes: number) => void, register: (xhr: XMLHttpRequest) => void) {
+  return new Promise<{ status: number; body: Record<string, unknown> }>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    register(xhr);
+    xhr.open('PATCH', `/api/uploads/${encodeURIComponent(id)}`);
+    xhr.setRequestHeader('Content-Type', 'application/offset+octet-stream');
+    xhr.setRequestHeader('Upload-Offset', String(offset));
+    xhr.upload.addEventListener('progress', (event) => onProgress(event.loaded));
+    xhr.addEventListener('load', () => {
+      let body: Record<string, unknown> = {};
+      try {
+        body = JSON.parse(xhr.responseText || '{}');
+      } catch {}
+      resolve({ status: xhr.status, body });
+    });
+    xhr.addEventListener('error', () => reject(new ApiError(t('Netzwerkfehler beim Hochladen.'), 0)));
+    xhr.addEventListener('abort', () => reject(new ApiError('Abgebrochen.', 0, { code: 'aborted' })));
+    xhr.send(blob);
+  });
+}
+
+export function uploadResumable(
+  file: File,
+  onProgress: (fraction: number) => void,
+  options: UploadOptions = {},
+  { fileId = null, onState }: { fileId?: number | null; onState?: (state: 'running' | 'paused' | 'retrying') => void } = {}
+): ResumableHandle {
+  let current: XMLHttpRequest | null = null;
+  let paused = false;
+  let cancelled = false;
+  let wake: (() => void) | null = null;
+  let session: UploadSession | null = null;
+  const fingerprint = fingerprintOf(file);
+  const waitWhilePaused = () =>
+    paused
+      ? new Promise<void>((resolve) => {
+          wake = resolve;
+        })
+      : Promise.resolve();
+  const sleep = (ms: number) =>
+    new Promise<void>((resolve) => {
+      const timer = window.setTimeout(resolve, ms);
+      wake = () => {
+        window.clearTimeout(timer);
+        resolve();
+      };
+    });
+  const check = () => {
+    if (cancelled) throw new ApiError('Abgebrochen.', 0, { code: 'aborted' });
+  };
+
+  async function reuse(): Promise<UploadSession | null> {
+    if (fileId) return null;
+    const stored = storedSessions()[fingerprint];
+    if (stored && !sessionsInUse.has(stored.id)) {
+      try {
+        const existing = await fetchUploadSession(stored.id);
+        if (existing.size === file.size) return existing;
+      } catch {}
+    }
+    try {
+      const { uploads } = await listUploadSessions();
+      return (
+        uploads.find(
+          (entry) => !entry.fileId && entry.fingerprint === fingerprint && entry.size === file.size && !sessionsInUse.has(entry.id)
+        ) || null
+      );
+    } catch {
+      return null;
+    }
+  }
+
+  async function open(): Promise<UploadSession> {
+    const existing = await reuse();
+    if (existing) return existing;
+    return post<UploadSession>('/api/uploads', {
+      name: file.name,
+      size: file.size,
+      fingerprint,
+      ...(fileId ? { fileId } : Object.fromEntries(optionFields(options))),
+    });
+  }
+
+  async function run(): Promise<ResumableResult> {
+    session = await open();
+    if (cancelled) {
+      cancelUploadSession(session.id).catch(() => {});
+      if (!fileId) rememberSession(fingerprint, null);
+      check();
+    }
+    sessionsInUse.add(session.id);
+    try {
+      return await transfer(session);
+    } finally {
+      sessionsInUse.delete(session.id);
+    }
+  }
+
+  async function transfer(session: UploadSession): Promise<ResumableResult> {
+    check();
+    if (!fileId) rememberSession(fingerprint, session);
+    let received = session.received;
+    onProgress(received / file.size);
+    let failures = 0;
+    while (received < file.size) {
+      check();
+      await waitWhilePaused();
+      check();
+      const end = Math.min(file.size, received + session.chunkSize);
+      try {
+        const answer = await sendChunk(
+          session.id,
+          received,
+          file.slice(received, end),
+          (bytes) => onProgress((received + bytes) / file.size),
+          (xhr) => {
+            current = xhr;
+          }
+        );
+        current = null;
+        if (answer.status === 200) {
+          received = Number(answer.body.received);
+          failures = 0;
+          onState?.('running');
+        } else if (answer.status === 409 && typeof answer.body.received === 'number') {
+          received = answer.body.received;
+        } else if (answer.status === 401) {
+          throw new ApiError(SESSION_EXPIRED_MESSAGE, 401, { sessionExpired: true });
+        } else if (answer.status >= 400 && answer.status < 500 && answer.status !== 408 && answer.status !== 429) {
+          if (answer.status === 404) rememberSession(fingerprint, null);
+          throw new ApiError(typeof answer.body.error === 'string' ? answer.body.error : t('Upload fehlgeschlagen.'), answer.status);
+        } else {
+          throw new ApiError(t('Netzwerkfehler beim Hochladen.'), answer.status);
+        }
+        onProgress(received / file.size);
+      } catch (error) {
+        current = null;
+        if (cancelled || (error instanceof ApiError && error.code === 'aborted' && !paused)) throw error;
+        if (error instanceof ApiError && error.status >= 400 && error.status < 500 && error.status !== 408 && error.status !== 429)
+          throw error;
+        if (paused) continue;
+        if (failures >= RETRY_DELAYS.length) throw error;
+        onState?.('retrying');
+        await sleep(RETRY_DELAYS[failures]);
+        failures += 1;
+        try {
+          received = (await fetchUploadSession(session.id)).received;
+        } catch {}
+      }
+    }
+    check();
+    const result = await post<ResumableResult>(`/api/uploads/${encodeURIComponent(session.id)}/complete`, {});
+    if (!fileId) rememberSession(fingerprint, null);
+    onProgress(1);
+    return result;
+  }
+
+  const promise = run();
+  return {
+    promise,
+    abort: () => {
+      cancelled = true;
+      current?.abort();
+      wake?.();
+      if (session) {
+        cancelUploadSession(session.id).catch(() => {});
+        if (!fileId) rememberSession(fingerprint, null);
+      }
+    },
+    pause: () => {
+      paused = true;
+      onState?.('paused');
+      current?.abort();
+    },
+    resume: () => {
+      paused = false;
+      onState?.('running');
+      const resolve = wake;
+      wake = null;
+      resolve?.();
+    },
+  };
 }
 
 export type SortKey = 'newest' | 'oldest' | 'views' | 'size' | 'name' | 'expiring';
@@ -227,6 +482,7 @@ export function listFiles(params: {
 }
 
 export interface FilePatch {
+  warning?: string | boolean | null;
   title?: string | null;
   expires?: ExpiryChoice | string;
   password?: string | null;
@@ -238,8 +494,14 @@ export interface FilePatch {
 
 export const updateFile = (id: number, data: FilePatch) => patch<{ file: FileItem }>(`/api/files/${id}`, data);
 export const fetchFile = (id: number) => api<{ file: FileItem }>(`/api/files/${id}`);
-export const bulkFiles = (data: { action: string; ids: number[]; tags?: string[]; expires?: string; password?: string }) =>
-  post<{ ok: boolean; count: number; trashed: boolean }>('/api/files/bulk', data);
+export const bulkFiles = (data: {
+  action: string;
+  ids: number[];
+  tags?: string[];
+  expires?: string;
+  password?: string;
+  warning?: string | boolean;
+}) => post<{ ok: boolean; count: number; trashed: boolean }>('/api/files/bulk', data);
 export const fetchTags = () => api<{ tags: TagCount[] }>('/api/tags');
 
 export const listTrash = (page = 1, limit = 60) =>
@@ -257,6 +519,81 @@ export const fetchAlbumStats = (id: number, days = 30) => api<StatsSeries>(`/api
 export const fetchStatsOverview = (days = 30) => api<StatsOverview>(`/api/stats/overview?days=${days}`);
 
 export const fileContentUrl = (id: number) => `/api/files/${id}/content`;
+
+export const fetchDuplicates = () => api<DuplicateReport>('/api/files/duplicates');
+export const fetchVersions = (id: number) =>
+  api<{ file: FileItem; versions: FileVersion[]; enabled: boolean; keep: number }>(`/api/files/${id}/versions`);
+export const restoreVersion = (id: number, versionId: number) =>
+  post<{ ok: boolean; file: FileItem; versions: FileVersion[] }>(`/api/files/${id}/versions/${versionId}/restore`);
+export const deleteVersion = (id: number, versionId: number) =>
+  del<{ ok: boolean; file: FileItem; versions: FileVersion[] }>(`/api/files/${id}/versions/${versionId}`);
+
+export function uploadVersion(
+  id: number,
+  file: File,
+  onProgress: (fraction: number) => void
+): { promise: Promise<VersionUploadResponse>; abort: () => void } {
+  const xhr = new XMLHttpRequest();
+  const promise = new Promise<VersionUploadResponse>((resolve, reject) => {
+    xhr.open('POST', `/api/files/${id}/versions`);
+    xhr.upload.addEventListener('progress', (event) => {
+      if (event.lengthComputable && event.total > 0) onProgress(event.loaded / event.total);
+    });
+    xhr.addEventListener('load', () => {
+      let body: Record<string, unknown> = {};
+      try {
+        body = JSON.parse(xhr.responseText || '{}');
+      } catch {}
+      if (xhr.status === 200 && body.ok) return resolve(body as unknown as VersionUploadResponse);
+      if (xhr.status === 401) return reject(new ApiError(SESSION_EXPIRED_MESSAGE, 401, { sessionExpired: true }));
+      return reject(
+        new ApiError(
+          (typeof body.error === 'string' && body.error) || t('Upload fehlgeschlagen (HTTP {status}).', { status: xhr.status }),
+          xhr.status
+        )
+      );
+    });
+    xhr.addEventListener('error', () => reject(new ApiError(t('Netzwerkfehler beim Hochladen.'), 0)));
+    xhr.addEventListener('abort', () => reject(new ApiError('Abgebrochen.', 0, { code: 'aborted' })));
+    const form = new FormData();
+    form.append('file', file);
+    xhr.send(form);
+  });
+  return { promise, abort: () => xhr.abort() };
+}
+
+interface ClipRequest {
+  start: number;
+  end: number;
+  format: 'mp4' | 'gif';
+  target?: 'new' | 'version';
+  audio?: boolean;
+  fps?: number;
+  width?: number;
+}
+
+export interface ClipResult {
+  kind: 'file' | 'version';
+  file: FileItem;
+  links?: UploadResponse;
+}
+
+export const startClip = (id: number, data: ClipRequest) => post<{ job: Job<ClipResult> }>(`/api/files/${id}/clip`, data);
+const fetchJob = <T>(id: string) => api<{ job: Job<T> }>(`/api/jobs/${encodeURIComponent(id)}`);
+const fetchAdminJob = <T>(id: string) => api<{ job: Job<T> }>(`/api/admin/jobs/${encodeURIComponent(id)}`);
+
+export async function waitForJob<T>(
+  id: string,
+  onProgress: (job: Job<T>) => void,
+  { admin = false, interval = 700 }: { admin?: boolean; interval?: number } = {}
+): Promise<Job<T>> {
+  for (;;) {
+    const { job } = admin ? await fetchAdminJob<T>(id) : await fetchJob<T>(id);
+    onProgress(job);
+    if (job.state !== 'running') return job;
+    await new Promise((resolve) => window.setTimeout(resolve, interval));
+  }
+}
 
 export async function replaceFile(id: number, blob: Blob, name: string) {
   const form = new FormData();
@@ -314,6 +651,10 @@ export const updateAlbum = (
 export const deleteAlbum = (id: number) => del<{ ok: boolean }>(`/api/albums/${id}`);
 export const addToAlbum = (id: number, fileIds: number[]) => post<{ album: Album }>(`/api/albums/${id}/files`, { fileIds });
 export const removeFromAlbum = (id: number, fileIds: number[]) => del<{ album: Album }>(`/api/albums/${id}/files`, { fileIds });
+export const addAlbumMember = (id: number, username: string) => post<{ album: Album }>(`/api/albums/${id}/members`, { username });
+export const removeAlbumMember = (id: number, userId: number) => del<{ album: Album }>(`/api/albums/${id}/members/${userId}`);
+export const leaveAlbum = (id: number) => post<{ ok: boolean }>(`/api/albums/${id}/leave`);
+export const albumZipUrl = (id: number) => `/api/albums/${id}/zip`;
 export const reorderAlbum = (id: number, fileIds: number[]) => put<{ album: Album }>(`/api/albums/${id}/order`, { fileIds });
 
 export const unlock = (kind: 'file' | 'link' | 'album', slug: string, password: string) =>
@@ -359,6 +700,29 @@ export const addDomain = (domain: string) =>
 export const verifyDomain = (id: number) =>
   post<{ ok: boolean; result: DomainCheck; domains: DomainState }>(`/api/account/domains/${id}/verify`);
 export const removeDomain = (id: number) => del<{ ok: boolean; domains: DomainState }>(`/api/account/domains/${id}`);
+
+export const saveWatermark = (data: Partial<Omit<WatermarkConfig, 'allowed'>>) =>
+  put<{ ok: boolean; watermark: WatermarkConfig }>('/api/account/watermark', data);
+export const resetWatermark = () => del<{ ok: boolean; watermark: WatermarkConfig }>('/api/account/watermark');
+
+export async function previewWatermark(data: Partial<Omit<WatermarkConfig, 'allowed'>>): Promise<Blob> {
+  let res: Response;
+  try {
+    res = await fetch('/api/account/watermark/preview', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', Accept: 'image/jpeg' },
+      body: JSON.stringify(data),
+    });
+  } catch {
+    throw new ApiError(t('Keine Verbindung zum Server.'), 0);
+  }
+  if (!res.ok) throw await readError(res);
+  return res.blob();
+}
+
+export const exportUrl = (withFiles: boolean) => `/api/account/export${withFiles ? '' : '?files=0'}`;
+export const probeExport = () => api<{ ok: boolean }>('/api/account/export?probe=1');
 
 export const reauthWithPassword = (password: string) => post<{ ok: boolean }>('/api/auth/reauth', { password });
 export const reauthWithCode = (code: string) => post<{ ok: boolean }>('/api/auth/reauth', { code });
@@ -435,7 +799,37 @@ export const revokeInvite = (code: string) => del<{ ok: boolean }>(`/api/admin/i
 
 export const saveSettings = (changes: Record<string, SettingValue>) =>
   patch<SettingsPayload & { ok: boolean; changed: string[] }>('/api/admin/settings', changes);
-export const testWebhook = (url?: string) => post<{ ok: boolean }>('/api/admin/settings/webhook-test', { url });
+
+export interface WebhookInput {
+  kind?: string;
+  name?: string;
+  config?: Record<string, string>;
+  events?: string[];
+  enabled?: boolean;
+}
+
+export const createWebhook = (data: WebhookInput) =>
+  post<{ ok: boolean; target: WebhookTarget; targets: WebhookTarget[] }>('/api/admin/webhooks', data);
+export const updateWebhook = (id: number, data: WebhookInput) =>
+  patch<{ ok: boolean; target: WebhookTarget; targets: WebhookTarget[] }>(`/api/admin/webhooks/${id}`, data);
+export const deleteWebhook = (id: number) => del<{ ok: boolean; targets: WebhookTarget[] }>(`/api/admin/webhooks/${id}`);
+export const testWebhookTarget = (id: number | null, data?: WebhookInput) =>
+  post<{ ok: boolean; targets?: WebhookTarget[] }>(id ? `/api/admin/webhooks/${id}/test` : '/api/admin/webhooks/test', data || {});
+
+export const testClamav = (data: { host?: string; port?: number | string; socket?: string }) =>
+  post<{ ok: boolean; version: string; detects: boolean; signature: string | null; ms: number }>('/api/admin/clamav/test', data);
+
+export interface ImportInput {
+  kind: string;
+  database: string;
+  files: string;
+  admins?: boolean;
+  merge?: boolean;
+  orphans?: 'admin' | 'skip';
+}
+
+export const previewImport = (data: ImportInput) => post<{ ok: boolean; preview: ImportPreview }>('/api/admin/import/preview', data);
+export const startImport = (data: ImportInput) => post<{ ok: boolean; job: Job<ImportReport> }>('/api/admin/import', data);
 
 export const fetchDatabaseInfo = () => api<DatabaseInfo>('/api/admin/database');
 export const fetchStorageInfo = () => api<StorageInfo>('/api/admin/storage');

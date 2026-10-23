@@ -37,7 +37,155 @@ export interface FileItem {
   deletedAt: number | null;
   purgeAt: number | null;
   blocked: { at: number; reason: string } | null;
+  warning: string | null;
+  version: number;
+  versionAt: number | null;
+  scan: 'clean' | 'skipped' | 'error' | null;
+  deduped: boolean;
+  versions?: number;
+  twins?: number;
+  match?: SearchMatch;
+  mine?: boolean;
   urls: FileUrls;
+}
+
+export interface SearchMatch {
+  before: string;
+  match: string;
+  after: string;
+  line: number;
+}
+
+export interface FileVersion {
+  id: number;
+  version: number;
+  name: string;
+  filename: string;
+  sizeBytes: number;
+  createdAt: number;
+  replacedAt: number;
+  width: number;
+  height: number;
+  note: 'original' | 'edited' | 'trimmed' | null;
+  type: FileType;
+  content: string;
+}
+
+export interface DuplicateGroup {
+  sha256: string;
+  sizeBytes: number;
+  files: FileItem[];
+  redundantBytes: number;
+  savedBytes: number;
+}
+
+export interface DuplicateReport {
+  groups: DuplicateGroup[];
+  files: number;
+  redundantBytes: number;
+  savedBytes: number;
+}
+
+export interface Job<T = unknown> {
+  id: string;
+  kind: string;
+  state: 'running' | 'done' | 'error';
+  progress: number;
+  detail: unknown;
+  startedAt: number;
+  finishedAt?: number;
+  result: T | null;
+  error: { message: string; status: number; code: string | null } | null;
+}
+
+export interface UploadSession {
+  id: string;
+  name: string;
+  size: number;
+  received: number;
+  fileId: number | null;
+  fingerprint: string | null;
+  chunkSize: number;
+  maxChunk: number;
+  createdAt: number;
+  expiresAt: number;
+}
+
+export type WatermarkPosition =
+  'top-left' | 'top' | 'top-right' | 'left' | 'center' | 'right' | 'bottom-left' | 'bottom' | 'bottom-right' | 'tile';
+
+export interface WatermarkConfig {
+  enabled: boolean;
+  kind: 'text' | 'image';
+  text: string;
+  position: WatermarkPosition;
+  size: number;
+  opacity: number;
+  color: string;
+  shadow: boolean;
+  keepOriginal: boolean;
+  image: string | null;
+  allowed: boolean;
+}
+
+export type WebhookKind = 'discord' | 'slack' | 'matrix' | 'telegram' | 'ntfy' | 'json';
+
+export interface WebhookTarget {
+  id: number;
+  name: string;
+  kind: WebhookKind;
+  config: Record<string, string>;
+  secrets: Record<string, boolean>;
+  events: string[];
+  enabled: boolean;
+  createdAt: number;
+  updatedAt: number;
+  lastAt: number | null;
+  lastStatus: number | null;
+  lastError: string | null;
+}
+
+export interface ImportAccount {
+  username: string;
+  target: string;
+  merge: boolean;
+  renamed: boolean;
+  admin: boolean;
+  password: 'kept' | 'new';
+  active: boolean;
+}
+
+export interface ImportPreview {
+  kind: string;
+  label: string;
+  counts: { users: number; files: number; albums: number; links: number; texts: number };
+  bytes: number;
+  missing: number;
+  alreadyImported: number;
+  accounts: ImportAccount[];
+  orphans: number;
+}
+
+export interface ImportBucket {
+  imported: number;
+  skipped: number;
+  missing: number;
+  failed: number;
+  bytes: number;
+}
+
+export interface ImportReport {
+  users: { created: number; merged: number; skipped: number };
+  files: ImportBucket;
+  texts: ImportBucket;
+  albums: { imported: number; skipped: number };
+  links: { imported: number; skipped: number };
+  redirects: number;
+  passwords: Array<{ username: string; password: string }>;
+  renamed: Array<{ from: string; to: string }>;
+  warnings: string[];
+  label?: string;
+  ms?: number;
 }
 
 export interface FileListResponse {
@@ -54,6 +202,7 @@ export interface StorageBreakdown {
   videos: number;
   audio: number;
   other: number;
+  versions?: number;
 }
 
 export interface QuotaInfo {
@@ -69,6 +218,8 @@ export interface UserStats {
   videos: number;
   audio: number;
   texts?: number;
+  savedBytes?: number;
+  duplicates?: number;
   latestUpload: string | null;
   storageBreakdown: StorageBreakdown;
   quota?: QuotaInfo;
@@ -181,6 +332,18 @@ export interface UploadOptionsInfo {
   stats: boolean;
   profiles: boolean;
   editable: string[];
+  chunked: boolean;
+  chunkSize: number;
+  versions: boolean;
+  versionsKeep: number;
+  optimize: boolean;
+  optimizeFormat: 'keep' | 'webp' | 'avif';
+  optimizePreference: boolean;
+  watermark: boolean;
+  watermarks: boolean;
+  contentSearch: boolean;
+  deduplicate: boolean;
+  clips: boolean;
 }
 
 export interface TagCount {
@@ -229,6 +392,18 @@ export interface Album {
   blocked?: { at: number; reason: string } | null;
   cover?: { type: FileType; url: string | null; color: string } | null;
   items?: FileItem[];
+  owner?: string | null;
+  role?: 'owner' | 'member';
+  members?: number;
+  memberList?: AlbumMember[];
+  contributors?: string[];
+}
+
+export interface AlbumMember {
+  id: number;
+  username: string;
+  role: string;
+  addedAt: number;
 }
 
 export type NotifyKey = 'security' | 'reports' | 'users';
@@ -238,6 +413,7 @@ export interface Preferences {
   urlStyle: UrlStyle | null;
   domain: string | null;
   expiry: ExpiryChoice | null;
+  optimize: boolean | null;
   notify: Record<NotifyKey, boolean>;
 }
 
@@ -251,6 +427,8 @@ export interface PreferenceChoices {
   texts: boolean;
   links: boolean;
   mail: boolean;
+  optimize: boolean;
+  export: boolean;
 }
 
 export interface SessionUser {
@@ -480,6 +658,7 @@ export interface DesignBoot extends BootBase {
   embed: EmbedPageData;
   userStats: UserStats;
   sudo: SudoMethods;
+  watermark: WatermarkConfig;
 }
 
 export interface StatsCounts {
@@ -673,6 +852,8 @@ export interface AdminBoot extends BootBase {
   moderation: { open: number; enabled: boolean };
   domains: UserDomain[];
   mail: { ready: boolean };
+  webhooks: { targets: WebhookTarget[]; kinds: WebhookKind[]; events: string[] };
+  imports: { sources: Array<{ id: string; label: string }>; argon2: boolean; redirects: number };
 }
 
 export interface DatabaseInfo {
@@ -757,6 +938,8 @@ export interface ViewFile {
   username: string;
   owner: boolean;
   blocked?: { reason: string } | null;
+  warning?: string | null;
+  version?: number;
 }
 
 export interface ViewUrls {
@@ -806,6 +989,8 @@ export interface AlbumItem {
   preview: string | null;
   direct: string | null;
   download: string | null;
+  warning?: string | null;
+  username?: string;
 }
 
 export interface AlbumBoot extends BootBase, OwnerStyle {
@@ -817,12 +1002,14 @@ export interface AlbumBoot extends BootBase, OwnerStyle {
     title: string;
     description: string;
     owner: string | null;
+    contributors?: string[];
     updatedAt: number;
     url: string;
     zip: boolean;
   };
   items?: AlbumItem[];
   owner?: boolean;
+  dashboard?: string | null;
 }
 
 export interface PublicAlbum {

@@ -67,7 +67,8 @@ class MysqlAdapter {
   withLock(fn) {
     return this.session(async (exec) => {
       const { rows } = await exec('SELECT GET_LOCK(?, 120) AS locked', [LOCK_NAME]);
-      if (!rows[0] || Number(rows[0].locked) !== 1) throw new Error('Die Datenbank ist gerade durch einen anderen MoeShare-Prozess gesperrt.');
+      if (!rows[0] || Number(rows[0].locked) !== 1)
+        throw new Error('Die Datenbank ist gerade durch einen anderen MoeShare-Prozess gesperrt.');
       try {
         return await fn(exec);
       } finally {

@@ -4,6 +4,7 @@ const fs = require('fs');
 const fsp = fs.promises;
 const path = require('path');
 const { spawn, spawnSync } = require('child_process');
+require('./fonts');
 const sharp = require('sharp');
 const config = require('../config');
 const logger = require('./logger');
@@ -42,17 +43,77 @@ const ffmpegPath = detected ? detected.path : null;
 
 const lastLine = (text) => text.trim().split(/\r?\n/).pop() || 'Unbekannter Fehler';
 
-function ffmpeg(args) {
+const seconds = (h, m, s) => Number(h) * 3600 + Number(m) * 60 + Number(s);
+
+function ffmpeg(args, { onProgress = null, duration = 0 } = {}) {
   if (!ffmpegPath) return Promise.reject(new Error('FFmpeg ist nicht verfügbar.'));
   return new Promise((resolve, reject) => {
     const child = spawn(ffmpegPath, ['-hide_banner', '-nostdin', ...args], { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
     let stderr = '';
     child.stderr.on('data', (chunk) => {
       stderr = (stderr + chunk).slice(-50000);
+      if (onProgress && duration > 0) {
+        const times = [...String(chunk).matchAll(/time=(\d+):(\d+):(\d+(?:\.\d+)?)/g)];
+        const last = times[times.length - 1];
+        if (last) onProgress(Math.min(1, seconds(last[1], last[2], last[3]) / duration));
+      }
     });
     child.on('error', reject);
     child.on('close', (code) => resolve({ code, stderr }));
   });
+}
+
+async function probe(file) {
+  const { stderr } = await ffmpeg(['-i', file]);
+  const duration = /Duration: (\d+):(\d+):(\d+(?:\.\d+)?)/.exec(stderr);
+  return {
+    duration: duration ? seconds(duration[1], duration[2], duration[3]) : 0,
+    video: /Stream #\d+:\d+.*?Video:/.test(stderr),
+    audio: /Stream #\d+:\d+.*?Audio:/.test(stderr),
+  };
+}
+
+async function cutVideo(source, target, { start, end, audio = true, onProgress }) {
+  const length = Math.max(0.05, end - start);
+  const { code, stderr } = await ffmpeg(
+    [
+      '-y',
+      '-ss',
+      start.toFixed(3),
+      '-i',
+      source,
+      '-t',
+      length.toFixed(3),
+      '-map',
+      '0:v:0',
+      ...(audio ? ['-map', '0:a:0?', '-c:a', 'aac', '-b:a', '160k'] : ['-an']),
+      '-vf',
+      'scale=trunc(iw/2)*2:trunc(ih/2)*2',
+      '-c:v',
+      'libx264',
+      '-preset',
+      'veryfast',
+      '-crf',
+      '22',
+      '-pix_fmt',
+      'yuv420p',
+      '-movflags',
+      '+faststart',
+      target,
+    ],
+    { onProgress, duration: length }
+  );
+  if (code !== 0) throw new Error(lastLine(stderr));
+}
+
+async function makeGif(source, target, { start, end, fps = 15, width = 480, onProgress }) {
+  const length = Math.max(0.05, end - start);
+  const filter = `[0:v]fps=${fps},scale='min(${width},iw)':-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=192:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle`;
+  const { code, stderr } = await ffmpeg(
+    ['-y', '-ss', start.toFixed(3), '-t', length.toFixed(3), '-i', source, '-filter_complex', filter, '-loop', '0', target],
+    { onProgress, duration: length }
+  );
+  if (code !== 0) throw new Error(lastLine(stderr));
 }
 
 async function imagePreview(source, target) {
@@ -211,6 +272,9 @@ async function analyze(username, filename, type, options) {
 module.exports = {
   ffmpegAvailable: Boolean(ffmpegPath),
   ffmpegVersion: detected ? detected.version : null,
+  probe,
+  cutVideo,
+  makeGif,
   analyze,
   stripLocation,
   removeHlsArtifacts,

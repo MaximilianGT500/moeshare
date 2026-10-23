@@ -5,7 +5,9 @@ import Dialog from '@mui/material/Dialog';
 import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
 import DialogTitle from '@mui/material/DialogTitle';
+import FormControlLabel from '@mui/material/FormControlLabel';
 import MenuItem from '@mui/material/MenuItem';
+import Switch from '@mui/material/Switch';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import TuneRounded from '@mui/icons-material/TuneRounded';
@@ -19,6 +21,7 @@ import {
   ProtectionFields,
   TagInput,
   UrlStyleSelect,
+  WarningFields,
   expiryLabel,
   urlStyleLabel,
 } from '../../components/ShareOptions';
@@ -33,6 +36,9 @@ export interface UploadPrefs {
   domain: string;
   tags: string[];
   album: number | null;
+  warning: string | null;
+  optimize: boolean | null;
+  watermark: boolean | null;
 }
 
 export const EMPTY_PREFS: UploadPrefs = {
@@ -44,6 +50,9 @@ export const EMPTY_PREFS: UploadPrefs = {
   domain: '',
   tags: [],
   album: null,
+  warning: null,
+  optimize: null,
+  watermark: null,
 };
 
 export const prefsActive = (prefs: UploadPrefs) =>
@@ -54,7 +63,10 @@ export const prefsActive = (prefs: UploadPrefs) =>
     prefs.urlStyle ||
     prefs.domain ||
     prefs.tags.length ||
-    prefs.album
+    prefs.album ||
+    prefs.warning !== null ||
+    prefs.optimize !== null ||
+    prefs.watermark !== null
   );
 
 export function toUploadOptions(prefs: UploadPrefs): UploadOptions {
@@ -66,6 +78,9 @@ export function toUploadOptions(prefs: UploadPrefs): UploadOptions {
     domain: prefs.domain || undefined,
     tags: prefs.tags.length ? prefs.tags : undefined,
     album: prefs.album || undefined,
+    warning: prefs.warning ?? undefined,
+    optimize: prefs.optimize ?? undefined,
+    watermark: prefs.watermark ?? undefined,
   };
 }
 
@@ -78,6 +93,9 @@ export function describePrefs(prefs: UploadPrefs, albums: Album[] = []) {
   if (prefs.urlStyle) parts.push(urlStyleLabel(prefs.urlStyle));
   if (prefs.tags.length) parts.push(prefs.tags.map((tag) => `#${tag}`).join(' '));
   if (prefs.album) parts.push(t('Album: {name}', { name: albums.find((album) => album.id === prefs.album)?.title || '…' }));
+  if (prefs.warning !== null) parts.push(prefs.warning ? t('Inhaltswarnung: {label}', { label: prefs.warning }) : t('Inhaltswarnung'));
+  if (prefs.optimize !== null) parts.push(prefs.optimize ? t('Bilder optimieren') : t('Bilder nicht optimieren'));
+  if (prefs.watermark === false) parts.push(t('Ohne Wasserzeichen'));
   return parts.join(' · ');
 }
 
@@ -143,6 +161,55 @@ export function UploadOptionsDialog({
             includeDefault={t('Standard')}
           />
           <TagInput value={draft.tags} onChange={(next) => setDraft({ ...draft, tags: next })} suggestions={tags} />
+          <WarningFields value={draft.warning} onChange={(warning) => setDraft({ ...draft, warning })} />
+          {(info.optimize || info.watermark) && (
+            <Box sx={{ display: 'grid', gap: 0.5 }}>
+              {info.optimize && (
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={draft.optimize ?? info.optimizePreference}
+                      onChange={(event) =>
+                        setDraft({ ...draft, optimize: event.target.checked === info.optimizePreference ? null : event.target.checked })
+                      }
+                    />
+                  }
+                  label={
+                    <Box>
+                      {t('Bilder optimieren')}
+                      <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+                        {info.optimizeFormat === 'keep'
+                          ? t('Bilder werden kleiner gerechnet, das Format bleibt.')
+                          : t('Bilder werden als {format} gespeichert und dadurch meist deutlich kleiner.', {
+                              format: info.optimizeFormat.toUpperCase(),
+                            })}
+                      </Typography>
+                    </Box>
+                  }
+                  sx={{ alignItems: 'flex-start', '& .MuiSwitch-root': { mt: -0.5 } }}
+                />
+              )}
+              {info.watermark && (
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={draft.watermark ?? true}
+                      onChange={(event) => setDraft({ ...draft, watermark: event.target.checked ? null : false })}
+                    />
+                  }
+                  label={
+                    <Box>
+                      {t('Wasserzeichen einfügen')}
+                      <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+                        {t('Dein Wasserzeichen richtest du unter „Gestalten“ ein.')}
+                      </Typography>
+                    </Box>
+                  }
+                  sx={{ alignItems: 'flex-start', '& .MuiSwitch-root': { mt: -0.5 } }}
+                />
+              )}
+            </Box>
+          )}
           {info.albums && albums.length > 0 && (
             <TextField
               select

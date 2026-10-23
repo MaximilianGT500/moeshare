@@ -28,7 +28,10 @@ function incrementSql(client, table, keys, counters, assigned) {
   const columns = [...keys, ...counters, ...assigned];
   const insert = `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${placeholders(columns.length)})`;
   if (client === 'mysql') {
-    const updates = [...counters.map((column) => `${column} = ${column} + VALUES(${column})`), ...assigned.map((column) => `${column} = VALUES(${column})`)];
+    const updates = [
+      ...counters.map((column) => `${column} = ${column} + VALUES(${column})`),
+      ...assigned.map((column) => `${column} = VALUES(${column})`),
+    ];
     return `${insert} ON DUPLICATE KEY UPDATE ${updates.join(', ')}`;
   }
   const updates = [
@@ -75,15 +78,24 @@ function build(exec, client) {
     },
     async insertRow(table, row) {
       const columns = Object.keys(row);
-      return api.insert(insertSql(client, table, columns), columns.map((column) => row[column]));
+      return api.insert(
+        insertSql(client, table, columns),
+        columns.map((column) => row[column])
+      );
     },
     async upsert(table, row, keys, update = Object.keys(row).filter((column) => !keys.includes(column))) {
       const columns = Object.keys(row);
-      return api.run(upsertSql(client, table, columns, keys, update), columns.map((column) => row[column]));
+      return api.run(
+        upsertSql(client, table, columns, keys, update),
+        columns.map((column) => row[column])
+      );
     },
     async insertIgnore(table, row) {
       const columns = Object.keys(row);
-      return api.run(insertSql(client, table, columns, { ignore: true }), columns.map((column) => row[column]));
+      return api.run(
+        insertSql(client, table, columns, { ignore: true }),
+        columns.map((column) => row[column])
+      );
     },
     async increment(table, keys, counters, assigned = {}) {
       const keyNames = Object.keys(keys);

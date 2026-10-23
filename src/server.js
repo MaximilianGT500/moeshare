@@ -22,6 +22,12 @@ const storage = require('./services/storageService');
 const backups = require('./services/backupService');
 const domains = require('./services/domainService');
 const stats = require('./services/statsService');
+const resumable = require('./services/resumableService');
+const dedupe = require('./services/dedupeService');
+const search = require('./services/searchService');
+const redirects = require('./services/redirectService');
+const webhook = require('./services/webhookService');
+const scans = require('./services/scanService');
 const { createApp } = require('./app');
 
 const log = logger.scope('server');
@@ -93,6 +99,9 @@ function scheduleMaintenance() {
         log.debug('Abgelaufenes entfernt', { files: expiredFiles, links: expiredLinks, trash: trashed });
       await backups.tick();
       await domains.checkPending();
+      await resumable.cleanup();
+      await search.backfill();
+      await dedupe.backfill();
     } catch (error) {
       log.error('Die minütliche Wartung ist fehlgeschlagen', { error });
     }
@@ -127,7 +136,7 @@ async function checkForUpdate() {
   }
 }
 
-function logSummary() {
+function logSummary(notifications) {
   const providers = oauth.enabled().map(({ label }) => label);
   const features = [
     ['Vorschaubilder', settings.get('uploads.preview')],
@@ -137,7 +146,7 @@ function logSummary() {
     ['Startseite', settings.get('home.enabled')],
     ['Passkeys', settings.get('auth.passkeys')],
     [providers.length ? `Anmeldung mit ${providers.join(', ')}` : 'Anmeldung über Dienste', providers.length > 0],
-    ['Discord-Webhook', settings.get('webhook.enabled') && Boolean(settings.get('webhook.url'))],
+    ['Benachrichtigungen', notifications],
     ['Speicher in S3', storage.activeDriver() === 's3'],
     ['Automatische Sicherungen', settings.get('backup.enabled')],
     ['Papierkorb', settings.get('trash.enabled')],
@@ -146,6 +155,12 @@ function logSummary() {
     ['Profilseiten', settings.get('profiles.enabled')],
     ['Meldungen', settings.get('reports.enabled')],
     ['E-Mail-Versand', settings.get('mail.enabled') && Boolean(settings.get('mail.host'))],
+    ['Fortsetzbare Uploads', resumable.enabled()],
+    ['Dateiversionen', settings.get('uploads.versions')],
+    ['Duplikate zusammenlegen', dedupe.enabled()],
+    ['Bilder optimieren', settings.get('images.optimize')],
+    ['Volltextsuche', search.enabled()],
+    ['Virenscan', scans.enabled()],
   ];
   const active = features.filter(([, on]) => on).map(([name]) => name);
   const inactive = features.filter(([, on]) => !on).map(([name]) => name);
@@ -207,16 +222,19 @@ async function start() {
     await prepareUserFolders();
     await domains.refresh();
     domains.start();
+    await webhook.adoptLegacy().catch((error) => log.warn('Der bisherige Discord-Webhook ließ sich nicht übernehmen', { error }));
+    await redirects.load();
   } catch (error) {
     return fatal('MoeShare konnte nicht starten', error);
   }
 
   const app = createApp();
   scheduleMaintenance();
+  const notifications = await webhook.configured().catch(() => false);
 
   const server = app.listen(config.port, (error) => {
     if (error) return;
-    logSummary();
+    logSummary(notifications);
     checkForUpdate();
     setup.prepare().catch((error) => log.error('Der Einrichtungslink konnte nicht erstellt werden', { error }));
   });

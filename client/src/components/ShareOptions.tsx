@@ -10,6 +10,7 @@ import Typography from '@mui/material/Typography';
 import TimerOutlined from '@mui/icons-material/TimerOutlined';
 import LockOutlined from '@mui/icons-material/LockOutlined';
 import VisibilityOutlined from '@mui/icons-material/VisibilityOutlined';
+import WarningAmberRounded from '@mui/icons-material/WarningAmberRounded';
 import type { ExpiryChoice, TagCount, UrlStyle } from '../lib/types';
 import { t } from '../lib/i18n';
 import { formatNumber, relativeMs } from '../lib/format';
@@ -304,6 +305,79 @@ export function ProtectionFields({
         }
         sx={{ alignItems: 'flex-start', '& .MuiSwitch-root': { mt: -0.5 } }}
       />
+    </Box>
+  );
+}
+
+const WARNING_SUGGESTIONS = () => [t('Spoiler'), t('NSFW'), t('Blut'), t('Flackern')];
+
+export function WarningFields({
+  value,
+  onChange,
+  help = t('Bilder und Videos erscheinen unscharf, bis jemand bewusst draufklickt. Auch Vorschauen in Discord und Co. zeigen nichts.'),
+}: {
+  value: string | null;
+  onChange: (value: string | null) => void;
+  help?: string;
+}) {
+  const enabled = value !== null;
+  return (
+    <Box sx={{ display: 'grid', gap: 1 }}>
+      <FormControlLabel
+        control={<Switch checked={enabled} onChange={(event) => onChange(event.target.checked ? '' : null)} />}
+        label={
+          <Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <WarningAmberRounded fontSize="small" sx={{ color: 'text.secondary' }} />
+              {t('Inhaltswarnung')}
+            </Box>
+            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+              {help}
+            </Typography>
+          </Box>
+        }
+        sx={{ alignItems: 'flex-start', '& .MuiSwitch-root': { mt: -0.5 } }}
+      />
+      {enabled && (
+        <Box sx={{ pl: { xs: 0, sm: 6.5 } }}>
+          <WarningLabelInput value={value} onChange={onChange} />
+        </Box>
+      )}
+    </Box>
+  );
+}
+
+export function WarningLabelInput({
+  value,
+  onChange,
+  autoFocus = false,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  autoFocus?: boolean;
+}) {
+  return (
+    <Box sx={{ display: 'grid', gap: 1 }}>
+      <TextField
+        size="small"
+        label={t('Hinweis (optional)')}
+        placeholder={t('zum Beispiel Spoiler')}
+        value={value}
+        autoFocus={autoFocus}
+        onChange={(event) => onChange(event.target.value.slice(0, 100))}
+        slotProps={{ htmlInput: { maxLength: 100 } }}
+      />
+      <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
+        {WARNING_SUGGESTIONS().map((suggestion) => (
+          <Chip
+            key={suggestion}
+            size="small"
+            label={suggestion}
+            variant={value === suggestion ? 'filled' : 'outlined'}
+            onClick={() => onChange(value === suggestion ? '' : suggestion)}
+          />
+        ))}
+      </Box>
     </Box>
   );
 }

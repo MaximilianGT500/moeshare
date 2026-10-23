@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, m } from 'motion/react';
 import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
 import Collapse from '@mui/material/Collapse';
 import GlobalStyles from '@mui/material/GlobalStyles';
 import IconButton from '@mui/material/IconButton';
@@ -13,16 +14,32 @@ import ExpandMoreRounded from '@mui/icons-material/ExpandMoreRounded';
 import CheckCircleRounded from '@mui/icons-material/CheckCircleRounded';
 import ErrorRounded from '@mui/icons-material/ErrorRounded';
 import ReplayRounded from '@mui/icons-material/ReplayRounded';
-import { ApiError, uploadFile, type UploadHandle, type UploadOptions, type UploadResponse } from '../../lib/api';
+import PauseRounded from '@mui/icons-material/PauseRounded';
+import PlayArrowRounded from '@mui/icons-material/PlayArrowRounded';
+import RestoreRounded from '@mui/icons-material/RestoreRounded';
+import {
+  ApiError,
+  cancelUploadSession,
+  discardResumable,
+  fingerprintOf,
+  listUploadSessions,
+  uploadFile,
+  uploadResumable,
+  type UploadOptions,
+  type UploadResponse,
+} from '../../lib/api';
+import type { UploadSession } from '../../lib/types';
 import { t, tn } from '../../lib/i18n';
 import { formatBytes } from '../../lib/format';
 import { isTypingTarget } from '../../lib/hooks';
 import { mix } from '../../lib/color';
+import { droppedEntries, groupPicked, readDrop, type DropContents } from '../../lib/folders';
+import { canUnzip, isZip } from '../../lib/unzip';
 import { useToast } from '../../components/Toaster';
 import { fileIcon } from '../../components/FileIcons';
 import { c, css, ease, elevation, radius } from '../../theme/tokens';
 
-type Status = 'queued' | 'uploading' | 'done' | 'error';
+type Status = 'queued' | 'uploading' | 'paused' | 'retrying' | 'done' | 'error';
 
 interface UploadItem {
   id: number;
@@ -30,22 +47,41 @@ interface UploadItem {
   options: UploadOptions;
   progress: number;
   status: Status;
+  resumable: boolean;
   error?: string;
   thumb?: string;
   result?: UploadResponse;
 }
 
-interface UploadContextValue {
-  pick: () => void;
-  enqueue: (files: FileList | File[]) => void;
-  active: number;
-  setOptions: (options: UploadOptions) => void;
+interface Control {
+  abort: () => void;
+  pause?: () => void;
+  resume?: () => void;
 }
 
-const UploadContext = createContext<UploadContextValue>({ pick: () => {}, enqueue: () => {}, active: 0, setOptions: () => {} });
+interface UploadContextValue {
+  pick: () => void;
+  pickFolder: () => void;
+  enqueue: (files: FileList | File[], overrides?: UploadOptions) => void;
+  active: number;
+  setOptions: (options: UploadOptions) => void;
+  pending: UploadSession[];
+  discardPending: () => Promise<void>;
+}
+
+const UploadContext = createContext<UploadContextValue>({
+  pick: () => {},
+  pickFolder: () => {},
+  enqueue: () => {},
+  active: 0,
+  setOptions: () => {},
+  pending: [],
+  discardPending: async () => {},
+});
 export const useUploads = () => useContext(UploadContext);
 
 const CONCURRENCY = 2;
+const RUNNING: Status[] = ['uploading', 'retrying'];
 
 function guessType(file: File) {
   if (file.type.startsWith('image/')) return 'image' as const;
@@ -58,37 +94,60 @@ export function UploadProvider({
   children,
   onUploaded,
   maxBytes,
+  chunked,
+  chunkSize,
+  albums,
+  onFolders,
+  onArchive,
 }: {
   children: ReactNode;
-  onUploaded: (names: string[]) => void;
+  onUploaded: (names: string[], results: UploadResponse[]) => void;
   maxBytes: number | null;
+  chunked: boolean;
+  chunkSize: number;
+  albums: boolean;
+  onFolders: (contents: DropContents) => void;
+  onArchive: (file: File) => void;
 }) {
   const toast = useToast();
   const [items, setItems] = useState<UploadItem[]>([]);
   const [dragging, setDragging] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [pending, setPending] = useState<UploadSession[]>([]);
   const input = useRef<HTMLInputElement>(null);
-  const handles = useRef(new Map<number, UploadHandle>());
+  const folderInput = useRef<HTMLInputElement>(null);
+  const handles = useRef(new Map<number, Control>());
   const started = useRef(new Set<number>());
   const nextId = useRef(1);
-  const finished = useRef<string[]>([]);
+  const finished = useRef<UploadResponse[]>([]);
   const flushTimer = useRef(0);
   const onUploadedRef = useRef(onUploaded);
   onUploadedRef.current = onUploaded;
+  const routeRef = useRef({ albums, onFolders, onArchive });
+  routeRef.current = { albums, onFolders, onArchive };
   const optionsRef = useRef<UploadOptions>({});
   const setOptions = useCallback((options: UploadOptions) => {
     optionsRef.current = options;
   }, []);
+
+  useEffect(() => {
+    if (!chunked) return;
+    listUploadSessions()
+      .then((res) => setPending(res.uploads.filter((session) => !session.fileId)))
+      .catch(() => {});
+  }, [chunked]);
 
   const update = useCallback((id: number, patch: Partial<UploadItem>) => {
     setItems((list) => list.map((item) => (item.id === id ? { ...item, ...patch } : item)));
   }, []);
 
   const enqueue = useCallback(
-    (fileList: FileList | File[]) => {
+    (fileList: FileList | File[], overrides: UploadOptions = {}) => {
       const files = Array.from(fileList || []);
       if (!files.length) return;
       setCollapsed(false);
+      const prints = new Set(files.map(fingerprintOf));
+      setPending((list) => list.filter((session) => !session.fingerprint || !prints.has(session.fingerprint)));
       setItems((list) => [
         ...list,
         ...files.map((file) => {
@@ -96,8 +155,9 @@ export function UploadProvider({
           return {
             id: nextId.current++,
             file,
-            options: optionsRef.current,
+            options: { ...optionsRef.current, ...overrides },
             progress: 0,
+            resumable: chunked && file.size > chunkSize,
             status: tooBig ? ('error' as const) : ('queued' as const),
             error: tooBig ? t('Zu groß – erlaubt sind bis zu {max}.', { max: formatBytes(maxBytes!) }) : undefined,
             thumb: guessType(file) === 'image' && file.size < 25 * 1024 * 1024 ? URL.createObjectURL(file) : undefined,
@@ -105,28 +165,59 @@ export function UploadProvider({
         }),
       ]);
     },
-    [maxBytes]
+    [maxBytes, chunked, chunkSize]
+  );
+
+  const route = useCallback(
+    (contents: DropContents) => {
+      if (contents.folders.length && routeRef.current.albums) {
+        routeRef.current.onFolders(contents);
+        return;
+      }
+      const all = [...contents.loose, ...contents.folders.flatMap((folder) => folder.files)];
+      if (all.length === 1 && isZip(all[0]) && routeRef.current.albums && canUnzip()) {
+        routeRef.current.onArchive(all[0]);
+        return;
+      }
+      enqueue(all);
+    },
+    [enqueue]
   );
 
   useEffect(() => {
-    const running = items.filter((item) => item.status === 'uploading').length;
+    const running = items.filter((item) => RUNNING.includes(item.status)).length;
     const waiting = items.filter((item) => item.status === 'queued' && !started.current.has(item.id));
     for (const item of waiting.slice(0, Math.max(0, CONCURRENCY - running))) {
       started.current.add(item.id);
       update(item.id, { status: 'uploading', progress: 0 });
-      const handle = uploadFile(item.file, (progress) => update(item.id, { progress }), item.options);
-      handles.current.set(item.id, handle);
-      handle.promise
+      const onProgress = (progress: number) => update(item.id, { progress });
+      let promise: Promise<UploadResponse>;
+      if (item.resumable) {
+        const handle = uploadResumable(item.file, onProgress, item.options, {
+          onState: (state) => update(item.id, { status: state === 'running' ? 'uploading' : state }),
+        });
+        handles.current.set(item.id, handle);
+        promise = handle.promise as Promise<UploadResponse>;
+      } else {
+        const handle = uploadFile(item.file, onProgress, item.options);
+        handles.current.set(item.id, handle);
+        promise = handle.promise;
+      }
+      promise
         .then((result) => {
           update(item.id, { status: 'done', progress: 1, result });
-          finished.current.push(result.filename || result.view.split('/').pop() || '');
+          finished.current.push(result);
           window.clearTimeout(flushTimer.current);
           flushTimer.current = window.setTimeout(() => {
-            const names = finished.current.splice(0);
-            onUploadedRef.current(names);
+            const results = finished.current.splice(0);
+            onUploadedRef.current(
+              results.map((entry) => entry.filename || entry.view.split('/').pop() || ''),
+              results
+            );
           }, 350);
         })
         .catch((error: unknown) => {
+          if (error instanceof ApiError && error.code === 'aborted') return;
           const message = error instanceof ApiError ? error.message : t('Upload fehlgeschlagen.');
           update(item.id, { status: 'error', error: message });
           if (error instanceof ApiError && error.sessionExpired) {
@@ -149,21 +240,35 @@ export function UploadProvider({
     return () => window.clearTimeout(timer);
   }, [allDone]);
 
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+
+  const forget = (item: UploadItem) => {
+    const handle = handles.current.get(item.id);
+    if (handle) handle.abort();
+    else if (item.resumable && item.status === 'error') discardResumable(item.file);
+    if (item.thumb) URL.revokeObjectURL(item.thumb);
+  };
+
   const remove = (id: number) => {
-    handles.current.get(id)?.abort();
-    setItems((list) => {
-      const item = list.find((entry) => entry.id === id);
-      if (item?.thumb) URL.revokeObjectURL(item.thumb);
-      return list.filter((entry) => entry.id !== id);
-    });
+    const item = itemsRef.current.find((entry) => entry.id === id);
+    if (item) forget(item);
+    setItems((list) => list.filter((entry) => entry.id !== id));
   };
 
   const clearAll = () => {
-    handles.current.forEach((handle) => handle.abort());
-    setItems((list) => {
-      list.forEach((item) => item.thumb && URL.revokeObjectURL(item.thumb));
-      return [];
-    });
+    itemsRef.current.forEach(forget);
+    setItems([]);
+  };
+
+  const pause = (id: number) => {
+    handles.current.get(id)?.pause?.();
+    update(id, { status: 'paused' });
+  };
+
+  const resume = (id: number) => {
+    handles.current.get(id)?.resume?.();
+    update(id, { status: 'uploading' });
   };
 
   useEffect(() => {
@@ -187,7 +292,14 @@ export function UploadProvider({
       event.preventDefault();
       depth = 0;
       setDragging(false);
-      if (event.dataTransfer?.files.length) enqueue(event.dataTransfer.files);
+      const entries = droppedEntries(event.dataTransfer);
+      if (entries.some((entry) => entry.isDirectory)) {
+        readDrop(entries)
+          .then(route)
+          .catch(() => toast(t('Der Ordner ließ sich nicht lesen.'), { variant: 'error' }));
+        return;
+      }
+      if (event.dataTransfer?.files.length) route({ loose: Array.from(event.dataTransfer.files), folders: [] });
     };
     window.addEventListener('dragenter', onEnter);
     window.addEventListener('dragleave', onLeave);
@@ -199,7 +311,7 @@ export function UploadProvider({
       window.removeEventListener('dragover', onOver);
       window.removeEventListener('drop', onDrop);
     };
-  }, [enqueue]);
+  }, [route, toast]);
 
   useEffect(() => {
     const onPaste = (event: ClipboardEvent) => {
@@ -227,8 +339,25 @@ export function UploadProvider({
     return () => document.removeEventListener('paste', onPaste);
   }, [enqueue, toast]);
 
-  const active = items.filter((item) => item.status === 'queued' || item.status === 'uploading').length;
-  const value = useMemo(() => ({ pick: () => input.current?.click(), enqueue, active, setOptions }), [enqueue, active, setOptions]);
+  const discardPending = useCallback(async () => {
+    const list = pending;
+    setPending([]);
+    await Promise.all(list.map((session) => cancelUploadSession(session.id).catch(() => {})));
+  }, [pending]);
+
+  const active = items.filter((item) => ['queued', 'uploading', 'paused', 'retrying'].includes(item.status)).length;
+  const value = useMemo(
+    () => ({
+      pick: () => input.current?.click(),
+      pickFolder: () => folderInput.current?.click(),
+      enqueue,
+      active,
+      setOptions,
+      pending,
+      discardPending,
+    }),
+    [enqueue, active, setOptions, pending, discardPending]
+  );
 
   return (
     <UploadContext.Provider value={value}>
@@ -239,7 +368,18 @@ export function UploadProvider({
         multiple
         hidden
         onChange={(event) => {
-          if (event.target.files) enqueue(event.target.files);
+          if (event.target.files) route({ loose: Array.from(event.target.files), folders: [] });
+          event.target.value = '';
+        }}
+      />
+      <input
+        ref={folderInput}
+        type="file"
+        multiple
+        hidden
+        {...{ webkitdirectory: '', directory: '' }}
+        onChange={(event) => {
+          if (event.target.files) route(groupPicked(event.target.files));
           event.target.value = '';
         }}
       />
@@ -249,12 +389,14 @@ export function UploadProvider({
           '@media (max-width: 899.95px)': { '.moeshare-upload-tray': { bottom: 'calc(92px + env(safe-area-inset-bottom))' } },
         }}
       />
-      <DropOverlay open={dragging} maxBytes={maxBytes} />
+      <DropOverlay open={dragging} maxBytes={maxBytes} albums={albums} />
       <UploadTray
         items={items}
         collapsed={collapsed}
         onToggle={() => setCollapsed((v) => !v)}
         onRemove={remove}
+        onPause={pause}
+        onResume={resume}
         onRetry={(id) => {
           started.current.delete(id);
           update(id, { status: 'queued', progress: 0, error: undefined });
@@ -265,7 +407,68 @@ export function UploadProvider({
   );
 }
 
-function DropOverlay({ open, maxBytes }: { open: boolean; maxBytes: number | null }) {
+export function ResumeNotice() {
+  const { pending, pick, discardPending } = useUploads();
+  const [busy, setBusy] = useState(false);
+  if (!pending.length) return null;
+  const bytes = pending.reduce((sum, session) => sum + (session.size - session.received), 0);
+  return (
+    <m.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, ease: ease.emphasizedDecelerate }}>
+      <Box
+        role="status"
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 2,
+          flexWrap: 'wrap',
+          mb: 2,
+          px: 2,
+          py: 1.5,
+          borderRadius: `${radius.lg}px`,
+          bgcolor: c.surfaceContainerHigh,
+          color: c.onSurface,
+        }}
+      >
+        <Box sx={{ color: c.primary, display: 'flex' }}>
+          <RestoreRounded />
+        </Box>
+        <Box sx={{ flex: 1, minWidth: 220 }}>
+          <Typography variant="subtitle2" sx={{ wordBreak: 'break-word' }}>
+            {tn(pending.length, 'Ein Upload wurde unterbrochen', '{count} Uploads wurden unterbrochen')}:{' '}
+            {pending
+              .slice(0, 3)
+              .map((session) => session.name)
+              .join(', ')}
+            {pending.length > 3 ? ' …' : ''}
+          </Typography>
+          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+            {t('Wähle dieselben Dateien noch einmal aus, dann geht es an der Stelle weiter. Es fehlen noch {size}.', {
+              size: formatBytes(bytes),
+            })}
+          </Typography>
+        </Box>
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <Button
+            color="inherit"
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              await discardPending();
+              setBusy(false);
+            }}
+          >
+            {t('Verwerfen')}
+          </Button>
+          <Button variant="contained" onClick={pick}>
+            {t('Dateien wählen')}
+          </Button>
+        </Box>
+      </Box>
+    </m.div>
+  );
+}
+
+function DropOverlay({ open, maxBytes, albums }: { open: boolean; maxBytes: number | null; albums: boolean }) {
   return (
     <AnimatePresence>
       {open && (
@@ -347,6 +550,11 @@ function DropOverlay({ open, maxBytes }: { open: boolean; maxBytes: number | nul
                   {t('Bilder, Videos, Audio und alle anderen Dateien')}
                   {maxBytes ? t(' – bis zu {maxBytes} pro Datei', { maxBytes: formatBytes(maxBytes) }) : ''}.
                 </Typography>
+                {albums && (
+                  <Typography variant="body2" sx={{ mt: 0.5, color: 'text.secondary' }}>
+                    {t('Ordner und ZIP-Archive werden auf Wunsch zum Album.')}
+                  </Typography>
+                )}
               </Box>
             </m.div>
           </Box>
@@ -362,6 +570,8 @@ function UploadTray({
   collapsed,
   onToggle,
   onRemove,
+  onPause,
+  onResume,
   onRetry,
   onClose,
 }: {
@@ -369,17 +579,22 @@ function UploadTray({
   collapsed: boolean;
   onToggle: () => void;
   onRemove: (id: number) => void;
+  onPause: (id: number) => void;
+  onResume: (id: number) => void;
   onRetry: (id: number) => void;
   onClose: () => void;
 }) {
-  const active = items.filter((item) => item.status === 'queued' || item.status === 'uploading');
+  const active = items.filter((item) => ['queued', 'uploading', 'paused', 'retrying'].includes(item.status));
   const failed = items.filter((item) => item.status === 'error').length;
   const done = items.filter((item) => item.status === 'done').length;
+  const paused = items.filter((item) => item.status === 'paused').length;
   const totalBytes = items.reduce((sum, item) => sum + item.file.size, 0) || 1;
   const progress = items.reduce((sum, item) => sum + item.file.size * (item.status === 'error' ? 1 : item.progress), 0) / totalBytes;
 
   const title = active.length
-    ? tn(active.length, 'Eine Datei wird hochgeladen', '{count} Dateien werden hochgeladen')
+    ? paused === active.length
+      ? tn(paused, 'Ein Upload ist pausiert', '{count} Uploads sind pausiert')
+      : tn(active.length, 'Eine Datei wird hochgeladen', '{count} Dateien werden hochgeladen')
     : failed
       ? tn(failed, '1 Upload ist fehlgeschlagen', '{count} Uploads sind fehlgeschlagen')
       : tn(done, 'Datei hochgeladen', '{count} Dateien hochgeladen');
@@ -433,7 +648,13 @@ function UploadTray({
                       exit={{ opacity: 0, height: 0 }}
                       transition={{ duration: 0.25 }}
                     >
-                      <UploadRow item={item} onRemove={() => onRemove(item.id)} onRetry={() => onRetry(item.id)} />
+                      <UploadRow
+                        item={item}
+                        onRemove={() => onRemove(item.id)}
+                        onRetry={() => onRetry(item.id)}
+                        onPause={() => onPause(item.id)}
+                        onResume={() => onResume(item.id)}
+                      />
                     </m.div>
                   ))}
                 </AnimatePresence>
@@ -446,8 +667,34 @@ function UploadTray({
   );
 }
 
-function UploadRow({ item, onRemove, onRetry }: { item: UploadItem; onRemove: () => void; onRetry: () => void }) {
+function doneCaption(item: UploadItem) {
+  const twin = item.result?.duplicateOf;
+  if (twin) return twin.stored ? t('Schon vorhanden, belegt keinen zusätzlichen Speicher') : t('Diese Datei hast du schon');
+  return t('{size} hochgeladen', { size: formatBytes(item.file.size) });
+}
+
+function UploadRow({
+  item,
+  onRemove,
+  onRetry,
+  onPause,
+  onResume,
+}: {
+  item: UploadItem;
+  onRemove: () => void;
+  onRetry: () => void;
+  onPause: () => void;
+  onResume: () => void;
+}) {
   const type = guessType(item.file);
+  const label =
+    item.status === 'queued'
+      ? t('wartet')
+      : item.status === 'paused'
+        ? t('pausiert')
+        : item.status === 'retrying'
+          ? t('neuer Versuch')
+          : `${Math.round(item.progress * 100)} %`;
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, p: 1, borderRadius: `${radius.tile}px` }}>
       <Box
@@ -478,29 +725,44 @@ function UploadRow({ item, onRemove, onRetry }: { item: UploadItem; onRemove: ()
             {item.error}
           </Typography>
         ) : item.status === 'done' ? (
-          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-            {formatBytes(item.file.size)} hochgeladen
+          <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }} noWrap>
+            {doneCaption(item)}
           </Typography>
         ) : (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.75 }}>
             <LinearProgress
               variant={item.status === 'queued' ? 'indeterminate' : 'determinate'}
               value={item.progress * 100}
+              color={item.status === 'paused' || item.status === 'retrying' ? 'inherit' : 'primary'}
               sx={{ flex: 1, height: 4 }}
             />
-            <Typography variant="caption" sx={{ color: 'text.secondary', minWidth: 34, textAlign: 'right' }}>
-              {item.status === 'queued' ? 'wartet' : `${Math.round(item.progress * 100)} %`}
+            <Typography variant="caption" sx={{ color: 'text.secondary', minWidth: 34, textAlign: 'right', whiteSpace: 'nowrap' }}>
+              {label}
             </Typography>
           </Box>
         )}
       </Box>
       {item.status === 'done' && <CheckCircleRounded sx={{ color: c.primary }} />}
+      {item.resumable && (item.status === 'uploading' || item.status === 'retrying') && (
+        <Tooltip title={t('Pausieren')}>
+          <IconButton size="small" onClick={onPause} aria-label={t('Upload pausieren')}>
+            <PauseRounded fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      )}
+      {item.status === 'paused' && (
+        <Tooltip title={t('Fortsetzen')}>
+          <IconButton size="small" onClick={onResume} aria-label={t('Upload fortsetzen')}>
+            <PlayArrowRounded fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      )}
       {item.status === 'error' && (
         <>
           <ErrorRounded sx={{ color: c.error }} />
           {!item.error?.startsWith(t('Zu groß')) && (
-            <Tooltip title={t('Erneut versuchen')}>
-              <IconButton size="small" onClick={onRetry} aria-label={t('Erneut versuchen')}>
+            <Tooltip title={item.resumable ? t('Fortsetzen') : t('Erneut versuchen')}>
+              <IconButton size="small" onClick={onRetry} aria-label={item.resumable ? t('Upload fortsetzen') : t('Erneut versuchen')}>
                 <ReplayRounded fontSize="small" />
               </IconButton>
             </Tooltip>

@@ -30,6 +30,7 @@ const TABLES = [
       col('email_verified_at', 'bigint'),
       col('design', 'longtext'),
       col('profile', 'text'),
+      col('watermark', 'longtext'),
     ],
     indexes: [
       { name: 'idx_users_username', columns: ['username'], unique: true },
@@ -63,6 +64,12 @@ const TABLES = [
       col('listed', 'int', { notNull: true, default: 0 }),
       col('blocked_at', 'bigint'),
       col('blocked_reason', 'string', { length: 200 }),
+      col('sha256', 'string', { length: 64 }),
+      col('deduped', 'int', { notNull: true, default: 0 }),
+      col('warning', 'string', { length: 100 }),
+      col('scan_status', 'string', { length: 16 }),
+      col('version', 'int', { notNull: true, default: 1 }),
+      col('version_at', 'bigint'),
     ],
     indexes: [
       { name: 'idx_file_data_username_id', columns: ['username', 'id'] },
@@ -72,6 +79,7 @@ const TABLES = [
       { name: 'idx_file_data_expires', columns: ['expires_at'] },
       { name: 'idx_file_data_created', columns: ['created_at'] },
       { name: 'idx_file_data_deleted', columns: ['deleted_at'] },
+      { name: 'idx_file_data_hash', columns: ['username', 'sha256'] },
     ],
   },
   {
@@ -253,6 +261,7 @@ const TABLES = [
       col('file_id', 'bigint', { notNull: true, references: 'file_data(id)', onDelete: 'CASCADE' }),
       col('sort_order', 'int', { notNull: true, default: 0 }),
       col('added_at', 'bigint', { notNull: true }),
+      col('added_by', 'bigint'),
     ],
     primaryKey: ['album_id', 'file_id'],
     indexes: [{ name: 'idx_album_files_file', columns: ['file_id'] }],
@@ -333,6 +342,113 @@ const TABLES = [
       { name: 'idx_reports_target', columns: ['kind', 'target_id'] },
     ],
   },
+  {
+    name: 'file_versions',
+    columns: [
+      id(),
+      col('file_id', 'bigint', { notNull: true, references: 'file_data(id)', onDelete: 'CASCADE' }),
+      col('version', 'int', { notNull: true }),
+      col('filename', 'string', { length: 255, notNull: true }),
+      col('original_name', 'string', { length: 255 }),
+      col('size_bytes', 'bigint', { notNull: true, default: 0 }),
+      col('sha256', 'string', { length: 64 }),
+      col('created_at', 'bigint', { notNull: true }),
+      col('replaced_at', 'bigint', { notNull: true }),
+      col('resolution_width', 'int', { notNull: true, default: 0 }),
+      col('resolution_height', 'int', { notNull: true, default: 0 }),
+      col('dominant_color', 'string', { length: 16, notNull: true, default: '#ffffff' }),
+      col('storage', 'string', { length: 16, notNull: true, default: 'local' }),
+      col('variants', 'string', { length: 64 }),
+      col('note', 'string', { length: 32 }),
+    ],
+    indexes: [
+      { name: 'idx_file_versions_file', columns: ['file_id', 'version'] },
+      { name: 'idx_file_versions_filename', columns: ['filename'] },
+    ],
+  },
+  {
+    name: 'album_members',
+    columns: [
+      col('album_id', 'bigint', { notNull: true, references: 'albums(id)', onDelete: 'CASCADE' }),
+      userRef(),
+      col('role', 'string', { length: 16, notNull: true, default: 'contributor' }),
+      col('added_at', 'bigint', { notNull: true }),
+      col('added_by', 'bigint'),
+    ],
+    primaryKey: ['album_id', 'user_id'],
+    indexes: [{ name: 'idx_album_members_user', columns: ['user_id'] }],
+  },
+  {
+    name: 'upload_sessions',
+    columns: [
+      col('id', 'string', { length: 40, notNull: true }),
+      userRef(),
+      col('name', 'string', { length: 255, notNull: true }),
+      col('size_bytes', 'bigint', { notNull: true }),
+      col('received', 'bigint', { notNull: true, default: 0 }),
+      col('file_id', 'bigint'),
+      col('fingerprint', 'string', { length: 191 }),
+      col('options', 'text'),
+      col('created_at', 'bigint', { notNull: true }),
+      col('updated_at', 'bigint', { notNull: true }),
+      col('expires_at', 'bigint', { notNull: true }),
+    ],
+    primaryKey: ['id'],
+    indexes: [
+      { name: 'idx_upload_sessions_user', columns: ['user_id'] },
+      { name: 'idx_upload_sessions_expires', columns: ['expires_at'] },
+    ],
+  },
+  {
+    name: 'file_search',
+    columns: [
+      col('file_id', 'bigint', { notNull: true, references: 'file_data(id)', onDelete: 'CASCADE' }),
+      col('body', 'longtext', { notNull: true }),
+      col('folded', 'longtext', { notNull: true }),
+      col('indexed_at', 'bigint', { notNull: true }),
+    ],
+    primaryKey: ['file_id'],
+  },
+  {
+    name: 'webhooks',
+    columns: [
+      id(),
+      col('name', 'string', { length: 80, notNull: true }),
+      col('kind', 'string', { length: 16, notNull: true }),
+      col('config', 'text', { notNull: true }),
+      col('events', 'text', { notNull: true }),
+      col('enabled', 'int', { notNull: true, default: 1 }),
+      col('created_at', 'bigint', { notNull: true }),
+      col('updated_at', 'bigint', { notNull: true }),
+      col('last_at', 'bigint'),
+      col('last_status', 'int'),
+      col('last_error', 'text'),
+    ],
+  },
+  {
+    name: 'redirects',
+    columns: [
+      col('path', 'string', { length: 191, notNull: true }),
+      col('kind', 'string', { length: 8, notNull: true }),
+      col('target_id', 'bigint', { notNull: true }),
+      col('variant', 'string', { length: 16, notNull: true, default: 'view' }),
+      col('source', 'string', { length: 40 }),
+      col('created_at', 'bigint', { notNull: true }),
+    ],
+    primaryKey: ['path'],
+    indexes: [{ name: 'idx_redirects_target', columns: ['kind', 'target_id'] }],
+  },
+  {
+    name: 'import_map',
+    columns: [
+      col('source', 'string', { length: 40, notNull: true }),
+      col('kind', 'string', { length: 12, notNull: true }),
+      col('source_id', 'string', { length: 120, notNull: true }),
+      col('target_id', 'bigint', { notNull: true }),
+      col('created_at', 'bigint', { notNull: true }),
+    ],
+    primaryKey: ['source', 'kind', 'source_id'],
+  },
 ];
 
 const TABLE = Object.fromEntries(TABLES.map((table) => [table.name, table]));
@@ -401,21 +517,32 @@ function introspect(q) {
     async hasTable(name) {
       if (client === 'sqlite') return Boolean(await q.get("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?", [name]));
       if (client === 'postgres') {
-        return Boolean(await q.get('SELECT 1 AS found FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = ?', [name]));
+        return Boolean(
+          await q.get('SELECT 1 AS found FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = ?', [name])
+        );
       }
-      return Boolean(await q.get('SELECT 1 AS found FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?', [name]));
+      return Boolean(
+        await q.get('SELECT 1 AS found FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?', [name])
+      );
     },
     async columns(name) {
       if (client === 'sqlite') return new Set((await q.all(`PRAGMA table_info("${name}")`)).map((row) => row.name));
       const schema = client === 'postgres' ? 'current_schema()' : 'DATABASE()';
-      const rows = await q.all(`SELECT column_name AS name FROM information_schema.columns WHERE table_schema = ${schema} AND table_name = ?`, [name]);
+      const rows = await q.all(
+        `SELECT column_name AS name FROM information_schema.columns WHERE table_schema = ${schema} AND table_name = ?`,
+        [name]
+      );
       return new Set(rows.map((row) => row.name || row.NAME || row.COLUMN_NAME));
     },
     async hasIndex(table, index) {
       if (client === 'sqlite') return Boolean(await q.get("SELECT name FROM sqlite_master WHERE type = 'index' AND name = ?", [index]));
-      if (client === 'postgres') return Boolean(await q.get('SELECT 1 AS found FROM pg_indexes WHERE schemaname = current_schema() AND indexname = ?', [index]));
+      if (client === 'postgres')
+        return Boolean(await q.get('SELECT 1 AS found FROM pg_indexes WHERE schemaname = current_schema() AND indexname = ?', [index]));
       return Boolean(
-        await q.get('SELECT 1 AS found FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?', [table, index])
+        await q.get(
+          'SELECT 1 AS found FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?',
+          [table, index]
+        )
       );
     },
   };

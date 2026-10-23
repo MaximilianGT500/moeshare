@@ -12,6 +12,7 @@ const files = require('../services/fileService');
 const profiles = require('../services/profileService');
 const viewer = require('../services/viewerService');
 const audit = require('../services/auditService');
+const watermarks = require('../services/watermarkService');
 const { fileView, sampleRecord } = require('../services/viewService');
 const { DEFAULT_DESIGN, LAYOUTS, BACKGROUNDS, FONTS, CORNERS, SCHEMES, ELEMENTS, MAX_CSS } = require('../lib/viewDesign');
 
@@ -50,17 +51,18 @@ async function viewData(user) {
 router.get('/design', requirePage(), async (req, res) => {
   const summary = viewer.summary(req.user);
   if (!summary.canDesign) return res.redirect('/dashboard');
-  const [view, profile, embed, userStats, sudo] = await Promise.all([
+  const [view, profile, embed, userStats, sudo, watermark] = await Promise.all([
     viewData(req.user),
     profileData(req.user),
     embeds.builderData(req.user),
     files.userStats(req.user.username),
     viewer.confirmMethods(req.user),
+    watermarks.get(req.user.id),
   ]);
   return renderPage(res, {
     page: 'design',
     title: 'Gestalten',
-    data: { user: summary, view, profile, embed, userStats, sudo },
+    data: { user: summary, view, profile, embed, userStats, sudo, watermark: watermarks.present(watermark) },
   });
 });
 

@@ -232,7 +232,86 @@ async function moveStorage() {
   if (result.failed) process.exitCode = 1;
 }
 
-const COMMANDS = { register, token, reset, db: databaseInfo, 'copy-db': copyDatabase, backup, restore, storage: moveStorage };
+function valueOf(...names) {
+  for (let index = 0; index < args.length; index++) {
+    for (const name of names) {
+      if (args[index] === name) return args[index + 1] || null;
+      if (args[index].startsWith(`${name}=`)) return args[index].slice(name.length + 1);
+    }
+  }
+  return null;
+}
+
+async function importData() {
+  const kind = String(args[0] || '').toLowerCase();
+  const database = valueOf('--db', '--datenbank');
+  const filesDir = valueOf('--files', '--dateien');
+  if (!['zipline', 'xbackbone', 'chibisafe'].includes(kind) || !database || !filesDir) {
+    throw new Error(
+      `Verwendung: ${program} import <zipline|xbackbone|chibisafe> --db <adresse> --files <ordner> [--probe] [--ohne-admins] [--waisen-ueberspringen] [--als <admin>]\n` +
+        `Beispiel: ${program} import zipline --db postgres://zipline:passwort@localhost:5432/zipline --files /srv/zipline/uploads`
+    );
+  }
+  const importer = require('./src/services/importService');
+  const redirects = require('./src/services/redirectService');
+  const { formatBytes } = require('./src/lib/format');
+  const input = {
+    kind,
+    database,
+    files: filesDir,
+    admins: !option('--ohne-admins', '--no-admins'),
+    orphans: option('--waisen-ueberspringen', '--skip-orphans') ? 'skip' : 'admin',
+  };
+  const preview = await importer.preview(input);
+  say(
+    `\n${preview.label}: ${preview.counts.users} Konten, ${preview.counts.files} Dateien (${formatBytes(preview.bytes)}), ${preview.counts.albums} Alben, ${preview.counts.links} Kurzlinks, ${preview.counts.texts} Texte`
+  );
+  if (preview.missing) say(`${preview.missing} Dateien fehlen im angegebenen Ordner und werden übersprungen.`);
+  if (preview.alreadyImported) say(`${preview.alreadyImported} Einträge wurden schon früher übernommen und bleiben unverändert.`);
+  for (const account of preview.accounts) {
+    const notes = [account.merge ? `wird mit ${account.target} zusammengelegt` : account.renamed ? `heißt hier ${account.target}` : null];
+    if (account.password === 'new') notes.push('bekommt ein neues Passwort');
+    if (account.admin) notes.push('Admin');
+    console.log(`  ${account.username}${notes.filter(Boolean).length ? ` (${notes.filter(Boolean).join(', ')})` : ''}`);
+  }
+  if (option('--probe', '--dry-run')) return say('\nProbelauf, es wurde nichts übernommen.\n');
+  const asName = valueOf('--als', '--as');
+  const actor = asName
+    ? await users.findByName(asName)
+    : await db.get("SELECT * FROM users WHERE role = 'admin' AND status = 'active' ORDER BY id LIMIT 1");
+  if (!actor) throw new Error('Es gibt noch kein Admin-Konto. Lege zuerst eins an oder richte MoeShare ein.');
+  say('\nImport läuft …');
+  let last = 0;
+  const result = await importer.run(actor, input, (fraction) => {
+    if (Date.now() - last > 2000 || fraction >= 1) {
+      last = Date.now();
+      console.log(`  ${Math.round(fraction * 100)} %`);
+    }
+  });
+  await redirects.load();
+  say(
+    `\nFertig in ${Math.round(result.ms / 100) / 10} s: ${result.files.imported} Dateien (${formatBytes(result.files.bytes)}), ${result.texts.imported} Texte, ${result.albums.imported} Alben, ${result.links.imported} Kurzlinks, ${result.users.created} neue Konten, ${result.users.merged} zusammengelegt, ${result.redirects} alte Adressen weitergeleitet.`
+  );
+  if (result.files.missing || result.files.failed)
+    say(`${result.files.missing} Dateien fehlten, ${result.files.failed} ließen sich nicht übernehmen.`);
+  if (result.passwords.length) {
+    say('\nDiese Konten haben ein vorläufiges Passwort und müssen es beim ersten Anmelden ändern:');
+    for (const entry of result.passwords) console.log(`  ${entry.username}: ${entry.password}`);
+  }
+  console.log('');
+}
+
+const COMMANDS = {
+  register,
+  token,
+  reset,
+  db: databaseInfo,
+  'copy-db': copyDatabase,
+  backup,
+  restore,
+  storage: moveStorage,
+  import: importData,
+};
 
 async function main() {
   const command = COMMANDS[process.argv[2]];
@@ -246,6 +325,7 @@ async function main() {
     say('  backup               erstellt eine Sicherung in db/backups (--uploads nimmt die Dateien mit)');
     say('  restore <datei>      spielt eine Sicherung ein (--force überschreibt, --ohne-dateien nur die Datenbank)');
     say('  storage <s3|lokal>   verschiebt vorhandene Dateien nach S3 oder zurück');
+    say('  import <quelle>      übernimmt Konten und Dateien aus Zipline, XBackBone oder Chibisafe');
     process.exit(1);
   }
   await db.ready;

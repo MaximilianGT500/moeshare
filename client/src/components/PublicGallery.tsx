@@ -13,6 +13,8 @@ import LockRounded from '@mui/icons-material/LockRounded';
 import LooksOneRounded from '@mui/icons-material/LooksOneRounded';
 import OpenInNewRounded from '@mui/icons-material/OpenInNewRounded';
 import PlayArrowRounded from '@mui/icons-material/PlayArrowRounded';
+import WarningAmberRounded from '@mui/icons-material/WarningAmberRounded';
+import Button from '@mui/material/Button';
 import type { AlbumItem } from '../lib/types';
 import { justify, tileAspect } from '../lib/justified';
 import { useElementWidth } from '../lib/hooks';
@@ -25,6 +27,42 @@ import { VideoPlayer } from './VideoPlayer';
 import { c, ease, elevation, fileTypeColor, radius } from '../theme/tokens';
 
 export const viewable = (item: AlbumItem) => !item.locked && !!item.direct && (item.type === 'image' || item.type === 'video');
+
+const warned = (item: AlbumItem) => typeof item.warning === 'string';
+const blurOf = (item: AlbumItem) => `${item.view.replace(/\/+$/, '')}/blur.jpg`;
+
+function WarningPill({ item, hint = false }: { item: AlbumItem; hint?: boolean }) {
+  return (
+    <Box
+      sx={{
+        display: 'inline-flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 0.25,
+        maxWidth: 'calc(100% - 16px)',
+        px: 1.25,
+        py: 0.75,
+        borderRadius: `${radius.md}px`,
+        bgcolor: 'rgb(12 10 16 / 0.55)',
+        backdropFilter: 'blur(8px)',
+        color: '#fff',
+        textAlign: 'center',
+      }}
+    >
+      <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, maxWidth: '100%', fontSize: '0.8125rem', fontWeight: 700 }}>
+        <WarningAmberRounded sx={{ fontSize: 18, flexShrink: 0 }} />
+        <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {item.warning || t('Inhaltswarnung')}
+        </Box>
+      </Box>
+      {hint && (
+        <Box component="span" sx={{ fontSize: '0.6875rem', opacity: 0.8 }}>
+          {t('Zum Anzeigen tippen')}
+        </Box>
+      )}
+    </Box>
+  );
+}
 
 const typeColor = (item: AlbumItem) =>
   item.type === 'audio'
@@ -46,12 +84,15 @@ export function PublicGallery({ items }: { items: AlbumItem[] }) {
   const { target, gap } = metrics(width);
   const media = useMemo(() => items.filter(viewable), [items]);
   const [open, setOpen] = useState<number | null>(null);
+  const [revealed, setRevealed] = useState<Set<number>>(() => new Set());
   const rows = useMemo(() => justify(items, tileAspect, width, { targetHeight: target, gap }), [items, width, target, gap]);
 
   const openItem = (item: AlbumItem) => {
     const index = media.findIndex((entry) => entry.id === item.id);
     if (index >= 0) setOpen(index);
   };
+  const reveal = (item: AlbumItem) => setRevealed((current) => new Set(current).add(item.id));
+  const veiled = (item: AlbumItem) => warned(item) && !revealed.has(item.id);
 
   return (
     <>
@@ -64,6 +105,8 @@ export function PublicGallery({ items }: { items: AlbumItem[] }) {
                 item={cell.item}
                 width={row.complete && cellIndex === row.cells.length - 1 ? undefined : Math.round(cell.width)}
                 index={rowIndex * 10 + cellIndex}
+                veiled={veiled(cell.item)}
+                onReveal={() => reveal(cell.item)}
                 onOpen={() => openItem(cell.item)}
               />
             ))}
@@ -71,21 +114,51 @@ export function PublicGallery({ items }: { items: AlbumItem[] }) {
         ))}
       </Box>
       <AnimatePresence>
-        {open !== null && media[open] && <Lightbox items={media} index={open} onIndex={setOpen} onClose={() => setOpen(null)} />}
+        {open !== null && media[open] && (
+          <Lightbox
+            items={media}
+            index={open}
+            onIndex={setOpen}
+            onClose={() => setOpen(null)}
+            veiled={veiled(media[open])}
+            onReveal={() => reveal(media[open])}
+          />
+        )}
       </AnimatePresence>
     </>
   );
 }
 
-function AlbumTile({ item, width, index, onOpen }: { item: AlbumItem; width?: number; index: number; onOpen: () => void }) {
+function AlbumTile({
+  item,
+  width,
+  index,
+  veiled,
+  onReveal,
+  onOpen,
+}: {
+  item: AlbumItem;
+  width?: number;
+  index: number;
+  veiled: boolean;
+  onReveal: () => void;
+  onOpen: () => void;
+}) {
   const { r } = useDesign();
   const [loaded, setLoaded] = useState(false);
   const canOpen = viewable(item);
   const name = item.locked ? (item.once ? t('Nur einmal abrufbar') : t('Geschützte Datei')) : item.name || t('Datei');
   const showImage = !item.locked && !!item.preview;
+  const visualVeil = veiled && showImage && (item.type === 'image' || item.type === 'video');
 
   const click = (event: MouseEvent<HTMLAnchorElement>) => {
-    if (!canOpen || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    if (veiled) {
+      event.preventDefault();
+      onReveal();
+      return;
+    }
+    if (!canOpen) return;
     event.preventDefault();
     onOpen();
   };
@@ -94,7 +167,7 @@ function AlbumTile({ item, width, index, onOpen }: { item: AlbumItem; width?: nu
     <m.a
       href={item.view}
       onClick={click}
-      aria-label={name}
+      aria-label={veiled ? t('{name}, Inhaltswarnung: zum Anzeigen tippen', { name: item.warning || name }) : name}
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.45, delay: Math.min(index, 24) * 0.025, ease: ease.emphasizedDecelerate }}
@@ -120,7 +193,8 @@ function AlbumTile({ item, width, index, onOpen }: { item: AlbumItem; width?: nu
       >
         {showImage && (
           <img
-            src={item.preview!}
+            key={visualVeil ? 'veiled' : 'clear'}
+            src={visualVeil ? blurOf(item) : item.preview!}
             alt=""
             loading="lazy"
             decoding="async"
@@ -133,8 +207,14 @@ function AlbumTile({ item, width, index, onOpen }: { item: AlbumItem; width?: nu
               display: 'block',
               opacity: loaded ? 1 : 0,
               transition: 'opacity 300ms',
+              transform: visualVeil ? 'scale(1.08)' : undefined,
             }}
           />
+        )}
+        {veiled && (
+          <Box sx={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', zIndex: 1 }}>
+            <WarningPill item={item} hint />
+          </Box>
         )}
         {!showImage && (
           <Box
@@ -176,7 +256,7 @@ function AlbumTile({ item, width, index, onOpen }: { item: AlbumItem; width?: nu
             </Box>
           </Box>
         )}
-        {item.type === 'video' && showImage && (
+        {item.type === 'video' && showImage && !veiled && (
           <Box
             aria-hidden
             sx={{
@@ -207,11 +287,15 @@ function Lightbox({
   index,
   onIndex,
   onClose,
+  veiled,
+  onReveal,
 }: {
   items: AlbumItem[];
   index: number;
   onIndex: (index: number) => void;
   onClose: () => void;
+  veiled: boolean;
+  onReveal: () => void;
 }) {
   const item = items[index];
   const [direction, setDirection] = useState(0);
@@ -236,7 +320,7 @@ function Lightbox({
   useEffect(() => {
     for (const offset of [1, -1]) {
       const neighbour = items[(index + offset + items.length) % items.length];
-      if (neighbour && neighbour.type === 'image' && neighbour.direct) {
+      if (neighbour && neighbour.type === 'image' && neighbour.direct && !warned(neighbour)) {
         const image = new Image();
         image.src = neighbour.direct;
       }
@@ -342,7 +426,30 @@ function Lightbox({
               transition={{ duration: 0.3, ease: ease.emphasizedDecelerate }}
               style={{ maxWidth: '100%', maxHeight: '100%', display: 'grid', placeItems: 'center' }}
             >
-              {item.type === 'image' ? (
+              {veiled ? (
+                <Box sx={{ position: 'relative', borderRadius: `${radius.md}px`, overflow: 'hidden', lineHeight: 0 }}>
+                  <img
+                    src={blurOf(item)}
+                    alt=""
+                    draggable={false}
+                    style={{
+                      display: 'block',
+                      width: `min(88vw, ${item.width ? Math.max(320, Math.min(item.width, 900)) : 720}px)`,
+                      aspectRatio: item.width && item.height ? `${item.width} / ${item.height}` : '4 / 3',
+                      maxHeight: 'calc(100dvh - 120px)',
+                      objectFit: 'cover',
+                    }}
+                  />
+                  <Box sx={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', lineHeight: 1.4 }}>
+                    <Box sx={{ display: 'grid', justifyItems: 'center', gap: 2 }}>
+                      <WarningPill item={item} />
+                      <Button variant="contained" onClick={onReveal}>
+                        {t('Inhalt anzeigen')}
+                      </Button>
+                    </Box>
+                  </Box>
+                </Box>
+              ) : item.type === 'image' ? (
                 <img
                   src={item.direct!}
                   alt={item.name || ''}

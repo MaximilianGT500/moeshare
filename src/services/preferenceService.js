@@ -9,7 +9,7 @@ const domains = require('./domainService');
 
 const LANGUAGES = ['de', 'en'];
 const NOTIFY_KEYS = ['security', 'reports', 'users'];
-const DEFAULTS = { language: null, urlStyle: null, domain: null, expiry: null };
+const DEFAULTS = { language: null, urlStyle: null, domain: null, expiry: null, optimize: null };
 const NOTIFY_DEFAULTS = { security: true, reports: true, users: false };
 
 function parse(raw) {
@@ -43,6 +43,7 @@ function clean(stored, username) {
   if (STYLES.includes(stored.urlStyle)) preferences.urlStyle = stored.urlStyle;
   if (typeof stored.domain === 'string' && domainAllowed(stored.domain, username)) preferences.domain = stored.domain;
   if (EXPIRY_CHOICES.includes(stored.expiry)) preferences.expiry = stored.expiry;
+  if (typeof stored.optimize === 'boolean') preferences.optimize = stored.optimize;
   preferences.notify = cleanNotify(stored.notify);
   return preferences;
 }
@@ -75,6 +76,7 @@ function validate(patch, username) {
     'Diese Domain ist auf dem Server nicht eingetragen.'
   );
   check('expiry', (value) => EXPIRY_CHOICES.includes(value), 'Ungültige Ablaufzeit.');
+  check('optimize', (value) => typeof value === 'boolean', 'Erwartet wird an oder aus.');
   if ('notify' in patch) {
     const notify = patch.notify;
     if (!notify || typeof notify !== 'object' || Array.isArray(notify)) throw badRequest('Ungültige Anfrage.', { field: 'notify' });

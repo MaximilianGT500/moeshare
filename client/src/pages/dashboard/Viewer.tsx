@@ -18,6 +18,12 @@ import InfoOutlined from '@mui/icons-material/InfoOutlined';
 import InfoRounded from '@mui/icons-material/InfoRounded';
 import ShareRounded from '@mui/icons-material/ShareRounded';
 import CropRotateRounded from '@mui/icons-material/CropRotateRounded';
+import MoreVertRounded from '@mui/icons-material/MoreVertRounded';
+import HistoryRounded from '@mui/icons-material/HistoryRounded';
+import ContentCutRounded from '@mui/icons-material/ContentCutRounded';
+import WarningAmberRounded from '@mui/icons-material/WarningAmberRounded';
+import ListItemIcon from '@mui/material/ListItemIcon';
+import MenuItem from '@mui/material/MenuItem';
 import type { FileItem } from '../../lib/types';
 import { extensionOf, formatBytes, formatDateTime, formatNumber, parseServerDate, relativeFromServer } from '../../lib/format';
 import { shareFormats } from '../../lib/share';
@@ -30,7 +36,7 @@ import { StatsPanel } from '../../components/StatsView';
 import { fetchFileStats } from '../../lib/api';
 import { stopAudio } from './audioPlayer';
 import { c, ease, elevation, fonts, radius } from '../../theme/tokens';
-import { t } from '../../lib/i18n';
+import { t, tn } from '../../lib/i18n';
 
 export interface ViewerState {
   index: number;
@@ -51,6 +57,9 @@ interface ViewerProps {
   statsEnabled?: boolean;
   canEdit?: (file: FileItem) => boolean;
   onImageEdit?: (file: FileItem) => void;
+  onVersions?: (file: FileItem) => void;
+  onClip?: (file: FileItem) => void;
+  onWarning?: (file: FileItem) => void;
   trash?: boolean;
   paused?: boolean;
 }
@@ -141,6 +150,22 @@ function InfoPanel({ file, stats }: { file: FileItem; stats: boolean }) {
           </Typography>
         </DetailRow>
         <DetailRow label={t('Aufrufe')}>{formatNumber(file.views)}</DetailRow>
+        {(file.version > 1 || (file.versions ?? 0) > 0) && (
+          <DetailRow label={t('Version')}>
+            {t('Version {version}', { version: file.version })}
+            {file.versions ? (
+              <Typography variant="caption" component="p" sx={{ color: 'text.secondary' }}>
+                {tn(file.versions, '1 ältere Fassung aufbewahrt', '{count} ältere Fassungen aufbewahrt')}
+              </Typography>
+            ) : null}
+          </DetailRow>
+        )}
+        {!!file.twins && (
+          <DetailRow label={t('Duplikate')}>
+            {tn(file.twins, 'Diese Datei hast du noch einmal hochgeladen', 'Diese Datei hast du noch {count}-mal hochgeladen')}
+          </DetailRow>
+        )}
+        {file.scan === 'clean' && <DetailRow label={t('Virenscan')}>{t('Geprüft, nichts gefunden')}</DetailRow>}
         <DetailRow label={t('Dateiname')}>
           <Box component="span" sx={{ fontFamily: fonts.mono, fontSize: '0.8rem' }}>
             {file.filename}
@@ -261,6 +286,9 @@ export function Viewer({
   statsEnabled = false,
   canEdit,
   onImageEdit,
+  onVersions,
+  onClip,
+  onWarning,
   trash = false,
   paused = false,
 }: ViewerProps) {
@@ -276,6 +304,7 @@ export function Viewer({
   const [natural, setNatural] = useState<Record<string, { w: number; h: number }>>({});
   const [fullLoaded, setFullLoaded] = useState<Record<string, boolean>>({});
   const [shareAnchor, setShareAnchor] = useState<HTMLElement | null>(null);
+  const [moreAnchor, setMoreAnchor] = useState<HTMLElement | null>(null);
   const [closeTarget, setCloseTarget] = useState<TargetAndTransition | null>(null);
 
   const openKey = state ? `${state.openedWith}:${state.origin?.top ?? 0}:${state.origin?.left ?? 0}` : '';
@@ -356,7 +385,7 @@ export function Viewer({
   useEffect(() => {
     if (!open) return undefined;
     const onKey = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || shareAnchor || paused) return;
+      if (event.defaultPrevented || shareAnchor || moreAnchor || paused) return;
       if (event.key === 'ArrowRight') go(1);
       else if (event.key === 'ArrowLeft') go(-1);
       else if (event.key === 'i') setPanelOpen((v) => !v);
@@ -364,7 +393,7 @@ export function Viewer({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open, go, file, onDelete, shareAnchor, paused]);
+  }, [open, go, file, onDelete, shareAnchor, moreAnchor, paused]);
 
   if (!open || !file) return null;
 
@@ -472,9 +501,22 @@ export function Viewer({
             <Typography variant="subtitle2" noWrap sx={{ color: '#fff' }} title={file.filename}>
               {file.filename}
             </Typography>
-            <Typography variant="caption" sx={{ color: 'rgb(255 255 255 / 0.7)' }}>
-              {t('{current} von {total}', { current: index! + 1, total: files.length })}
-              {hasMore ? '+' : ''}
+            <Typography
+              variant="caption"
+              sx={{ color: 'rgb(255 255 255 / 0.7)', display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}
+            >
+              <span>
+                {t('{current} von {total}', { current: index! + 1, total: files.length })}
+                {hasMore ? '+' : ''}
+              </span>
+              {typeof file.warning === 'string' && (
+                <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, minWidth: 0, color: '#ffd58a' }}>
+                  <WarningAmberRounded sx={{ fontSize: 14 }} />
+                  <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {file.warning || t('Inhaltswarnung')}
+                  </Box>
+                </Box>
+              )}
             </Typography>
           </Box>
           {!phone && (
@@ -523,6 +565,18 @@ export function Viewer({
               <DeleteOutlineRounded />
             </IconButton>
           </Tooltip>
+          {(onVersions || onWarning || (onClip && file.type === 'video')) && (
+            <Tooltip title={t('Mehr')}>
+              <IconButton
+                aria-label={t('Weitere Aktionen')}
+                aria-haspopup="menu"
+                onClick={(event) => setMoreAnchor(event.currentTarget)}
+                sx={glassButton}
+              >
+                <MoreVertRounded />
+              </IconButton>
+            </Tooltip>
+          )}
           {!phone && (
             <Tooltip title={panelOpen ? t('Details ausblenden (i)') : t('Details zeigen (i)')}>
               <IconButton aria-label={t('Details')} aria-pressed={panelOpen} onClick={() => setPanelOpen((v) => !v)} sx={glassButton}>
@@ -541,6 +595,55 @@ export function Viewer({
           slotProps={{ root: { sx: { zIndex: 1500 } } }}
         >
           <ShareMenuItems file={file} onDone={() => setShareAnchor(null)} />
+        </Menu>
+
+        <Menu
+          anchorEl={moreAnchor}
+          open={!!moreAnchor}
+          onClose={() => setMoreAnchor(null)}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+          transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+          slotProps={{ root: { sx: { zIndex: 1500 } } }}
+        >
+          {onClip && file.type === 'video' && (
+            <MenuItem
+              onClick={() => {
+                setMoreAnchor(null);
+                onClip(file);
+              }}
+            >
+              <ListItemIcon>
+                <ContentCutRounded />
+              </ListItemIcon>
+              {t('Kürzen oder GIF machen')}
+            </MenuItem>
+          )}
+          {onVersions && (
+            <MenuItem
+              onClick={() => {
+                setMoreAnchor(null);
+                onVersions(file);
+              }}
+            >
+              <ListItemIcon>
+                <HistoryRounded />
+              </ListItemIcon>
+              {file.versions ? t('Versionen ({count})', { count: file.versions + 1 }) : t('Versionen')}
+            </MenuItem>
+          )}
+          {onWarning && (
+            <MenuItem
+              onClick={() => {
+                setMoreAnchor(null);
+                onWarning(file);
+              }}
+            >
+              <ListItemIcon>
+                <WarningAmberRounded />
+              </ListItemIcon>
+              {typeof file.warning === 'string' ? t('Inhaltswarnung entfernen') : t('Inhaltswarnung setzen')}
+            </MenuItem>
+          )}
         </Menu>
 
         <AnimatePresence custom={direction} mode="popLayout">

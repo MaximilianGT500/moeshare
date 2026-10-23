@@ -12,6 +12,7 @@ const { customDomain } = require('./middleware/customDomain');
 const { requestLog } = require('./middleware/requestLog');
 const { contentSecurityPolicy } = require('./middleware/security');
 const { notFound, errorHandler } = require('./middleware/errors');
+const redirects = require('./services/redirectService');
 const i18n = require('./lib/i18n');
 
 const trustProxy = () => (settings.get('system.trustProxy') ? 1 : false);
@@ -35,7 +36,7 @@ function createApp() {
 
   const json = express.json({ limit: '1mb' });
   const form = express.urlencoded({ extended: false, limit: '1mb' });
-  const ownParser = new Set(['/api/texts', '/upload/text']);
+  const ownParser = new Set(['/api/texts', '/upload/text', '/api/account/watermark', '/api/account/watermark/preview']);
   app.use((req, res, next) => (ownParser.has(req.path) ? next() : json(req, res, next)));
   app.use((req, res, next) => (ownParser.has(req.path) ? next() : form(req, res, next)));
   app.use(cookieParser());
@@ -59,6 +60,7 @@ function createApp() {
     next();
   });
 
+  app.use(redirects.middleware);
   app.use(require('./routes/profiles'));
   app.use(require('./routes/home'));
   app.use(require('./routes/setup'));

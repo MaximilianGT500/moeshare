@@ -3,6 +3,7 @@
 const crypto = require('crypto');
 const bcrypt = require('bcrypt');
 const secrets = require('../lib/secrets');
+const passwords = require('../lib/passwords');
 const { isSecure } = require('../lib/request');
 
 const PASSWORD_COST = 10;
@@ -47,11 +48,7 @@ async function hashPassword(password) {
 
 async function checkPassword(hash, password) {
   if (!hash || typeof password !== 'string' || !password || password.length > MAX_PASSWORD) return false;
-  try {
-    return await bcrypt.compare(password, hash);
-  } catch {
-    return false;
-  }
+  return passwords.verify(hash, password);
 }
 
 const isOwner = (req, username) => Boolean(req.user && (req.user.username === username || req.user.isAdmin));

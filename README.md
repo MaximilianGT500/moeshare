@@ -17,7 +17,7 @@
 [GitHub Issues]: https://img.shields.io/github/issues/MaximilianGT500/moeshare?color=278c42&label=Issues&style=for-the-badge
 [GitHub Sterne]: https://img.shields.io/github/stars/MaximilianGT500/moeshare?color=278c42&label=Sterne&style=for-the-badge
 
-MoeShare nimmt Bilder, Videos, Audio, Texte und beliebige Dateien von ShareX, aus dem Browser oder per Link entgegen und macht daraus Links mit schöner Vorschau, auch in Discord. Dazu kürzt es lange Adressen und sammelt Dateien in Alben. Jede Person gestaltet ihre Vorschauseiten selbst und kann eine eigene Domain verbinden. Eingerichtet wird alles im Browser: Beim ersten Start führt dich ein Assistent durch Datenbank, Admin-Konto und Einstellungen, eine `.env` brauchst du nicht.
+MoeShare nimmt Bilder, Videos, Audio, Texte und beliebige Dateien von ShareX, aus dem Browser oder per Link entgegen und macht daraus Links mit schöner Vorschau, auch in Discord. Dazu kürzt es lange Adressen und sammelt Dateien in Alben, die du auch mit anderen Konten teilen kannst. Jede Person gestaltet ihre Vorschauseiten selbst und kann eine eigene Domain verbinden. Eingerichtet wird alles im Browser: Beim ersten Start führt dich ein Assistent durch Datenbank, Admin-Konto und Einstellungen, eine `.env` brauchst du nicht. Wer von Zipline, XBackBone oder Chibisafe kommt, nimmt Konten, Dateien und alte Links mit.
 
 Mehr zum Projekt, Screenshots und eine Kurzanleitung gibt es auf [moeshare.eu](https://moeshare.eu). Was sich in jeder Version geändert hat, steht im [Changelog](https://moeshare.eu/changelog.html).
 
@@ -31,12 +31,22 @@ Offizielle Instance: [v3.moeshare.eu](https://v3.moeshare.eu).
 - [ShareX verbinden](#sharex-verbinden)
 - [Texte, Kurzlinks und Alben](#texte-kurzlinks-und-alben)
 - [Papierkorb, Statistiken und ZIP](#papierkorb-statistiken-und-zip)
+- [Große Dateien, Ordner und Versionen](#große-dateien-ordner-und-versionen)
+- [Gemeinsame Alben](#gemeinsame-alben)
+- [Duplikate und Volltextsuche](#duplikate-und-volltextsuche)
 - [Bilder bearbeiten](#bilder-bearbeiten)
+- [Bilder optimieren und Wasserzeichen](#bilder-optimieren-und-wasserzeichen)
+- [Videos kürzen und GIFs](#videos-kürzen-und-gifs)
+- [Inhaltswarnungen](#inhaltswarnungen)
 - [Vorschauseiten gestalten](#vorschauseiten-gestalten)
 - [Profilseiten](#profilseiten)
 - [Eigene Domains](#eigene-domains)
 - [Melden und Moderation](#melden-und-moderation)
 - [E-Mail](#e-mail)
+- [Benachrichtigungen](#benachrichtigungen)
+- [Virenscan mit ClamAV](#virenscan-mit-clamav)
+- [Datenexport](#datenexport)
+- [Import aus anderen Uploadern](#import-aus-anderen-uploadern)
 - [Datenbank](#datenbank)
 - [Dateien in S3](#dateien-in-s3)
 - [Einstellungen und Umgebungsvariablen](#einstellungen-und-umgebungsvariablen)
@@ -56,10 +66,16 @@ Offizielle Instance: [v3.moeshare.eu](https://v3.moeshare.eu).
 ## Funktionen
 
 - **Hochladen** per ShareX, Drag & Drop, Zwischenablage oder Link, mit Vorschaubildern, Video-Standbildern und optionalem HLS-Streaming
+- **Große Dateien** gehen im Browser in Teilen hoch und laufen nach einem Abbruch an derselben Stelle weiter, auch nach dem Neuladen der Seite
+- **Ordner und ZIP-Archive** als Album hochladen, entpackt wird im Browser
 - **Texte und Code** wie in einem Pastebin, mit Syntaxhervorhebung, aus ShareX oder direkt im Browser
 - **Kurzlinks** für lange Adressen, auch direkt aus ShareX
 - **Schutz pro Upload**: Ablaufzeit, Passwort oder nur ein einziger Abruf, für Dateien, Texte und Kurzlinks
-- **Alben und Tags**: Dateien ordnen und als Album mit eigener Seite teilen, als ZIP herunterladen
+- **Inhaltswarnungen**: Bilder und Videos erscheinen erst nach einem Klick, auch die Vorschau in Discord bleibt verschwommen
+- **Alben und Tags**: Dateien ordnen und als Album mit eigener Seite teilen, als ZIP herunterladen und gemeinsam mit anderen Konten füllen
+- **Versionen**: eine Datei durch eine neue Fassung ersetzen, ohne dass sich ihr Link ändert, und jederzeit zu einer älteren zurück
+- **Duplikate**: Mehrfach hochgeladene Dateien zeigt das Dashboard an, auf der Festplatte liegen sie nur einmal
+- **Volltextsuche** in Texten, Code und anderen Textdateien
 - **Papierkorb**: Gelöschtes lässt sich 30 Tage lang zurückholen
 - **Statistiken** pro Datei, Kurzlink und Album: Aufrufe, Vorschauen in Discord und Co., Downloads und woher die Besucher kommen, ganz ohne IP-Adressen
 - **Adressen nach Wahl**: lange ID, kurze Zeichenfolge, Wörter, Emojis, unsichtbare Zeichen oder der Originalname, auf Wunsch über mehrere Domains
@@ -68,13 +84,19 @@ Offizielle Instance: [v3.moeshare.eu](https://v3.moeshare.eu).
 - **Profilseiten** mit Beschreibung, Links, ausgewählten Dateien und öffentlichen Alben
 - **Eigene Domains pro Konto**, bestätigt über einen TXT-Eintrag im DNS, die Zertifikate holt Caddy von selbst
 - **Bilder bearbeiten** im Browser: zuschneiden, drehen, spiegeln, Pfeile, Rahmen, Text und Verpixeln
+- **Bilder optimieren** als WebP oder AVIF, auf Wunsch verkleinert und mit dem Original als älterer Fassung
+- **Wasserzeichen** aus Text oder Logo, automatisch auf jedem neuen Bild
+- **Videos kürzen und GIFs erstellen** direkt im Dashboard
 - **Melden und Moderation**: Besucher melden Inhalte, Admins sperren oder löschen sie
+- **Virenscan** mit ClamAV für jeden Upload
 - **E-Mail über SMTP** für „Passwort vergessen“, Einladungen und Hinweise zum Konto
 - **Startseite** mit Statistiken und Upload-Verlauf, im Browser anpassbar oder abschaltbar
 - **Anmeldung** mit Passwort, Zwei-Faktor per Authenticator-App und Passkeys, dazu über Discord, GitHub, Google, Microsoft, GitLab oder jeden OpenID-Connect-Anbieter wie Authentik, Keycloak oder Authelia
 - **Benutzerverwaltung** mit Rollen, Speicherlimits, Einladungslinks, Sperren und Aktivitätsprotokoll
 - **API-Tokens** für ShareX und Skripte, mehrere pro Konto und einzeln widerrufbar, die `.sxcu`-Dateien für Dateien, Texte und Kurzlinks gibt es per Klick
 - **Datenbank nach Wahl**: SQLite, PostgreSQL oder MySQL/MariaDB, der Umzug geht mit einem Befehl
+- **Umzug von Zipline, XBackBone und Chibisafe** mit Konten, Alben, Texten und Kurzlinks, alte Links leiten weiter
+- **Datenexport**: Jede Person lädt alle eigenen Dateien und Angaben als ZIP herunter
 - **Speicher in S3**: AWS S3, Cloudflare R2, Backblaze B2, MinIO, Wasabi und andere S3-Dienste
 - **Automatische Sicherungen** mit Aufbewahrungsregel, im Ordner `db/backups` oder in S3
 - **Deutsch und Englisch**: Jede Person stellt ihre Sprache selbst ein
@@ -82,14 +104,14 @@ Offizielle Instance: [v3.moeshare.eu](https://v3.moeshare.eu).
 - **Impressum, Datenschutz und eigene Links** im Fuß jeder Seite, als Link oder direkt in MoeShare geschrieben
 - **Datenschutz**: Standortdaten werden aus Fotos entfernt, bevor sie öffentlich erreichbar sind
 - **Sicherheit**: strenge Content Security Policy, hochgeladene HTML- und SVG-Dateien laufen in einer Sandbox
-- **Benachrichtigungen** über einen Discord-Webhook, wählbar nach Ereignis
+- **Benachrichtigungen** an Discord, Slack, Matrix, Telegram, ntfy oder einen eigenen Webhook, für jedes Ziel mit eigener Auswahl an Ereignissen
 - **Weboberfläche** mit Material You: Farben aus einer Grundfarbe, helles und dunkles Design, auf dem Handy genauso gut wie am PC
 
 Für macOS und Linux funktionieren auch [Flameshot](https://flameshot.org/) (siehe [`config_flameshot.sh`](config_flameshot.sh)) und [MagicCap](https://magiccap.me/).
 
 ## Installation
 
-MoeShare braucht **Node.js 24 oder neuer** oder Docker. Das Docker-Image bringt Node.js 26 und FFmpeg schon mit. Ohne Docker installierst du FFmpeg für Video-Vorschauen und Streaming selbst, etwa mit `apt install ffmpeg`, `brew install ffmpeg` oder `winget install ffmpeg`. MoeShare findet es über den `PATH`, alternativ gibst du den Pfad mit `FFMPEG_PATH` an. Die Weboberfläche liegt fertig gebaut im Repository, ein eigener Build-Schritt ist nicht nötig.
+MoeShare braucht **Node.js 24 oder neuer** oder Docker. Das Docker-Image bringt Node.js 26 und FFmpeg schon mit. Ohne Docker installierst du FFmpeg für Video-Vorschauen, Streaming, gekürzte Videos und GIFs selbst, etwa mit `apt install ffmpeg`, `brew install ffmpeg` oder `winget install ffmpeg`. MoeShare findet es über den `PATH`, alternativ gibst du den Pfad mit `FFMPEG_PATH` an. Die Weboberfläche liegt fertig gebaut im Repository, ein eigener Build-Schritt ist nicht nötig.
 
 ### Mit Docker
 
@@ -119,7 +141,7 @@ docker compose pull
 docker compose up -d
 ```
 
-Zu jeder veröffentlichten Version gibt es neben `latest` eigene Tags wie `3.1.0`, `3.1` und `3`. Selbst bauen geht mit `docker build -t ghcr.io/maximiliangt500/moeshare:latest .` im geklonten Repository, `docker compose up -d` nimmt dann dieses Image.
+Zu jeder veröffentlichten Version gibt es neben `latest` eigene Tags wie `3.2.0`, `3.2` und `3`. Selbst bauen geht mit `docker build -t ghcr.io/maximiliangt500/moeshare:latest .` im geklonten Repository, `docker compose up -d` nimmt dann dieses Image.
 
 ### Mit PostgreSQL oder MariaDB in Docker
 
@@ -135,7 +157,7 @@ docker compose up -d
 
 Für MariaDB nimmst du `docker/mariadb.yml` und `MARIADB_PASSWORD`. Durch `COMPOSE_FILE` in der `.env` nutzt `docker compose` beide Dateien automatisch, unter Windows trennt ein Semikolon statt eines Doppelpunkts die Dateien. Die Daten der Datenbank liegen im Ordner `postgres/` bzw. `mariadb/`. Das Passwort steht später in der Datenbank-Adresse, nimm deshalb nur Buchstaben und Ziffern, wie es `openssl rand -hex 24` erzeugt.
 
-Wie du eine bestehende Installation umziehst, steht unter [Datenbank](#datenbank).
+Wie du eine bestehende Installation umziehst, steht unter [Datenbank](#datenbank). Auf die gleiche Art startet `docker/clamav.yml` einen Virenscanner neben MoeShare, siehe [Virenscan mit ClamAV](#virenscan-mit-clamav).
 
 ### Mit Node.js
 
@@ -199,7 +221,10 @@ Wer Uploads aus ShareX gleich schützen oder einsortieren will, ergänzt in der 
 | `X-Title` | `Mein Skript` | Titel für Texte und Dateien |
 | `X-Syntax` | `python` | Sprache für die Hervorhebung von Texten |
 | `X-Tags` | `urlaub,2026` | Tags, durch Kommas getrennt |
-| `X-Album` | `aB3dE9` | Code oder ID eines eigenen Albums |
+| `X-Album` | `aB3dE9` | Code oder ID eines eigenen oder mit dir geteilten Albums |
+| `X-Warning` | `Spoiler` | [Inhaltswarnung](#inhaltswarnungen) mit diesem Text, `true` für eine Warnung ohne Text |
+| `X-Optimize` | `false` | Bild [optimieren](#bilder-optimieren-und-wasserzeichen) (`true`) oder unverändert speichern (`false`), sofern der Server optimiert |
+| `X-Watermark` | `false` | Mit `false` bekommt dieses Bild kein [Wasserzeichen](#bilder-optimieren-und-wasserzeichen) |
 
 ## Texte, Kurzlinks und Alben
 
@@ -223,11 +248,47 @@ Kurzlinks und Alben lassen sich unter **Admin › Einstellungen › Funktionen**
 
 Unter **Admin › Einstellungen › Funktionen** legst du fest, wie lange Dateien im Papierkorb bleiben und wie lange die Statistik zurückreicht, oder schaltest Papierkorb, Statistiken und ZIP-Download ab.
 
+## Große Dateien, Ordner und Versionen
+
+**Große Dateien**: Im Dashboard gehen Dateien über 8 MB in Teilen hoch. Bricht die Verbindung ab, versucht MoeShare es selbst noch einmal und macht an derselben Stelle weiter, laufende Uploads lassen sich auch pausieren. Lädst du die Seite neu oder schließt den Browser, bietet das Dashboard beim nächsten Mal an, den Upload fortzusetzen. Dafür wählst du dieselbe Datei noch einmal aus. Unfertige Uploads hebt MoeShare 24 Stunden auf und hält so lange den Platz dafür frei. Weil jedes Teil eine eigene Anfrage ist, kommen auch Dateien an, die größer sind als das Limit eines Proxys, etwa die 100 MB pro Anfrage bei Cloudflare. ShareX lädt weiter in einem Stück hoch, für eigene Skripte gibt es die [API](#große-dateien-über-die-api).
+
+**Ordner und ZIP-Archive**: Ziehst du einen Ordner ins Dashboard oder wählst ihn über „Ordner hochladen“ aus, wird daraus ein Album mit dem Namen des Ordners. Mehrere Ordner ergeben mehrere Alben, Unterordner zählen zum Ordner darüber, mehr als 500 Dateien verteilt MoeShare auf mehrere Alben. Name und Sichtbarkeit legst du vorher fest. Eine einzelne ZIP-Datei entpackt MoeShare auf Wunsch direkt im Browser und legt die Dateien ebenfalls in ein neues Album, oder lädt sie als ZIP hoch.
+
+**Versionen**: Über „Versionen“ im Menü einer Datei lädst du eine neue Fassung hoch. Links, Statistiken, Alben und Tags bleiben dabei gleich, alte Direktlinks leiten auf die neue Fassung weiter. Die bisherigen Fassungen stehen in der Liste darunter: ansehen, herunterladen, wiederherstellen oder löschen. Neue Fassungen entstehen auch, wenn du ein Bild im [Editor](#bilder-bearbeiten) ersetzt, ein Video [kürzt](#videos-kürzen-und-gifs) oder MoeShare ein Bild [optimiert](#bilder-optimieren-und-wasserzeichen) und das Original aufhebt. Ältere Fassungen zählen zum Speicher. Wie viele pro Datei bleiben (Standard 10, Originale zählen nicht mit), legst du unter **Admin › Einstellungen › Uploads** fest. Dort schaltest du Versionen und fortsetzbare Uploads auch ab.
+
+## Gemeinsame Alben
+
+Ein Album lässt sich mit bis zu 20 anderen Konten teilen. Öffne es unter **Alben**, trage bei „Gemeinsames Album“ einen Benutzernamen ein und tippe auf „Einladen“. Die Person sieht das Album ab sofort in ihrem Dashboard, auch wenn es privat ist. Mitglieder fügen eigene Dateien hinzu, laden direkt ins Album hoch, auch über ShareX mit `X-Album`, und nehmen ihre eigenen Beiträge wieder heraus. Titel, Sichtbarkeit, Reihenfolge und Mitglieder bestimmt nur, wem das Album gehört. Wer das Album verlässt oder entfernt wird, nimmt seine Dateien wieder mit, sie bleiben im eigenen Konto. Auf der Albumseite steht, wer etwas beigetragen hat, und das ZIP enthält die Dateien aller Mitglieder.
+
+## Duplikate und Volltextsuche
+
+**Duplikate**: Lädst du eine Datei hoch, die schon in deinem Konto liegt, sagt das Dashboard es direkt. Gibt es mehrfach vorhandene Dateien, zeigt die Filterleiste „Duplikate“. Dort stehen sie nach Gruppen, und die Kopien löschst du mit einem Klick. Auf der Festplatte liegt jede Datei eines Kontos trotzdem nur einmal und zählt auch nur einmal zum Speicher, MoeShare verknüpft die Kopien per Hardlink. Das gilt für Dateien im Ordner `uploads/`, in S3 liegt jede Kopie einzeln. Klappt das Verknüpfen nicht, etwa auf manchen Netzlaufwerken, bleibt die Kopie eine eigene Datei. Unter **Admin › Einstellungen › Uploads** schaltest du das Zusammenlegen ab, das Erkennen bleibt.
+
+**Volltextsuche**: Die Suche im Dashboard findet Wörter auch im Inhalt von Texten, Code und anderen Textdateien, bei großen Dateien in den ersten 512 KB, und zeigt die Fundstelle direkt an der Datei. Unter **Admin › Einstellungen › Funktionen** lässt sie sich auf Dateinamen und Titel beschränken.
+
+Nach dem Update auf 3.2 berechnet MoeShare für vorhandene Dateien im Hintergrund Prüfsummen und nimmt bestehende Texte in den Suchindex auf, ein paar Dutzend Dateien pro Minute.
+
 ## Bilder bearbeiten
 
 Bilder öffnest du im Dashboard über das Menü einer Datei oder in der großen Ansicht mit „Bild bearbeiten“. Der Editor schneidet zu, frei oder im Format 1:1, 4:3, 3:2, 16:9 oder 9:16, dreht und spiegelt. Dazu kommen Stift, Pfeil, Rahmen und Text in mehreren Farben und Stärken sowie Flächen, die etwas verpixeln oder abdecken, etwa Namen oder Adressen auf einem Screenshot. Jeder Schritt lässt sich mit Strg+Z rückgängig machen.
 
-Gespeichert wird als Kopie oder anstelle des Originals. Beim Ersetzen bleibt der Link zur Ansichtsseite gleich, alte Direktlinks leiten auf die neue Fassung weiter. Bearbeiten lassen sich PNG-, JPEG- und WebP-Bilder.
+Gespeichert wird als Kopie oder anstelle des Originals. Beim Ersetzen bleibt der Link zur Ansichtsseite gleich, alte Direktlinks leiten auf die neue Fassung weiter und das Original bleibt als ältere [Version](#große-dateien-ordner-und-versionen) erhalten. Bearbeiten lassen sich PNG-, JPEG- und WebP-Bilder.
+
+## Bilder optimieren und Wasserzeichen
+
+**Optimieren**: Unter **Admin › Einstellungen › Bilder** schaltest du ein, dass MoeShare hochgeladene Bilder sparsamer speichert. Als Format stehen WebP (klappt überall), AVIF (noch kleiner, braucht mehr Rechenzeit) oder das ursprüngliche Format zur Wahl, dazu die Qualität (Standard 82) und eine größte Kantenlänge, über der Bilder verkleinert werden. Das gilt für JPEG, PNG, WebP, AVIF und TIFF. GIFs und Bilder mit mehreren Seiten bleiben, wie sie sind, PNG-Grafiken werden verlustfrei gespeichert. Wird ein Bild nicht kleiner, behält MoeShare das Original. Metadaten wie Kameradaten fallen beim Umrechnen weg. Mit „Original aufheben“ bleibt das unveränderte Bild als ältere Fassung erhalten, das klappt hier wie beim Wasserzeichen nur mit eingeschalteten Versionen. Jede Person kann das Optimieren unter **Konto › Einstellungen** für sich abschalten und es pro Upload in den Upload-Optionen oder mit `X-Optimize` ein- und ausschalten.
+
+**Wasserzeichen**: Unter **Gestalten › Wasserzeichen** legt jede Person einen Text mit bis zu 80 Zeichen oder ein Logo fest (PNG mit transparentem Hintergrund oder SVG, höchstens 4 MB). Dazu kommen Position (neun Stellen oder über das ganze Bild verteilt), Größe, Deckkraft, Farbe und ein Schatten, der Text auf hellen und dunklen Bildern lesbar hält. Eine Vorschau zeigt das Ergebnis auf deinem letzten Bild oder einem Beispielbild. Das Wasserzeichen landet in jedem neuen Bild, schon hochgeladene bleiben unverändert. Mit „Original aufheben“ bleibt das Bild ohne Wasserzeichen als ältere Fassung erhalten, die nur du siehst. Einzelne Uploads nimmst du in den Upload-Optionen oder mit `X-Watermark: false` aus. Admins schalten Wasserzeichen unter **Admin › Einstellungen › Bilder** für alle ab. Für Text bringt MoeShare die Schrift Inter mit, eine installierte Schrift braucht der Server dafür nicht.
+
+## Videos kürzen und GIFs
+
+Ein Video öffnest du im Dashboard über das Menü der Datei oder in der großen Ansicht mit „Kürzen oder GIF machen“. Start und Ende legst du auf einer Zeitleiste fest, der Ausschnitt lässt sich vorher abspielen. Als **MP4** speicherst du ihn mit oder ohne Ton als neue Datei oder als neue Fassung des Videos, dann bleibt der Link gleich. Als **GIF** wählst du 10 bis 25 Bilder pro Sekunde und eine Breite von 320 bis 800 Pixeln, ein GIF darf höchstens 30 Sekunden lang sein. FFmpeg rechnet auf dem Server im Hintergrund, den Fortschritt zeigt der Dialog. Das Ergebnis übernimmt die Inhaltswarnung des Videos und zählt zum Speicher wie jeder andere Upload.
+
+## Inhaltswarnungen
+
+Eine Inhaltswarnung legt sich über Dateien, die nicht alle sofort sehen sollen, etwa Spoiler oder drastische Bilder. Du setzt sie beim Hochladen in den Upload-Optionen, später im Menü einer Datei mit „Inhaltswarnung setzen“ oder in ShareX mit `X-Warning`, auf Wunsch mit einem kurzen Hinweis wie „Spoiler“ (bis 100 Zeichen).
+
+Wer die Ansichtsseite öffnet, sieht zuerst den Hinweis über einer verschwommenen Fassung und entscheidet selbst, ob der Inhalt erscheint. In Discord, Telegram und Co. zeigt die Vorschau nur das verschwommene Bild mit der Warnung, ShareX kopiert statt des Direktlinks den Link zur Ansichtsseite. In Alben und auf Profilseiten bleiben solche Dateien verschwommen, bis jemand sie aufdeckt, im Dashboard sind sie in der Übersicht verschwommen.
 
 ## Vorschauseiten gestalten
 
@@ -287,6 +348,89 @@ Unter **Admin › Einstellungen › E-Mail** trägst du einen SMTP-Server ein, e
 
 Jede Person trägt ihre Adresse unter **Konto › Einstellungen** ein und bestätigt sie über einen Link. Dort wählt sie auch, welche Hinweise sie per Mail bekommt. E-Mails kommen in der Sprache der Empfänger.
 
+## Benachrichtigungen
+
+Unter **Admin › Einstellungen › Benachrichtigungen** legst du bis zu 20 Ziele an. Jedes Ziel bekommt eine eigene Auswahl an Ereignissen: Uploads, Löschungen, Benutzer, Sicherheit, Verarbeitung, Meldungen, Systemfehler, Virenfunde, geteilte Alben und Importe. „Testen“ schickt sofort eine Nachricht, und die Liste zeigt, ob die letzte Zustellung geklappt hat. Adressen und Tokens speichert MoeShare verschlüsselt. Ein Discord-Webhook aus einer älteren Version wird beim Update als erstes Ziel übernommen.
+
+| Dienst | Was du brauchst |
+| --- | --- |
+| Discord | Webhook-Adresse aus den Kanaleinstellungen › Integrationen › Webhooks |
+| Slack | Adresse eines Incoming Webhooks (`https://hooks.slack.com/…`) |
+| Matrix | Adresse des Servers, den Raum (`!abc123:matrix.org` oder `#name:matrix.org`) und das Zugangstoken eines Kontos, das im Raum ist |
+| Telegram | Token eines Bots von [@BotFather](https://t.me/BotFather) und die Chat-ID oder `@kanalname`, der Bot muss im Chat sein |
+| ntfy | Thema, dazu bei Bedarf ein eigener Server, ein Zugangstoken und die Priorität |
+| Eigener Webhook | Eine Adresse, die JSON per POST annimmt, optional ein Schlüssel für die Signatur |
+
+Der eigene Webhook bekommt jedes Ereignis so:
+
+```json
+{
+  "event": "upload",
+  "kind": "success",
+  "title": "Neue Datei hochgeladen",
+  "text": "Dateiname: aB3dE9.png\nURL: https://share.example.com/view/aB3dE9\nBenutzername: max\nGröße: 1,2 MB",
+  "markdown": "Dateiname: **aB3dE9.png**\nURL: **https://share.example.com/view/aB3dE9**\nBenutzername: **max**\nGröße: **1,2 MB**",
+  "site": { "title": "MoeShare", "url": "https://share.example.com" },
+  "at": "2026-10-23T08:15:02.418Z"
+}
+```
+
+Der Header `X-MoeShare-Event` nennt das Ereignis. Mit Schlüssel steht in `X-MoeShare-Signature` der Wert `sha256=…`, die HMAC-SHA256 des unveränderten Bodys mit dem Schlüssel. So prüfst du sie in Node.js, `rawBody` ist dabei der Body, so wie er ankam:
+
+```js
+const signature = req.get('X-MoeShare-Signature') || '';
+const expected = `sha256=${crypto.createHmac('sha256', SECRET).update(rawBody).digest('hex')}`;
+const valid = signature.length === expected.length && crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
+```
+
+Die Texte kommen in der Sprache des Servers. `kind` ist `error`, wenn etwas schiefging, etwa bei Systemfehlern oder Virenfunden.
+
+## Virenscan mit ClamAV
+
+Mit [ClamAV](https://www.clamav.net) prüft MoeShare jede Datei, bevor sie gespeichert wird: Uploads aus dem Browser, über ShareX und die API, neue Fassungen und Dateien per Link. Findet ClamAV Schadsoftware, wird die Datei sofort gelöscht, der Upload bekommt den Status 422 mit dem Namen des Funds, das Aktivitätsprotokoll des Kontos vermerkt ihn und die Benachrichtigung „Virenfunde“ geht raus. Dateien aus einem [Import](#import-aus-anderen-uploadern) prüft MoeShare nicht.
+
+MoeShare spricht mit einem laufenden ClamAV-Daemon (`clamd`) über TCP oder einen Unix-Socket. Mit Docker startet die Ergänzung `docker/clamav.yml` ihn als eigenen Container:
+
+```bash
+mkdir -p docker
+curl -o docker/clamav.yml https://raw.githubusercontent.com/MaximilianGT500/moeshare/main/docker/clamav.yml
+echo "COMPOSE_FILE=docker-compose.yml:docker/clamav.yml" >> .env
+docker compose up -d
+```
+
+Nutzt du schon PostgreSQL oder MariaDB, hängst du die Datei an, etwa `COMPOSE_FILE=docker-compose.yml:docker/postgres.yml:docker/clamav.yml`. Beim ersten Start lädt ClamAV seine Signaturen, das dauert ein paar Minuten. Laut ClamAV braucht der Container mindestens 3 GB Arbeitsspeicher, besser 4 GB. Ohne Docker installierst du ClamAV über die Paketverwaltung, unter Debian und Ubuntu etwa mit `apt install clamav-daemon`, und trägst den Socket `/run/clamav/clamd.ctl` ein.
+
+Unter **Admin › Einstellungen › Virenscan** trägst du Host und Port ein (im Docker-Stack `clamav` und `3310`) oder den Socket und prüfst die Verbindung mit „Testen“. Dabei geht die harmlose EICAR-Testsignatur an ClamAV, die es erkennen muss. Danach schaltest du „Uploads prüfen“ ein. Außerdem legst du fest:
+
+- **Größte geprüfte Datei**: Größere Dateien nimmt MoeShare ungeprüft an (Standard 25 MB). Soll ClamAV mehr prüfen, erhöhst du dort auch `StreamMaxLength` in der `clamd.conf`.
+- **Wenn ClamAV nicht antwortet**: den Upload abweisen (Standard) oder ungeprüft annehmen.
+
+## Datenexport
+
+Unter **Konto › Konto › Deine Daten** lädt jede Person ein ZIP-Archiv mit allem herunter, was MoeShare über sie gespeichert hat: alle Dateien, ältere Fassungen und den Papierkorb, dazu `account.json` (Konto, Einstellungen, Profil, Design, Domains, Anmeldeverfahren), `files.json`, `albums.json`, `links.json` und `activity.json` sowie eine `LIESMICH.txt`, die den Inhalt erklärt. „Nur die Angaben“ lässt die Dateien weg. Passwörter, Tokens und andere Geheimnisse stehen nicht im Export. Vor dem Download fragt MoeShare noch einmal nach Passwort oder Passkey. Unter **Admin › Einstellungen › Funktionen** schaltest du den Export ab.
+
+## Import aus anderen Uploadern
+
+Von Zipline 3 und 4, XBackBone und Chibisafe übernimmt MoeShare Konten, Dateien, Texte, Alben bzw. Ordner und Kurzlinks. Die alte Installation bleibt dabei unverändert, MoeShare liest ihre Datenbank nur und kopiert die Dateien.
+
+| Uploader | Datenbank | Ordner mit den Dateien |
+| --- | --- | --- |
+| Zipline | PostgreSQL, die Adresse aus `DATABASE_URL` | der Ordner aus `DATASOURCE_LOCAL_DIRECTORY`, meist `uploads` |
+| XBackBone | Pfad zur SQLite-Datei oder `mysql://benutzer:passwort@host/xbackbone` | der Ordner `storage` |
+| Chibisafe | Pfad zur `database.sqlite` | der Ordner `uploads` |
+
+Unter **Admin › Einstellungen › Import** wählst du den alten Uploader, trägst Datenbank und Ordner ein und klickst auf „Prüfen“. MoeShare zeigt dann, wie viele Konten, Dateien, Alben, Texte und Kurzlinks es findet und was mit jedem Konto passiert. Gleichnamige Konten führt MoeShare auf Wunsch mit bestehenden zusammen, sonst bekommen sie einen neuen Namen. Admins bleiben auf Wunsch Admins, Dateien ohne Besitzer landen in deinem Konto oder bleiben weg. Nach „Import starten“ arbeitet MoeShare im Hintergrund und zeigt den Fortschritt, am Ende steht eine Übersicht mit allem, was übernommen wurde.
+
+Passwörter aus bcrypt übernimmt MoeShare direkt, Argon2 ab Node.js 24.7 (im Docker-Image immer). Alle anderen Konten bekommen ein vorläufiges Passwort, das nach dem Import einmal angezeigt wird und beim ersten Anmelden geändert werden muss. Alte Links leiten danach weiter, etwa `/u/…` und `/r/…` von Zipline, `/…/raw` von XBackBone oder Kurzlinks von Chibisafe, sofern die alte Domain auf MoeShare zeigt, zum Beispiel als [weitere Domain](#mehrere-domains). Ein zweiter Durchlauf überspringt alles, was schon übernommen wurde.
+
+Mit Docker muss MoeShare den Ordner und eine SQLite-Datenbank im Container sehen. Ergänze dafür in der `docker-compose.yml` bei `moeshare` unter `volumes` eine schreibgeschützte Zeile wie `- /srv/zipline/uploads:/import/dateien:ro` und gib im Formular den Pfad im Container an, hier `/import/dateien`. Eine Datenbank auf einem Server muss MoeShare über das Netzwerk erreichen.
+
+Auf der Kommandozeile geht es ebenso, mit `--probe` nur als Probelauf:
+
+```bash
+node cli.js import zipline --db postgres://zipline:passwort@localhost:5432/zipline --files /srv/zipline/uploads --probe
+```
+
 ## Datenbank
 
 MoeShare speichert Konten, Einstellungen und Dateiinfos in einer Datenbank. Ohne weitere Angabe ist das eine SQLite-Datei unter `db/datenbank.sqlite`, die für die meisten Server reicht und keine Einrichtung braucht. Läuft bei dir schon PostgreSQL oder MySQL bzw. MariaDB, nimmt MoeShare auch die. Getestet wird mit PostgreSQL 16 und 18 sowie MariaDB 10.11.
@@ -333,13 +477,15 @@ Statt im Ordner `uploads/` kann MoeShare Dateien in einem S3-kompatiblen Speiche
 - **Ordner im Bucket**: optional, so kann sich MoeShare einen Bucket mit anderem teilen.
 - **Auslieferung**: „Über den Server“ hält den Bucket privat, alles läuft durch MoeShare. „Direkt aus S3“ leitet Besucher auf eine kurzlebige, signierte Adresse um und entlastet den Server.
 
-Vorschaubilder entstehen weiterhin auf dem Server, danach wandert die Datei in den Bucket. Vorhandene Dateien verschiebst du auf derselben Seite mit „Alles nach S3 verschieben“ und zurück mit „Alles auf den Server holen“, alle Links bleiben dabei gleich. Auf der Kommandozeile geht das mit `node cli.js storage s3` bzw. `node cli.js storage lokal`.
+Vorschaubilder entstehen weiterhin auf dem Server, danach wandert die Datei in den Bucket, ältere Fassungen gehen mit. Vorhandene Dateien verschiebst du auf derselben Seite mit „Alles nach S3 verschieben“ und zurück mit „Alles auf den Server holen“, alle Links bleiben dabei gleich. Auf der Kommandozeile geht das mit `node cli.js storage s3` bzw. `node cli.js storage lokal`.
+
+Im Bucket liegt jede Datei für sich. Gleiche Dateien teilen sich dort keinen Platz wie im Ordner `uploads/`, das Dashboard zeigt [Duplikate](#duplikate-und-volltextsuche) aber weiter an. Zum Kürzen eines Videos holt MoeShare es kurz auf den Server und löscht die Kopie danach wieder.
 
 ## Einstellungen und Umgebungsvariablen
 
-Alle Einstellungen stehen in der Datenbank und werden unter **Admin › Einstellungen** geändert: Allgemein, Uploads, Funktionen, Eigene Domains, Speicherort, Sicherungen, Anmeldung, Anmeldedienste, E-Mail, Rechtliches und Links, Benachrichtigungen und System. Änderungen gelten sofort, auch für alle Prozesse im PM2-Cluster.
+Alle Einstellungen stehen in der Datenbank und werden unter **Admin › Einstellungen** geändert: Allgemein, Uploads, Bilder, Funktionen, Virenscan, Eigene Domains, Speicherort, Sicherungen, E-Mail, Anmeldung, Anmeldedienste, Rechtliches und Links, Benachrichtigungen, Import und System. Änderungen gelten sofort, auch für alle Prozesse im PM2-Cluster.
 
-Unter **Konto › Einstellungen** legt jede Person eigene Vorlieben fest: Sprache, Adressstil, automatisches Löschen nach einer Zeit und, wenn es mehrere gibt, die Domain. Sie gelten im Browser genauso wie für ShareX.
+Unter **Konto › Einstellungen** legt jede Person eigene Vorlieben fest: Sprache, Adressstil, automatisches Löschen nach einer Zeit, ob Bilder optimiert werden und, wenn es mehrere gibt, die Domain. Sie gelten im Browser genauso wie für ShareX.
 
 Umgebungsvariablen sind nur noch optional. Du kannst sie als `.env` im Projektordner, in der `docker-compose.yml` oder direkt beim Start setzen:
 
@@ -347,7 +493,7 @@ Umgebungsvariablen sind nur noch optional. Du kannst sie als `.env` im Projektor
 | --- | --- | --- |
 | `PORT` | `3000` | Port, auf dem MoeShare lauscht |
 | `DATABASE_URL` | SQLite in `db/` | Datenbank, siehe [Datenbank](#datenbank). Hat Vorrang vor der Auswahl im Assistenten. |
-| `FFMPEG_PATH` | `ffmpeg` aus dem `PATH` | Pfad zu FFmpeg für Video-Vorschauen und Streaming |
+| `FFMPEG_PATH` | `ffmpeg` aus dem `PATH` | Pfad zu FFmpeg für Video-Vorschauen, Streaming, gekürzte Videos und GIFs |
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn` oder `error`. Mit `debug` steht jede Anfrage mit Dauer und Request-ID im Log. |
 | `LOG_FORMAT` | `text` | `text` für die Konsole, `json` für Loki, Graylog, Elasticsearch und Co. |
 | `NO_COLOR` / `FORCE_COLOR` | | Farben im Log abschalten oder erzwingen. Ohne Angabe gibt es Farben nur im Terminal. |
@@ -366,7 +512,7 @@ Unter **Admin › Einstellungen › Allgemein** trägst du weitere Domains ein, 
 
 ## Sprache
 
-Die Oberfläche gibt es auf Deutsch und Englisch. Unter **Admin › Einstellungen › Allgemein** legst du die Sprache des Servers fest und ob MoeShare neuen Besuchern die Sprache ihres Browsers zeigt. Angemeldete wählen ihre Sprache unter **Konto › Einstellungen**, alle anderen über den Umschalter unten auf jeder Seite. Fehlermeldungen der API kommen in derselben Sprache, E-Mails in der Sprache der Empfänger und Benachrichtigungen über den Discord-Webhook in der Sprache des Servers. Das Protokoll bleibt auf Deutsch.
+Die Oberfläche gibt es auf Deutsch und Englisch. Unter **Admin › Einstellungen › Allgemein** legst du die Sprache des Servers fest und ob MoeShare neuen Besuchern die Sprache ihres Browsers zeigt. Angemeldete wählen ihre Sprache unter **Konto › Einstellungen**, alle anderen über den Umschalter unten auf jeder Seite. Fehlermeldungen der API kommen in derselben Sprache, E-Mails in der Sprache der Empfänger und [Benachrichtigungen](#benachrichtigungen) in der Sprache des Servers. Das Protokoll bleibt auf Deutsch.
 
 ## Anmelden über andere Dienste
 
@@ -402,7 +548,7 @@ Unter **Admin › Einstellungen › Allgemein** lässt sich das abschalten. Für
 Im Textformat sieht das Log so aus:
 
 ```
-2026-10-20 19:12:43 INFO  [server] MoeShare 3.1.0 läuft auf https://share.example.com port=3000 node=26.12.0 log=info
+2026-10-20 19:12:43 INFO  [server] MoeShare 3.2.0 läuft auf https://share.example.com port=3000 node=26.12.0 log=info
 2026-10-20 19:12:43 INFO  [server] Aktiv: Vorschaubilder, Standortdaten entfernen, Hauptfarbe, Startseite, Passkeys, Anmeldung mit GitHub
 2026-10-20 19:13:02 INFO  [upload] Datei hochgeladen user=max file=aB3dE9.png size="1,2 MB" via=api
 2026-10-20 19:14:10 WARN  [audit] Anmeldung fehlgeschlagen user=max ip=203.0.113.7 method=password
@@ -494,6 +640,8 @@ Was neu ist und worauf du beim Update achten musst, steht im [Changelog](https:/
 
 Beim ersten Start sichert MoeShare die Datenbank automatisch nach `db/backups/` und bringt sie auf den neuen Stand. Bestehende Discord-Verknüpfungen bleiben dabei erhalten. Werte aus einer alten `.env` (zum Beispiel `SITE_TITLE` oder `MAX_FILE_SIZE_MB`) werden einmalig übernommen, danach meldet das Log, welche Variablen du entfernen kannst. Bisherige ShareX-Tokens funktionieren weiter. Für Konten aus älteren Versionen ist zunächst auch die Anmeldung mit dem Token möglich, damit sich alle ein Passwort setzen können. Unter **Admin › Einstellungen › Anmeldung** schaltest du das ab.
 
+Beim Update auf 3.2 wird ein bisheriger Discord-Webhook zum ersten Ziel unter [Benachrichtigungen](#benachrichtigungen). Für vorhandene Dateien berechnet MoeShare danach im Hintergrund Prüfsummen für die [Duplikate](#duplikate-und-volltextsuche) und baut den Suchindex auf, das läuft nebenher und braucht nichts von dir.
+
 Stand in der alten `.env` eine `REDIRECT_URL`, leitet die Adresse ohne Pfad weiter wie bisher. Die neue Startseite schaltest du unter **Admin › Startseite** ein. Datenbanken, die einmal aus PostgreSQL umgewandelt wurden (Tabellen mit `public.` im Namen), passt MoeShare beim Start selbst an.
 
 Läuft MoeShare bei dir mit einem älteren Docker-Image, trägst du in der `docker-compose.yml` `ghcr.io/maximiliangt500/moeshare:latest` ein oder nimmst gleich die neue Datei aus dem Repository. Die Ordner `db/` und `uploads/` bleiben gleich.
@@ -530,18 +678,22 @@ Wer lieber selbst sichert, nimmt diese Ordner mit:
 | `node cli.js backup [--uploads]` | Erstellt eine Sicherung, mit `--uploads` samt Dateien |
 | `node cli.js restore <datei> [--force] [--ohne-dateien]` | Spielt eine Sicherung ein |
 | `node cli.js storage <s3\|lokal>` | Verschiebt vorhandene Dateien nach S3 oder zurück auf den Server |
+| `node cli.js import <zipline\|xbackbone\|chibisafe> --db <adresse> --files <ordner>` | Übernimmt einen anderen Uploader, siehe [Import](#import-aus-anderen-uploadern). Mit `--probe` nur ein Probelauf, `--ohne-admins` macht niemanden zum Admin, `--waisen-ueberspringen` lässt Dateien ohne Besitzer weg, `--als <admin>` bestimmt, wem sie gehören. |
 
 Mit Docker heißen die Befehle `docker compose exec moeshare moeshare register`, `… moeshare db`, `… moeshare backup` und so weiter. Sie laufen dort mit dem Benutzer, dem die Datenbank gehört. Für `copy-db` und `restore` muss MoeShare gestoppt sein, nimm dafür `docker compose run --rm moeshare moeshare …`. Legst du das erste Konto mit `register` an, ist der Installationsassistent nicht mehr nötig und die Einstellungen machst du danach im Browser.
 
 ## API
 
-Skripte und Uploader melden sich mit einem API-Token im Header `Authorization` an. Alle Upload-Wege verstehen die Angaben aus der Tabelle unter [ShareX verbinden](#sharex-verbinden), als Header oder als Feld im Formular bzw. im JSON (`expires`, `password`, `once`, `maxViews`, `urlStyle`, `domain`, `title`, `syntax`, `tags`, `album`).
+Skripte und Uploader melden sich mit einem API-Token im Header `Authorization` an. Alle Upload-Wege verstehen die Angaben aus der Tabelle unter [ShareX verbinden](#sharex-verbinden), als Header oder als Feld im Formular bzw. im JSON (`expires`, `password`, `once`, `maxViews`, `urlStyle`, `domain`, `title`, `syntax`, `tags`, `album`, `warning`, `optimize`, `watermark`).
 
 | Methode | Pfad | Beschreibung |
 | --- | --- | --- |
-| `POST` | `/upload` | Datei im Formularfeld `file` hochladen. Antwort: `{ success, file, view, preview, delete }` |
+| `POST` | `/upload` | Datei im Formularfeld `file` hochladen. Antwort: `{ success, file, view, preview, delete, id, … }`, bei einer Datei, die schon im Konto liegt, zusätzlich `duplicateOf` |
 | `POST` | `/api/texts` | Text hochladen, als Feld `content` (Formular oder JSON) oder als `text/plain`. Antwort wie bei `/upload` |
 | `POST` | `/api/shorten` | Kurzlink für die Adresse im Feld `url` anlegen. Antwort: `{ success, url, target, code }` |
+| `POST` | `/api/files/:id/versions` | Neue Fassung einer eigenen Datei im Formularfeld `file`, die `id` stammt aus der Antwort von `/upload`. Antwort: `{ ok, file }` |
+| `POST` | `/api/uploads` | Großen Upload in Teilen beginnen, siehe unten |
+| `GET` | `/api/uploads` | Unfertige Uploads des eigenen Kontos |
 | `GET` | `/files` | Dateinamen des eigenen Kontos, neueste zuerst |
 | `DELETE` | `/file/:dateiname` | Eigene Datei in den Papierkorb legen, ohne Papierkorb sofort löschen. Antwort: `{ ok, trashed }` |
 
@@ -551,6 +703,30 @@ Skripte und Uploader melden sich mit einem API-Token im Header `Authorization` a
 curl -H "Authorization: ms_…" -F "file=@bild.png" https://share.example.com/upload
 curl -H "Authorization: ms_…" -H "X-Expires: 1d" -H "X-Syntax: bash" --data-binary @skript.sh -H "Content-Type: text/plain" https://share.example.com/api/texts
 curl -H "Authorization: ms_…" -d "url=https://example.com/ein/sehr/langer/pfad" https://share.example.com/api/shorten
+```
+
+### Große Dateien über die API
+
+Große Dateien gehen in Teilen hoch, so lässt sich ein abgebrochener Upload fortsetzen:
+
+1. `POST /api/uploads` mit JSON `{ "name": "video.mp4", "size": 734003200 }` beginnt den Upload. Die Angaben zum Upload wie `expires` oder `album` kommen als Header oder ins selbe JSON. Mit `"fileId"` wird daraus eine neue Fassung einer vorhandenen Datei. Die Antwort enthält die `id`, die empfohlene Größe der Teile `chunkSize` (8 MB) und die größte erlaubte `maxChunk` (64 MB).
+2. `PATCH /api/uploads/:id` schickt das nächste Teil mit `Content-Type: application/offset+octet-stream` und dem Header `Upload-Offset`, der Zahl der Bytes, die schon angekommen sind. Die Antwort nennt den neuen Stand in `received` und im Header `Upload-Offset`. Passt der Offset nicht, antwortet MoeShare mit 409 und dem richtigen Stand.
+3. `POST /api/uploads/:id/complete` schließt den Upload ab. Die Antwort ist dieselbe wie bei `/upload`.
+
+`GET /api/uploads/:id` zeigt den Stand nach einem Abbruch, `DELETE /api/uploads/:id` verwirft den Upload. Unfertige Uploads verfallen nach 24 Stunden ohne neues Teil, einstellbar unter **Admin › Einstellungen › Uploads**.
+
+```bash
+DATEI=video.mp4
+GROESSE=$(stat -c %s "$DATEI")
+ID=$(curl -s -H "Authorization: ms_…" -H "Content-Type: application/json" \
+  -d "{\"name\":\"$DATEI\",\"size\":$GROESSE}" https://share.example.com/api/uploads | jq -r .id)
+OFFSET=0
+while [ "$OFFSET" -lt "$GROESSE" ]; do
+  OFFSET=$(tail -c +$((OFFSET + 1)) "$DATEI" | head -c 8388608 | curl -s -X PATCH -H "Authorization: ms_…" \
+    -H "Content-Type: application/offset+octet-stream" -H "Upload-Offset: $OFFSET" --data-binary @- \
+    https://share.example.com/api/uploads/$ID | jq -r .received)
+done
+curl -s -X POST -H "Authorization: ms_…" https://share.example.com/api/uploads/$ID/complete
 ```
 
 ## Entwicklung
@@ -570,11 +746,12 @@ Die Texte der Oberfläche sind auf Deutsch geschrieben und dienen gleichzeitig a
 | --- | --- |
 | `src/routes` | Seiten und API, nach Bereichen getrennt |
 | `src/services` | Logik für Benutzer, Dateien, Alben, Kurzlinks, Designs, Domains, Statistiken, Meldungen, E-Mail, Einstellungen, Speicher, Sicherungen, Anmeldung und mehr |
-| `src/lib` | Datenbank für SQLite, PostgreSQL und MySQL, S3, Protokoll, Medienverarbeitung und Hilfsfunktionen |
+| `src/lib` | Datenbank für SQLite, PostgreSQL und MySQL, S3, ClamAV, Protokoll, Medienverarbeitung, die Importer für andere Uploader und Hilfsfunktionen |
+| `src/assets` | Die Schrift Inter für Wasserzeichen, unter der SIL Open Font License |
 | `src/middleware` | Anmeldung, Sicherheitsregeln, Request-IDs und Fehlerbehandlung |
 | `src/i18n` | Englische Übersetzungen für Oberfläche und Server |
 | `client/src` | Weboberfläche mit React und Material UI |
-| `docker/` | Startskript, Kommandozeile, Caddyfile und die Ergänzungen für PostgreSQL und MariaDB |
+| `docker/` | Startskript, Kommandozeile, Caddyfile und die Ergänzungen für PostgreSQL, MariaDB und ClamAV |
 | `cli.js` | Befehle für die Kommandozeile |
 
 ## Support, Mitwirken und Lizenz

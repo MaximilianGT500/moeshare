@@ -19,7 +19,7 @@ const protection = require('../services/protectionService');
 const storage = require('../services/storageService');
 const domains = require('../services/domainService');
 const stats = require('../services/statsService');
-const { viewPage } = require('../services/viewService');
+const { viewPage, blurredPreview } = require('../services/viewService');
 
 const router = express.Router();
 
@@ -65,6 +65,7 @@ router.get('/view/:slug', async (req, res) => {
     access.state === 'open' &&
     crawler &&
     !protection.isProtected(record) &&
+    !embeds.hasWarning(record) &&
     !page.embed.enabled &&
     ['image', 'video'].includes(page.type)
   ) {
@@ -79,6 +80,20 @@ router.get('/view/:slug', async (req, res) => {
     noscript: page.noscript,
     scheme: page.data.design ? page.data.design.scheme : null,
   });
+});
+
+router.get('/view/:slug/blur.jpg', async (req, res) => {
+  const record = await existing(req, req.params.slug);
+  if (!record || !embeds.hasWarning(record) || protection.isProtected(record)) throw notFound('Datei nicht gefunden');
+  const access = protection.fileAccess(req, record);
+  if (access.state !== 'open') throw notFound('Datei nicht gefunden');
+  const buffer = await blurredPreview(record);
+  if (!buffer) throw notFound('Datei nicht gefunden');
+  res.removeHeader('Content-Security-Policy');
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+  res.type('image/jpeg');
+  return res.send(buffer);
 });
 
 router.post('/view/:slug/unlock', sameOriginOnly, unlockLimiter, async (req, res) => {
@@ -112,6 +127,7 @@ router.get('/oembed/:slug', async (req, res) => {
   const record = await existing(req, req.params.slug);
   if (!record) throw notFound('Datei nicht gefunden');
   if (protection.isProtected(record) || record.blocked_at) return res.json({ version: '1.0', type: 'link' });
+  if (embeds.hasWarning(record)) return res.json({ version: '1.0', type: 'link', title: embeds.warningTitle(record) });
   return res.json(embeds.oembedFor(await embeds.embedFor(record)));
 });
 
@@ -179,7 +195,12 @@ async function replacedName(user, name) {
     name,
     name,
   ]);
-  return row ? row.filename : null;
+  if (row) return row.filename;
+  const version = await db.get(
+    'SELECT f.filename FROM file_versions v JOIN file_data f ON f.id = v.file_id WHERE v.filename = ? AND f.username = ? AND f.deleted_at IS NULL',
+    [name, user]
+  );
+  return version ? version.filename : null;
 }
 
 function countsAsDirect(req) {

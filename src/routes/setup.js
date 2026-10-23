@@ -53,7 +53,7 @@ router.post('/api/setup/validate', guarded, async (req, res) => {
 router.post('/api/setup/webhook-test', guarded, async (req, res) => {
   const url = text(req.body.url, 300).trim();
   await setup.validate({ token: tokenOf(req), patch: { 'webhook.url': url } });
-  const problem = await webhook.test(url || undefined);
+  const problem = await webhook.testDiscordUrl(url);
   if (problem) throw badRequest(problem, { field: 'webhook.url' });
   res.json({ ok: true });
 });
@@ -70,6 +70,7 @@ router.post('/api/setup/database', guarded, async (req, res) => {
 router.post('/api/setup', guarded, async (req, res) => {
   const user = await setup.complete({ token: tokenOf(req), account: req.body.account, patch: req.body.settings });
   audit.log('user_created', { userId: user.id, req, details: { via: 'setup', role: 'admin' } });
+  await webhook.adoptLegacy().catch(() => {});
   const redirect = await sessions.start(req, res, user, { method: 'setup', next: '/dashboard' });
   const created = flag(req.body.createToken, false) ? await tokens.create(user.id, 'ShareX') : null;
   if (created) audit.log('token_created', { userId: user.id, req, details: { name: created.record.name } });

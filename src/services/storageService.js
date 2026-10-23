@@ -101,8 +101,33 @@ async function upload(items, target = bucket(), prefix = settings.get('storage.s
 }
 
 async function markStored(id, storage, variants) {
-  await db.run('UPDATE file_data SET storage = ?, variants = ? WHERE id = ?', [storage, variants || null, id]);
+  await db.run(`UPDATE file_data SET storage = ?, variants = ?${storage === 's3' ? ', deduped = 0' : ''} WHERE id = ?`, [
+    storage,
+    variants || null,
+    id,
+  ]);
   cache.clear();
+}
+
+async function markVersion(id, storage, variants) {
+  await db.run('UPDATE file_versions SET storage = ?, variants = ? WHERE id = ?', [storage, variants || null, id]);
+}
+
+const variantList = (items) => [...new Set(items.filter((item) => item.kind !== 'original').map((item) => item.kind))].join(',');
+
+async function offloadVersions(record) {
+  if (activeDriver() !== 's3') return 0;
+  const rows = await db.all("SELECT * FROM file_versions WHERE file_id = ? AND storage <> 's3'", [record.id]);
+  let moved = 0;
+  for (const row of rows) {
+    const items = localArtifacts(record.username, row.filename);
+    if (!fs.existsSync(items[0].file)) continue;
+    await upload(items);
+    await markVersion(row.id, 's3', variantList(items));
+    await removeLocal(record.username, row.filename);
+    moved += 1;
+  }
+  return moved;
 }
 
 async function offload(record, { graceMs = LOCAL_GRACE_MS } = {}) {
@@ -150,7 +175,7 @@ async function removeArtifacts(record) {
   await Promise.all(keys.map((key) => target.remove(key)));
 }
 
-async function download(record) {
+async function download(record, { mark = () => markStored(record.id, 'local', null) } = {}) {
   const target = bucket();
   const paths = filePaths(record.username, record.filename);
   const relatives = remoteKeys(record);
@@ -167,13 +192,36 @@ async function download(record) {
     await fsp.rename(temporary, job.file);
   }
   if (hls.length) await fsp.writeFile(paths.hlsComplete, '');
-  await markStored(record.id, 'local', null);
+  await mark();
   await Promise.all(jobs.map((job) => target.remove(job.key)));
+}
+
+async function migrateVersions(to) {
+  const rows = await db.all(
+    'SELECT v.*, f.username FROM file_versions v JOIN file_data f ON f.id = v.file_id WHERE v.storage <> ? ORDER BY v.id',
+    [to]
+  );
+  for (const row of rows) {
+    try {
+      if (to === 's3') {
+        if (!isValidUsername(row.username) || !fs.existsSync(filePaths(row.username, row.filename).file)) continue;
+        const items = localArtifacts(row.username, row.filename);
+        await upload(items);
+        await markVersion(row.id, 's3', variantList(items));
+        await removeLocal(row.username, row.filename);
+      } else {
+        await download({ ...row, id: null }, { mark: () => markVersion(row.id, 'local', null) });
+      }
+    } catch (error) {
+      log.warn('Eine ältere Version konnte nicht verschoben werden', { file: row.filename, to, error });
+    }
+  }
 }
 
 async function migrate(to, { onProgress = () => {} } = {}) {
   if (!['local', 's3'].includes(to)) throw new Error(`Unbekannter Speicherort: ${to}`);
   if (!configured()) throw new Error('S3 ist noch nicht eingerichtet.');
+  await migrateVersions(to);
   const rows = await db.all('SELECT * FROM file_data WHERE storage <> ? ORDER BY id', [to]);
   const result = { total: rows.length, moved: 0, failed: 0, missing: 0 };
   for (const row of rows) {
@@ -250,6 +298,13 @@ async function openRead(record) {
   return { stream: response, size: Number.isFinite(declared) ? declared : Number(record.size_bytes) || 0, modified: null };
 }
 
+async function readRemote(relative) {
+  const response = await bucket().get(prefixed(relative));
+  const chunks = [];
+  for await (const chunk of response) chunks.push(chunk);
+  return Buffer.concat(chunks);
+}
+
 async function sendRemote(req, res, relative, { cacheControl, downloadName = null, proxy = false }) {
   const key = prefixed(relative);
   if (!proxy && settings.get('storage.s3.delivery') === 'redirect') {
@@ -289,6 +344,7 @@ module.exports = {
   activeDriver,
   configured,
   offload,
+  offloadVersions,
   removeArtifacts,
   migrate,
   testConnection,
@@ -296,6 +352,7 @@ module.exports = {
   hasVariant,
   exists,
   openRead,
+  readRemote,
   sendRemote,
   cleanupLocalCopies,
   contentTypeOf,

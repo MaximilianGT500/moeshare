@@ -177,6 +177,11 @@ const toFile = (row, tags = [], domain = null) => ({
   deletedAt: row.deleted_at ? Number(row.deleted_at) : null,
   purgeAt: row.deleted_at ? Number(row.deleted_at) + settings.get('trash.days') * DAY_MS : null,
   blocked: row.blocked_at ? { at: Number(row.blocked_at), reason: row.blocked_reason || '' } : null,
+  warning: row.warning === null || row.warning === undefined ? null : String(row.warning),
+  version: Number(row.version) || 1,
+  versionAt: row.version_at ? Number(row.version_at) : row.created_at ? Number(row.created_at) : null,
+  scan: row.scan_status || null,
+  deduped: Boolean(Number(row.deduped)),
   ...protectionOf(row),
   ...typeOf(row.filename, row.syntax),
   urls: urlsFor(row, { domain }),
@@ -190,12 +195,42 @@ async function tagsByFile(ids) {
   return grouped;
 }
 
-async function withTags(rows, { domain = null } = {}) {
-  const tags = await tagsByFile(rows.map((row) => row.id));
-  return rows.map((row) => toFile(row, tags.get(Number(row.id)) || [], domain));
+async function versionCounts(ids) {
+  if (!ids.length) return new Map();
+  const rows = await db.all(
+    `SELECT file_id, COUNT(*) AS versions FROM file_versions WHERE file_id IN (${ids.map(() => '?').join(', ')}) GROUP BY file_id`,
+    ids
+  );
+  return new Map(rows.map((row) => [Number(row.file_id), Number(row.versions)]));
 }
 
-async function paginate({ conditions, params, order, page, limit, maxLimit, from = 'file_data', domain = null }) {
+async function twinCounts(rows) {
+  const hashed = rows.filter((row) => row.sha256 && !row.deleted_at);
+  const result = new Map();
+  for (const username of [...new Set(hashed.map((row) => row.username))]) {
+    const hashes = [...new Set(hashed.filter((row) => row.username === username).map((row) => row.sha256))];
+    const counts = await db.all(
+      `SELECT sha256, COUNT(*) AS files FROM file_data WHERE username = ? AND ${LIVE} AND sha256 IN (${hashes.map(() => '?').join(', ')}) GROUP BY sha256`,
+      [username, ...hashes]
+    );
+    for (const row of counts) result.set(`${username}/${row.sha256}`, Number(row.files));
+  }
+  return result;
+}
+
+async function withTags(rows, { domain = null, matches = null } = {}) {
+  const ids = rows.map((row) => row.id);
+  const [tags, versions, twins] = await Promise.all([tagsByFile(ids), versionCounts(ids), twinCounts(rows)]);
+  return rows.map((row) => {
+    const file = toFile(row, tags.get(Number(row.id)) || [], domain);
+    file.versions = versions.get(Number(row.id)) || 0;
+    file.twins = row.sha256 ? Math.max(0, (twins.get(`${row.username}/${row.sha256}`) || 1) - 1) : 0;
+    if (matches && matches.has(Number(row.id))) file.match = matches.get(Number(row.id));
+    return file;
+  });
+}
+
+async function paginate({ conditions, params, order, page, limit, maxLimit, from = 'file_data', domain = null, decorate = null }) {
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
   const size = Math.min(maxLimit, Math.max(1, Number.parseInt(limit, 10) || 24));
   const total = await db.count(`SELECT COUNT(*) FROM ${from} ${where}`, params);
@@ -206,16 +241,25 @@ async function paginate({ conditions, params, order, page, limit, maxLimit, from
     size,
     (current - 1) * size,
   ]);
-  return { files: await withTags(rows, { domain }), total, page: current, pages, limit: size, hasNext: current < pages };
+  const matches = decorate ? await decorate(rows) : null;
+  return { files: await withTags(rows, { domain, matches }), total, page: current, pages, limit: size, hasNext: current < pages };
 }
 
-function searchCondition(search) {
+function searchCondition(search, { content = false } = {}) {
   const term = `%${db.escapeLike(String(search).toLowerCase())}%`;
+  const names =
+    "lower(filename) LIKE ? ESCAPE '!' OR lower(slug) LIKE ? ESCAPE '!' OR lower(title) LIKE ? ESCAPE '!' OR lower(original_name) LIKE ? ESCAPE '!'";
+  if (!content) return { sql: `(${names})`, params: [term, term, term, term] };
   return {
-    sql: "(lower(filename) LIKE ? ESCAPE '!' OR lower(slug) LIKE ? ESCAPE '!' OR lower(title) LIKE ? ESCAPE '!' OR lower(original_name) LIKE ? ESCAPE '!')",
-    params: [term, term, term, term],
+    sql: `(${names} OR EXISTS (SELECT 1 FROM file_search s WHERE s.file_id = file_data.id AND s.folded LIKE ? ESCAPE '!'))`,
+    params: [term, term, term, term, term],
   };
 }
+
+let contentSearch = null;
+const useContentSearch = (provider) => {
+  contentSearch = provider;
+};
 
 function listForUser(
   username,
@@ -223,8 +267,9 @@ function listForUser(
 ) {
   const conditions = ['file_data.username = ?', trash ? 'file_data.deleted_at IS NOT NULL' : 'file_data.deleted_at IS NULL'];
   const params = [username];
+  const content = Boolean(search && contentSearch && contentSearch.enabled());
   if (search) {
-    const condition = searchCondition(search);
+    const condition = searchCondition(search, { content });
     conditions.push(condition.sql);
     params.push(...condition.params);
   }
@@ -242,7 +287,14 @@ function listForUser(
     params.push(Number(album) || 0);
   }
   const order = trash ? 'deleted_at DESC, id DESC' : SORTS[sort] || SORTS.newest;
-  return paginate({ conditions, params, order, page, limit, maxLimit: 100, domain });
+  const decorate = content
+    ? (rows) =>
+        contentSearch.snippets(
+          rows.filter((row) => typeOf(row.filename, row.syntax).type === 'text').map((row) => Number(row.id)),
+          search
+        )
+    : null;
+  return paginate({ conditions, params, order, page, limit, maxLimit: 100, domain, decorate });
 }
 
 function listAll({ page = 1, limit = 50, search = '', trash = false } = {}) {
@@ -318,6 +370,11 @@ async function insert({
   originalName = null,
   title = null,
   syntax = null,
+  sha256 = null,
+  deduped = false,
+  warning = null,
+  scanStatus = null,
+  version = 1,
 }) {
   const id = await db.insertRow('file_data', {
     username,
@@ -337,6 +394,12 @@ async function insert({
     original_name: originalName ? String(originalName).slice(0, 255) : null,
     title: title ? String(title).slice(0, 255) : null,
     syntax,
+    sha256,
+    deduped: deduped ? 1 : 0,
+    warning: warning === null || warning === undefined ? null : String(warning).slice(0, 100),
+    scan_status: scanStatus,
+    version,
+    version_at: createdAt.getTime(),
   });
   cache.clear();
   return findById(id);
@@ -363,10 +426,23 @@ async function patch(record, fields) {
   return findById(record.id);
 }
 
+const versionRows = (fileId) => db.all('SELECT * FROM file_versions WHERE file_id = ? ORDER BY version DESC', [fileId]);
+
+const versionRecord = (record, version) => ({
+  id: null,
+  username: record.username,
+  filename: version.filename,
+  storage: version.storage,
+  variants: version.variants,
+});
+
 async function forget(record) {
   await db.transaction(async (tx) => {
     await tx.run('DELETE FROM album_files WHERE file_id = ?', [record.id]);
     await tx.run('DELETE FROM file_tags WHERE file_id = ?', [record.id]);
+    await tx.run('DELETE FROM file_versions WHERE file_id = ?', [record.id]);
+    await tx.run('DELETE FROM file_search WHERE file_id = ?', [record.id]);
+    await tx.run("DELETE FROM redirects WHERE kind = 'file' AND target_id = ?", [record.id]);
     await tx.run('UPDATE albums SET cover_file_id = NULL WHERE cover_file_id = ?', [record.id]);
     await tx.run("DELETE FROM stats_daily WHERE kind = 'f' AND ref_id = ?", [record.id]);
     await tx.run("DELETE FROM stats_sources WHERE kind = 'f' AND ref_id = ?", [record.id]);
@@ -380,9 +456,30 @@ const REMOVAL_MESSAGES = {
   deleted: 'Datei gelöscht',
 };
 
+async function adoptTwin(record) {
+  if (!record.sha256 || Number(record.deduped)) return;
+  const primaries = await db.count('SELECT COUNT(*) FROM file_data WHERE username = ? AND sha256 = ? AND deduped = 0', [
+    record.username,
+    record.sha256,
+  ]);
+  if (primaries > 0) return;
+  const heir = await db.get('SELECT id FROM file_data WHERE username = ? AND sha256 = ? AND deduped = 1 ORDER BY id LIMIT 1', [
+    record.username,
+    record.sha256,
+  ]);
+  if (heir) await db.run('UPDATE file_data SET deduped = 0 WHERE id = ?', [heir.id]);
+}
+
 async function removeRecord(record, reason = 'deleted') {
+  const versions = await versionRows(record.id);
   await storage.removeArtifacts(record);
+  for (const version of versions) {
+    await storage
+      .removeArtifacts(versionRecord(record, version))
+      .catch((error) => log.warn('Eine ältere Version ließ sich nicht löschen', { file: version.filename, error }));
+  }
   await forget(record);
+  await adoptTwin(record);
   cache.clear();
   log.info(REMOVAL_MESSAGES[reason] || REMOVAL_MESSAGES.deleted, { user: record.username, file: record.filename });
 }
@@ -443,21 +540,44 @@ async function purgeTrash(now = Date.now()) {
 }
 
 async function trashSummary(username) {
-  const row = await db.get(
-    'SELECT COUNT(*) AS files, COALESCE(SUM(size_bytes), 0) AS bytes FROM file_data WHERE username = ? AND deleted_at IS NOT NULL',
-    [username]
-  );
-  return { files: Number(row.files) || 0, bytes: Number(row.bytes) || 0, days: settings.get('trash.days'), enabled: trashEnabled() };
+  const [row, versions] = await Promise.all([
+    db.get(
+      'SELECT COUNT(*) AS files, COALESCE(SUM(CASE WHEN deduped = 1 THEN 0 ELSE size_bytes END), 0) AS bytes FROM file_data WHERE username = ? AND deleted_at IS NOT NULL',
+      [username]
+    ),
+    db.count(
+      'SELECT COALESCE(SUM(v.size_bytes), 0) FROM file_versions v JOIN file_data f ON f.id = v.file_id WHERE f.username = ? AND f.deleted_at IS NOT NULL',
+      [username]
+    ),
+  ]);
+  return {
+    files: Number(row.files) || 0,
+    bytes: (Number(row.bytes) || 0) + versions,
+    days: settings.get('trash.days'),
+    enabled: trashEnabled(),
+  };
 }
 
 async function removeAllForUser(username) {
   const rows = await db.all("SELECT * FROM file_data WHERE username = ? AND storage = 's3'", [username]);
   for (const row of rows)
     await storage.removeArtifacts(row).catch((error) => log.warn('S3-Datei blieb liegen', { file: row.filename, error }));
+  const remote = await db.all(
+    "SELECT v.*, f.username FROM file_versions v JOIN file_data f ON f.id = v.file_id WHERE f.username = ? AND v.storage = 's3'",
+    [username]
+  );
+  for (const version of remote) {
+    await storage
+      .removeArtifacts(versionRecord(version, version))
+      .catch((error) => log.warn('S3-Datei blieb liegen', { file: version.filename, error }));
+  }
   await db.transaction(async (tx) => {
     const own = 'SELECT id FROM file_data WHERE username = ?';
     await tx.run(`DELETE FROM album_files WHERE file_id IN (${own})`, [username]);
     await tx.run(`DELETE FROM file_tags WHERE file_id IN (${own})`, [username]);
+    await tx.run(`DELETE FROM file_versions WHERE file_id IN (${own})`, [username]);
+    await tx.run(`DELETE FROM file_search WHERE file_id IN (${own})`, [username]);
+    await tx.run(`DELETE FROM redirects WHERE kind = 'file' AND target_id IN (${own})`, [username]);
     await tx.run(`UPDATE albums SET cover_file_id = NULL WHERE cover_file_id IN (${own})`, [username]);
     await tx.run(`DELETE FROM stats_daily WHERE kind = 'f' AND ref_id IN (${own})`, [username]);
     await tx.run(`DELETE FROM stats_sources WHERE kind = 'f' AND ref_id IN (${own})`, [username]);
@@ -549,13 +669,15 @@ async function tagsFor(username) {
   return rows.map((row) => ({ tag: row.tag, files: Number(row.files) }));
 }
 
+const STORED = '(CASE WHEN deduped = 1 THEN 0 ELSE size_bytes END)';
+
 function typeSums() {
   const parts = MEDIA_TYPES.map((type) => ({ type, ...matchesAny(formatsOf(type)) }));
   return {
     sql: parts
       .map(
         ({ type, sql }) =>
-          `SUM(CASE WHEN ${sql} THEN 1 ELSE 0 END) AS count_${type}, SUM(CASE WHEN ${sql} THEN size_bytes ELSE 0 END) AS bytes_${type}`
+          `SUM(CASE WHEN ${sql} THEN 1 ELSE 0 END) AS count_${type}, SUM(CASE WHEN ${sql} THEN ${STORED} ELSE 0 END) AS bytes_${type}`
       )
       .join(', '),
     params: parts.flatMap(({ params }) => [...params, ...params]),
@@ -565,36 +687,83 @@ function typeSums() {
 async function summary(username = null) {
   const sums = typeSums();
   const text = typeFilter('text');
-  const row = await db.get(
-    `SELECT COUNT(*) AS files, COALESCE(SUM(size_bytes), 0) AS bytes, COALESCE(SUM(views), 0) AS views, ${sums.sql},
-            SUM(CASE WHEN ${text.sql} THEN 1 ELSE 0 END) AS count_text
-     FROM file_data WHERE ${LIVE}${username ? ' AND username = ?' : ''}`,
-    [...sums.params, ...text.params, ...(username ? [username] : [])]
-  );
+  const [row, versions] = await Promise.all([
+    db.get(
+      `SELECT COUNT(*) AS files, COALESCE(SUM(${STORED}), 0) AS bytes, COALESCE(SUM(views), 0) AS views, ${sums.sql},
+              SUM(CASE WHEN ${text.sql} THEN 1 ELSE 0 END) AS count_text,
+              COALESCE(SUM(CASE WHEN deduped = 1 THEN size_bytes ELSE 0 END), 0) AS saved
+       FROM file_data WHERE ${LIVE}${username ? ' AND username = ?' : ''}`,
+      [...sums.params, ...text.params, ...(username ? [username] : [])]
+    ),
+    db.count(
+      `SELECT COALESCE(SUM(v.size_bytes), 0) FROM file_versions v JOIN file_data f ON f.id = v.file_id WHERE f.deleted_at IS NULL${username ? ' AND f.username = ?' : ''}`,
+      username ? [username] : []
+    ),
+  ]);
   const count = (type) => Number(row[`count_${type}`]) || 0;
   const bytes = (type) => Number(row[`bytes_${type}`]) || 0;
   const total = Number(row.bytes) || 0;
   return {
     files: Number(row.files) || 0,
-    storageBytes: total,
+    storageBytes: total + versions,
     views: Number(row.views) || 0,
     images: count('image'),
     videos: count('video'),
     audio: count('audio'),
     texts: count('text'),
+    savedBytes: Number(row.saved) || 0,
     storageBreakdown: {
       images: bytes('image'),
       videos: bytes('video'),
       audio: bytes('audio'),
       other: Math.max(0, total - bytes('image') - bytes('video') - bytes('audio')),
+      versions,
     },
   };
 }
 
+async function duplicates(username) {
+  const rows = await db.all(
+    `SELECT * FROM file_data WHERE username = ? AND ${LIVE} AND sha256 IN (
+       SELECT sha256 FROM file_data WHERE username = ? AND ${LIVE} AND sha256 IS NOT NULL AND sha256 <> '' GROUP BY sha256 HAVING COUNT(*) > 1
+     ) ORDER BY sha256, id`,
+    [username, username]
+  );
+  const items = await withTags(rows);
+  const groups = new Map();
+  for (const [index, row] of rows.entries()) {
+    const group = groups.get(row.sha256) || { sha256: row.sha256, sizeBytes: Number(row.size_bytes) || 0, files: [] };
+    group.files.push(items[index]);
+    groups.set(row.sha256, group);
+  }
+  const list = [...groups.values()].map((group) => ({
+    ...group,
+    redundantBytes: group.sizeBytes * (group.files.length - 1),
+    savedBytes: group.sizeBytes * group.files.filter((file) => file.deduped).length,
+  }));
+  return {
+    groups: list,
+    files: list.reduce((sum, group) => sum + group.files.length - 1, 0),
+    redundantBytes: list.reduce((sum, group) => sum + group.redundantBytes, 0),
+    savedBytes: list.reduce((sum, group) => sum + group.savedBytes, 0),
+  };
+}
+
+const duplicateCount = (username) =>
+  db.count(
+    `SELECT COALESCE(SUM(x.n - 1), 0) FROM (SELECT COUNT(*) AS n FROM file_data WHERE username = ? AND ${LIVE} AND sha256 IS NOT NULL AND sha256 <> '' GROUP BY sha256 HAVING COUNT(*) > 1) x`,
+    [username]
+  );
+
 const userStats = (username) =>
   cache.remember(`stats:user:${username}`, 30000, async () => {
     const latest = await db.get(`SELECT creation_date FROM file_data WHERE username = ? AND ${LIVE} ORDER BY id DESC LIMIT 1`, [username]);
-    return { ...(await summary(username)), latestUpload: latest ? latest.creation_date : null, trash: await trashSummary(username) };
+    return {
+      ...(await summary(username)),
+      latestUpload: latest ? latest.creation_date : null,
+      trash: await trashSummary(username),
+      duplicates: await duplicateCount(username),
+    };
   });
 
 const globalStats = () =>
@@ -608,6 +777,12 @@ module.exports = {
   TEXT_SYNTAX,
   LIVE,
   typeOf,
+  typeFilter,
+  useContentSearch,
+  versionRows,
+  versionRecord,
+  duplicates,
+  adoptTwin,
   syntaxOf,
   urlsFor,
   pickDomain,

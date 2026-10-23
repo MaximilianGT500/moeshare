@@ -6,6 +6,7 @@ const db = require('../lib/db');
 const { escapeHtml } = require('../lib/format');
 const { displayPath } = require('../lib/slugs');
 const { baseNameOf, filePaths } = require('../lib/storage');
+const imaging = require('../lib/imaging');
 const settings = require('./settingsService');
 const files = require('./fileService');
 const embeds = require('./embedService');
@@ -91,6 +92,8 @@ async function fileView(record, { access = { state: 'open' }, domain = null } = 
       username,
       owner: Boolean(access.owner),
       blocked: record.blocked_at ? { reason: record.blocked_reason || '' } : null,
+      warning: record.warning === null || record.warning === undefined ? null : record.warning,
+      version: Number(record.version) || 1,
     },
     urls: {
       view: urls.view,
@@ -127,6 +130,37 @@ async function viewPage(record, { access = { state: 'open' }, domain = null, loc
   };
 }
 
+const blurCache = new Map();
+const BLUR_CACHE = 64;
+
+async function blurSource(record, type) {
+  const paths = filePaths(record.username, record.filename);
+  const relativeBase = `${record.username}/preview/`;
+  if (type === 'video') {
+    if (fs.existsSync(paths.poster)) return paths.poster;
+    if (record.storage === 's3' && storage.hasVariant(record, 'poster'))
+      return storage.readRemote(`${relativeBase}${baseNameOf(record.filename)}.jpg`);
+    return null;
+  }
+  if (fs.existsSync(paths.preview)) return paths.preview;
+  if (fs.existsSync(paths.file)) return paths.file;
+  if (record.storage === 's3') return storage.readRemote(`${record.username}/${record.filename}`);
+  return null;
+}
+
+async function blurredPreview(record) {
+  const key = `${record.id}:${record.filename}`;
+  if (blurCache.has(key)) return blurCache.get(key);
+  const { type } = files.typeOf(record.filename, record.syntax);
+  if (type !== 'image' && type !== 'video') return null;
+  const source = await blurSource(record, type);
+  if (!source) return null;
+  const buffer = await imaging.blurred(source);
+  blurCache.set(key, buffer);
+  if (blurCache.size > BLUR_CACHE) blurCache.delete(blurCache.keys().next().value);
+  return buffer;
+}
+
 async function sampleRecord(user) {
   const row = await db.get(
     `SELECT * FROM file_data WHERE username = ? AND ${files.LIVE} AND blocked_at IS NULL AND password_hash IS NULL AND max_views IS NULL
@@ -136,4 +170,4 @@ async function sampleRecord(user) {
   return row && storage.exists(row) ? row : null;
 }
 
-module.exports = { viewPage, fileView, sampleRecord, TEXT_PREVIEW_BYTES };
+module.exports = { viewPage, fileView, sampleRecord, blurredPreview, TEXT_PREVIEW_BYTES };

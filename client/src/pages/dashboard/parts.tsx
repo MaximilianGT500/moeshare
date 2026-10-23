@@ -38,11 +38,14 @@ import BarChartRounded from '@mui/icons-material/BarChartRounded';
 import CropRotateRounded from '@mui/icons-material/CropRotateRounded';
 import FolderZipOutlined from '@mui/icons-material/FolderZipOutlined';
 import AccountBoxOutlined from '@mui/icons-material/AccountBoxOutlined';
+import HistoryRounded from '@mui/icons-material/HistoryRounded';
+import ContentCutRounded from '@mui/icons-material/ContentCutRounded';
+import WarningAmberRounded from '@mui/icons-material/WarningAmberRounded';
 import type { ExpiryChoice, FileItem, TagCount } from '../../lib/types';
 import { ApiError, uploadFromUrl, type UploadOptions } from '../../lib/api';
 import { formatNumber } from '../../lib/format';
 import { t, tn } from '../../lib/i18n';
-import { ExpirySelect, TagInput } from '../../components/ShareOptions';
+import { ExpirySelect, TagInput, WarningLabelInput } from '../../components/ShareOptions';
 import { PasswordField } from '../../components/PasswordField';
 import { ShareMenuItems } from '../../components/ShareList';
 import { CopyTextButton } from '../../components/CopyButton';
@@ -60,6 +63,9 @@ export function FileMenu({
   onAlbum,
   onStats,
   onImageEdit,
+  onClip,
+  onVersions,
+  onWarning,
   trash = false,
 }: {
   file: FileItem | null;
@@ -72,6 +78,9 @@ export function FileMenu({
   onAlbum?: (file: FileItem) => void;
   onStats?: (file: FileItem) => void;
   onImageEdit?: (file: FileItem) => void;
+  onClip?: (file: FileItem) => void;
+  onVersions?: (file: FileItem) => void;
+  onWarning?: (file: FileItem) => void;
   trash?: boolean;
 }) {
   const open = !!file && !!anchor;
@@ -132,6 +141,38 @@ export function FileMenu({
               </MenuItem>,
             ]
           : []),
+        ...(onClip
+          ? [
+              <MenuItem
+                key="clip"
+                onClick={() => {
+                  onClose();
+                  onClip(file);
+                }}
+              >
+                <ListItemIcon>
+                  <ContentCutRounded />
+                </ListItemIcon>
+                {t('Kürzen oder GIF machen')}
+              </MenuItem>,
+            ]
+          : []),
+        ...(onVersions
+          ? [
+              <MenuItem
+                key="versions"
+                onClick={() => {
+                  onClose();
+                  onVersions(file);
+                }}
+              >
+                <ListItemIcon>
+                  <HistoryRounded />
+                </ListItemIcon>
+                {file.versions ? t('Versionen ({count})', { count: file.versions + 1 }) : t('Versionen')}
+              </MenuItem>,
+            ]
+          : []),
         ...(onAlbum
           ? [
               <MenuItem
@@ -161,6 +202,22 @@ export function FileMenu({
                   <BarChartRounded />
                 </ListItemIcon>
                 {t('Statistik')}
+              </MenuItem>,
+            ]
+          : []),
+        ...(onWarning
+          ? [
+              <MenuItem
+                key="warning"
+                onClick={() => {
+                  onClose();
+                  onWarning(file);
+                }}
+              >
+                <ListItemIcon>
+                  <WarningAmberRounded />
+                </ListItemIcon>
+                {typeof file.warning === 'string' ? t('Inhaltswarnung entfernen') : t('Inhaltswarnung setzen')}
               </MenuItem>,
             ]
           : []),
@@ -209,8 +266,8 @@ export function FileMenu({
   );
 }
 
-export type BulkAction = 'tag' | 'untag' | 'expire' | 'protect' | 'unprotect';
-export type QuickAction = 'list' | 'unlist';
+export type BulkAction = 'tag' | 'untag' | 'expire' | 'protect' | 'unprotect' | 'warn';
+export type QuickAction = 'list' | 'unlist' | 'unwarn';
 
 export function SelectionBar({
   count,
@@ -224,6 +281,7 @@ export function SelectionBar({
   onQuick,
   zipHref,
   trash = false,
+  profiles = false,
 }: {
   count: number;
   allSelected: boolean;
@@ -236,6 +294,7 @@ export function SelectionBar({
   onQuick?: (action: QuickAction) => void;
   zipHref?: string;
   trash?: boolean;
+  profiles?: boolean;
 }) {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const bulk = (action: BulkAction) => {
@@ -360,8 +419,23 @@ export function SelectionBar({
               </ListItemIcon>
               {t('Schutz entfernen')}
             </MenuItem>
-            {onQuick && <Divider />}
+            <Divider />
+            <MenuItem onClick={() => bulk('warn')}>
+              <ListItemIcon>
+                <WarningAmberRounded />
+              </ListItemIcon>
+              {t('Inhaltswarnung setzen')}
+            </MenuItem>
             {onQuick && (
+              <MenuItem onClick={() => quick('unwarn')}>
+                <ListItemIcon>
+                  <WarningAmberRounded />
+                </ListItemIcon>
+                {t('Inhaltswarnung entfernen')}
+              </MenuItem>
+            )}
+            {onQuick && profiles && <Divider />}
+            {onQuick && profiles && (
               <MenuItem onClick={() => quick('list')}>
                 <ListItemIcon>
                   <AccountBoxOutlined />
@@ -369,7 +443,7 @@ export function SelectionBar({
                 {t('Im Profil zeigen')}
               </MenuItem>
             )}
-            {onQuick && (
+            {onQuick && profiles && (
               <MenuItem onClick={() => quick('unlist')}>
                 <ListItemIcon>
                   <AccountBoxOutlined />
@@ -408,11 +482,12 @@ export function BulkDialog({
   tags: TagCount[];
   maxExpiry: ExpiryChoice;
   onClose: () => void;
-  onSubmit: (action: BulkAction, extra: { tags?: string[]; expires?: string; password?: string }) => Promise<void>;
+  onSubmit: (action: BulkAction, extra: { tags?: string[]; expires?: string; password?: string; warning?: string }) => Promise<void>;
 }) {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [expires, setExpires] = useState<ExpiryChoice | ''>('7d');
   const [password, setPassword] = useState('');
+  const [warning, setWarning] = useState('');
   const [busy, setBusy] = useState(false);
   if (!action) return null;
 
@@ -422,6 +497,7 @@ export function BulkDialog({
     expire: t('Ablauf festlegen'),
     protect: t('Mit Passwort schützen'),
     unprotect: t('Schutz entfernen'),
+    warn: t('Inhaltswarnung setzen'),
   };
   const valid =
     action === 'tag' || action === 'untag'
@@ -439,9 +515,11 @@ export function BulkDialog({
         tags: action === 'tag' || action === 'untag' ? selectedTags : undefined,
         expires: action === 'expire' ? expires || 'never' : undefined,
         password: action === 'protect' ? password : undefined,
+        warning: action === 'warn' ? warning.trim() : undefined,
       });
       setSelectedTags([]);
       setPassword('');
+      setWarning('');
       onClose();
     } finally {
       setBusy(false);
@@ -462,12 +540,14 @@ export function BulkDialog({
         <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
           {tn(count, 'Gilt für 1 ausgewählte Datei.', 'Gilt für {count} ausgewählte Dateien.')}
           {action === 'unprotect' ? ` ${t('Passwort und Einmal-Abruf werden entfernt.')}` : ''}
+          {action === 'warn' ? ` ${t('Bilder und Videos erscheinen unscharf, bis jemand bewusst draufklickt.')}` : ''}
         </Typography>
         {(action === 'tag' || action === 'untag') && <TagInput value={selectedTags} onChange={setSelectedTags} suggestions={tags} />}
         {action === 'expire' && <ExpirySelect value={expires} onChange={setExpires} max={maxExpiry} label={t('Löschen nach')} />}
         {action === 'protect' && (
           <PasswordField label={t('Passwort')} value={password} onChange={setPassword} autoComplete="new-password" autoFocus />
         )}
+        {action === 'warn' && <WarningLabelInput value={warning} onChange={setWarning} autoFocus />}
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} disabled={busy}>

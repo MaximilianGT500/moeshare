@@ -13,16 +13,18 @@ import { SudoProvider } from '../../components/Sudo';
 import { EmbedPanel } from '../embed/EmbedPanel';
 import { ProfileEditor } from './ProfileEditor';
 import { ViewDesigner } from './ViewDesigner';
+import { WatermarkEditor } from './WatermarkEditor';
 import { c, ease } from '../../theme/tokens';
 import { t } from '../../lib/i18n';
 
-type TabKey = 'vorschauseite' | 'profil' | 'embed';
+type TabKey = 'vorschauseite' | 'profil' | 'embed' | 'wasserzeichen';
 
 function tabsFor(boot: DesignBoot): TabKey[] {
   const tabs: TabKey[] = [];
   if (boot.user.isAdmin || boot.view.allowCustom) tabs.push('vorschauseite');
   if (boot.profile.available) tabs.push('profil');
   if (boot.user.canCustomizeEmbed) tabs.push('embed');
+  if (boot.watermark?.allowed) tabs.push('wasserzeichen');
   return tabs.length ? tabs : ['vorschauseite'];
 }
 
@@ -47,7 +49,12 @@ function Design({ boot }: { boot: DesignBoot }) {
     window.history.replaceState(null, '', `#${next}`);
   };
 
-  const labels: Record<TabKey, string> = { vorschauseite: t('Vorschauseite'), profil: t('Profilseite'), embed: t('Embed') };
+  const labels: Record<TabKey, string> = {
+    vorschauseite: t('Vorschauseite'),
+    profil: t('Profilseite'),
+    embed: t('Embed'),
+    wasserzeichen: t('Wasserzeichen'),
+  };
 
   return (
     <AppShell
@@ -84,6 +91,7 @@ function Design({ boot }: { boot: DesignBoot }) {
           {tab === 'vorschauseite' && <ViewDesigner user={boot.user} data={boot.view} />}
           {tab === 'profil' && <ProfileEditor user={boot.user} initial={boot.profile} />}
           {tab === 'embed' && <EmbedPanel site={boot.site} user={boot.user} data={boot.embed} />}
+          {tab === 'wasserzeichen' && <WatermarkEditor initial={boot.watermark} />}
         </m.div>
       </AnimatePresence>
     </AppShell>

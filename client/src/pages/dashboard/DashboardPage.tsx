@@ -18,10 +18,14 @@ import {
   fetchUserStats,
   listAlbums,
   listFiles,
+  updateFile,
   zipUrl,
+  type ClipResult,
   type SortKey,
   type TypeFilter,
+  type UploadResponse,
 } from '../../lib/api';
+import type { DropContents } from '../../lib/folders';
 import { extensionOf, formatBytes, formatNumber, relativeFromServer } from '../../lib/format';
 import { t, tn } from '../../lib/i18n';
 import { sharedUrl, takeSharedItems } from '../../lib/shareTarget';
@@ -42,12 +46,16 @@ import { Gallery } from './Gallery';
 import { Viewer, type ViewerState } from './Viewer';
 import { FilterBar, type TypeCounts } from './FilterBar';
 import { BulkDialog, EmptyState, FileMenu, SelectionBar, UrlUploadDialog, type BulkAction, type QuickAction } from './parts';
-import { UploadProvider, useUploads } from './uploads';
+import { ResumeNotice, UploadProvider, useUploads } from './uploads';
+import { FolderImportDialog, type FolderSource } from './folders';
+import { VersionsDialog } from './versions';
+import { ClipDialog } from './clip';
+import { DuplicatesDialog } from './duplicates';
 import { TrashView } from './trash';
 import { InsightsView } from './insights';
 import { ImageEditor } from './editor/ImageEditor';
 import { StatsDialog, type StatsTarget } from '../../components/StatsView';
-import { displayName } from './MediaTile';
+import { displayName, hasWarning } from './MediaTile';
 import { c, ease } from '../../theme/tokens';
 
 const keyframes = (
@@ -145,15 +153,21 @@ function RailUpload() {
   );
 }
 
-interface DashboardProps {
-  boot: DashboardBoot;
-  registerUploadHandler: (fn: (names: string[]) => void) => void;
+interface UploadRoutes {
+  uploaded: (names: string[], results: UploadResponse[]) => void;
+  folders: (contents: DropContents) => void;
+  archive: (file: File) => void;
 }
 
-function Dashboard({ boot, registerUploadHandler }: DashboardProps) {
+interface DashboardProps {
+  boot: DashboardBoot;
+  registerRoutes: (routes: UploadRoutes) => void;
+}
+
+function Dashboard({ boot, registerRoutes }: DashboardProps) {
   const toast = useToast();
   const confirm = useConfirm();
-  const { pick, enqueue, setOptions } = useUploads();
+  const { pick, pickFolder, enqueue, setOptions } = useUploads();
   const pageSize = boot.files.limit || 40;
   useNow(60000);
 
@@ -176,8 +190,26 @@ function Dashboard({ boot, registerUploadHandler }: DashboardProps) {
   const [statsTarget, setStatsTarget] = useState<StatsTarget | null>(null);
   const [imageEdit, setImageEdit] = useState<FileItem | null>(null);
   const [trashVersion, setTrashVersion] = useState(0);
+  const [folderSource, setFolderSource] = useState<FolderSource | null>(null);
+  const [versionsFile, setVersionsFile] = useState<FileItem | null>(null);
+  const [clipFile, setClipFile] = useState<FileItem | null>(null);
+  const [duplicatesOpen, setDuplicatesOpen] = useState(false);
+  const [uploadRound, setUploadRound] = useState(0);
 
-  useEffect(() => setOptions(toUploadOptions(prefs)), [prefs, setOptions]);
+  useEffect(
+    () => setOptions({ ...toUploadOptions(prefs), ...(section === 'albums' && albumOpen ? { album: albumOpen } : {}) }),
+    [prefs, section, albumOpen, setOptions]
+  );
+
+  useEffect(() => {
+    const onHash = () => {
+      const next = sectionFromHash(boot);
+      setSection(next.section);
+      setAlbumOpen(next.album);
+    };
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, [boot]);
 
   const goSection = useCallback((next: Section, album: number | null = null) => {
     setSection(next);
@@ -228,7 +260,7 @@ function Dashboard({ boot, registerUploadHandler }: DashboardProps) {
 
   const selecting = selectMode || selected.size > 0;
   const filtered = !!search || type !== '' || !!tag;
-  const overlay = viewerIndex !== null || !!imageEdit;
+  const overlay = viewerIndex !== null || !!imageEdit || !!versionsFile || !!clipFile;
   const trashOn = boot.options.trash;
   const canEditImage = useCallback(
     (file: FileItem) => file.type === 'image' && !file.isGif && boot.options.editable.includes(`.${extensionOf(file.filename)}`),
@@ -322,13 +354,35 @@ function Dashboard({ boot, registerUploadHandler }: DashboardProps) {
   const sentinel = useInView(loadMore, hasMore && status === 'idle');
 
   useEffect(() => {
-    registerUploadHandler((names) => {
-      reload(names);
-      refreshStats();
-      if (prefs.tags.length) refreshTags();
-      toast(tn(names.length, 'Datei hochgeladen', '{count} Dateien hochgeladen'), { variant: 'success', duration: 2600 });
+    registerRoutes({
+      uploaded: (names, results) => {
+        reload(names);
+        refreshStats();
+        setUploadRound((value) => value + 1);
+        if (prefs.tags.length) refreshTags();
+        const twins = results.filter((result) => result.duplicateOf).length;
+        if (!twins) {
+          toast(tn(names.length, 'Datei hochgeladen', '{count} Dateien hochgeladen'), { variant: 'success', duration: 2600 });
+          return;
+        }
+        toast(
+          names.length === 1
+            ? t('Datei hochgeladen. Die gleiche Datei hattest du schon einmal hochgeladen.')
+            : tn(
+                twins,
+                '{total} Dateien hochgeladen, eine davon hattest du schon.',
+                '{total} Dateien hochgeladen, {count} davon hattest du schon.',
+                {
+                  total: names.length,
+                }
+              ),
+          { variant: 'info', duration: 7000, action: { label: t('Duplikate'), onClick: () => setDuplicatesOpen(true) } }
+        );
+      },
+      folders: (contents) => setFolderSource({ kind: 'folders', contents }),
+      archive: (file) => setFolderSource({ kind: 'zip', file }),
     });
-  }, [registerUploadHandler, reload, refreshStats, refreshTags, prefs.tags.length, toast]);
+  }, [registerRoutes, reload, refreshStats, refreshTags, prefs.tags.length, toast]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -562,8 +616,42 @@ function Dashboard({ boot, registerUploadHandler }: DashboardProps) {
     file: Math.max(0, stats.files - stats.images - stats.videos - stats.audio - (stats.texts || 0)),
   };
 
+  const replaceFile = useCallback((updated: FileItem) => {
+    setFiles((prev) => prev.map((file) => (file.id === updated.id ? updated : file)));
+  }, []);
+
+  const toggleWarning = useCallback(
+    async (file: FileItem) => {
+      try {
+        const { file: updated } = await updateFile(file.id, { warning: hasWarning(file) ? null : '' });
+        replaceFile(updated);
+        toast(hasWarning(updated) ? t('Inhaltswarnung gesetzt') : t('Inhaltswarnung entfernt'), { variant: 'success' });
+      } catch (error) {
+        fail(error);
+      }
+    },
+    [replaceFile, toast, fail]
+  );
+
+  const clipDone = useCallback(
+    (result: ClipResult) => {
+      if (result.kind === 'version') {
+        replaceFile(result.file);
+        toast(t('Video ersetzt'), { variant: 'success' });
+      } else {
+        reload([result.file.filename]);
+        toast(result.file.isGif ? t('GIF gespeichert') : t('Ausschnitt gespeichert'), {
+          variant: 'success',
+          action: { label: t('Öffnen'), onClick: () => window.open(result.file.urls.view, '_blank', 'noopener') },
+        });
+      }
+      refreshStats();
+    },
+    [replaceFile, reload, refreshStats, toast]
+  );
+
   const runBulk = useCallback(
-    async (action: string, extra: { tags?: string[]; expires?: string; password?: string } = {}) => {
+    async (action: string, extra: { tags?: string[]; expires?: string; password?: string; warning?: string } = {}) => {
       const ids = selectedFiles.map((file) => file.id);
       if (!ids.length) return;
       try {
@@ -573,7 +661,11 @@ function Dashboard({ boot, registerUploadHandler }: DashboardProps) {
             ? tn(res.count, '1 Datei erscheint jetzt im Profil', '{count} Dateien erscheinen jetzt im Profil')
             : action === 'unlist'
               ? tn(res.count, '1 Datei aus dem Profil genommen', '{count} Dateien aus dem Profil genommen')
-              : tn(res.count, '1 Datei geändert', '{count} Dateien geändert'),
+              : action === 'warn'
+                ? tn(res.count, '1 Datei hat jetzt eine Inhaltswarnung', '{count} Dateien haben jetzt eine Inhaltswarnung')
+                : action === 'unwarn'
+                  ? tn(res.count, 'Inhaltswarnung bei 1 Datei entfernt', 'Inhaltswarnung bei {count} Dateien entfernt')
+                  : tn(res.count, '1 Datei geändert', '{count} Dateien geändert'),
           { variant: 'success' }
         );
         reload();
@@ -608,9 +700,10 @@ function Dashboard({ boot, registerUploadHandler }: DashboardProps) {
             onDelete={() => deleteFiles(selectedFiles)}
             onAlbum={boot.options.albums ? () => setAlbumPicker(selectedFiles.map((f) => f.id)) : undefined}
             onBulk={setBulk}
-            onQuick={boot.options.profiles ? (action: QuickAction) => runBulk(action) : undefined}
+            onQuick={(action: QuickAction) => runBulk(action)}
             zipHref={boot.options.zip ? zipUrl(selectedFiles.map((f) => f.id)) : undefined}
             trash={trashOn}
+            profiles={boot.options.profiles}
           />
         </m.div>
       ) : (
@@ -629,7 +722,7 @@ function Dashboard({ boot, registerUploadHandler }: DashboardProps) {
               setQuery(value);
               if (section !== 'files') goSection('files');
             }}
-            placeholder={t('Dateien durchsuchen')}
+            placeholder={boot.options.contentSearch ? t('Dateien und Texte durchsuchen') : t('Dateien durchsuchen')}
             shortcut="/"
             busy={status === 'reload' && !!query}
           />
@@ -665,7 +758,12 @@ function Dashboard({ boot, registerUploadHandler }: DashboardProps) {
         </m.div>
         {(stats.files > 0 || (stats.trash?.bytes ?? 0) > 0) && (
           <Box sx={{ mt: 2.5 }}>
-            <StorageMeter breakdown={stats.storageBreakdown} capacity={quotaBytes} trash={stats.trash?.bytes ?? 0} />
+            <StorageMeter
+              breakdown={stats.storageBreakdown}
+              capacity={quotaBytes}
+              trash={stats.trash?.bytes ?? 0}
+              saved={stats.savedBytes ?? 0}
+            />
           </Box>
         )}
       </Box>
@@ -709,7 +807,9 @@ function Dashboard({ boot, registerUploadHandler }: DashboardProps) {
         </Box>
       )}
 
-      {section === 'albums' && <AlbumsView openId={albumOpen} onOpen={(id) => goSection('albums', id)} info={boot.options} />}
+      {section === 'albums' && (
+        <AlbumsView openId={albumOpen} onOpen={(id) => goSection('albums', id)} info={boot.options} refreshKey={uploadRound} />
+      )}
       {section === 'links' && <LinksView info={boot.options} version={linksVersion} />}
       {section === 'stats' && <InsightsView onOpen={openStats} />}
       {section === 'trash' && (
@@ -724,6 +824,7 @@ function Dashboard({ boot, registerUploadHandler }: DashboardProps) {
 
       {section === 'files' && (
         <>
+          <ResumeNotice />
           {(stats.files > 0 || filtered || files.length > 0) && (
             <FilterBar
               type={type}
@@ -733,6 +834,9 @@ function Dashboard({ boot, registerUploadHandler }: DashboardProps) {
               counts={counts}
               onUrl={boot.urlFetch ? () => setUrlOpen(true) : undefined}
               onText={boot.options.texts ? () => setTextOpen(true) : undefined}
+              onFolder={pickFolder}
+              duplicates={stats.duplicates || 0}
+              onDuplicates={() => setDuplicatesOpen(true)}
               onOptions={() => setOptionsOpen(true)}
               optionsActive={prefsActive(prefs)}
               tags={tags}
@@ -796,6 +900,9 @@ function Dashboard({ boot, registerUploadHandler }: DashboardProps) {
         onAlbum={boot.options.albums ? (file) => setAlbumPicker([file.id]) : undefined}
         onStats={boot.options.stats ? openStats : undefined}
         onImageEdit={menu && canEditImage(menu.file) ? (file) => setImageEdit(file) : undefined}
+        onClip={menu && boot.options.clips && menu.file.type === 'video' ? (file) => setClipFile(file) : undefined}
+        onVersions={(file) => setVersionsFile(file)}
+        onWarning={toggleWarning}
         trash={trashOn}
       />
 
@@ -812,8 +919,52 @@ function Dashboard({ boot, registerUploadHandler }: DashboardProps) {
         statsEnabled={boot.options.stats}
         canEdit={canEditImage}
         onImageEdit={(file) => setImageEdit(file)}
+        onVersions={(file) => setVersionsFile(file)}
+        onClip={boot.options.clips ? (file) => setClipFile(file) : undefined}
+        onWarning={toggleWarning}
         trash={trashOn}
-        paused={!!imageEdit}
+        paused={!!imageEdit || !!versionsFile || !!clipFile}
+      />
+
+      <VersionsDialog
+        file={versionsFile}
+        info={boot.options}
+        onClose={() => setVersionsFile(null)}
+        onChanged={(updated) => {
+          replaceFile(updated);
+          refreshStats();
+        }}
+      />
+
+      <ClipDialog file={clipFile} versions={boot.options.versions} onClose={() => setClipFile(null)} onDone={clipDone} />
+
+      <DuplicatesDialog open={duplicatesOpen} onClose={() => setDuplicatesOpen(false)} onDelete={deleteFiles} />
+
+      <FolderImportDialog
+        source={folderSource}
+        onClose={() => setFolderSource(null)}
+        onDone={(created, failed) => {
+          if (failed)
+            toast(tn(failed, '1 Datei ließ sich nicht entpacken.', '{count} Dateien ließen sich nicht entpacken.'), { variant: 'error' });
+          if (!created.length) return;
+          toast(
+            created.length === 1
+              ? t('Album „{album}“ angelegt, die Dateien werden hochgeladen', { album: created[0].title })
+              : tn(
+                  created.length,
+                  '1 Album angelegt, die Dateien werden hochgeladen',
+                  '{count} Alben angelegt, die Dateien werden hochgeladen'
+                ),
+            {
+              variant: 'success',
+              duration: 8000,
+              action: {
+                label: created.length === 1 ? t('Öffnen') : t('Alben'),
+                onClick: () => goSection('albums', created.length === 1 ? created[0].id : null),
+              },
+            }
+          );
+        }}
       />
 
       <ImageEditor
@@ -821,7 +972,7 @@ function Dashboard({ boot, registerUploadHandler }: DashboardProps) {
         onClose={() => setImageEdit(null)}
         onSaveCopy={(file) => enqueue([file])}
         onReplaced={(updated) => {
-          setFiles((prev) => prev.map((file) => (file.id === updated.id ? updated : file)));
+          replaceFile(updated);
           refreshStats();
           toast(t('Bild gespeichert'), { variant: 'success' });
         }}
@@ -913,14 +1064,22 @@ function Dashboard({ boot, registerUploadHandler }: DashboardProps) {
 
 export function DashboardPage() {
   const boot = readBoot<DashboardBoot>();
-  const handler = useRef<(names: string[]) => void>(() => {});
-  const registerUploadHandler = useCallback((fn: (names: string[]) => void) => {
-    handler.current = fn;
+  const routes = useRef<UploadRoutes>({ uploaded: () => {}, folders: () => {}, archive: () => {} });
+  const registerRoutes = useCallback((next: UploadRoutes) => {
+    routes.current = next;
   }, []);
   return (
     <ConfirmProvider>
-      <UploadProvider maxBytes={boot.maxUploadBytes} onUploaded={(names) => handler.current(names)}>
-        <Dashboard boot={boot} registerUploadHandler={registerUploadHandler} />
+      <UploadProvider
+        maxBytes={boot.maxUploadBytes}
+        chunked={boot.options.chunked}
+        chunkSize={boot.options.chunkSize}
+        albums={boot.options.albums}
+        onUploaded={(names, results) => routes.current.uploaded(names, results)}
+        onFolders={(contents) => routes.current.folders(contents)}
+        onArchive={(file) => routes.current.archive(file)}
+      >
+        <Dashboard boot={boot} registerRoutes={registerRoutes} />
       </UploadProvider>
     </ConfirmProvider>
   );

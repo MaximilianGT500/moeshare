@@ -11,6 +11,7 @@ import { LockedScreen } from '../../components/LockedScreen';
 import { waveformKeyframes } from '../../components/Waveform';
 import { ImageZoom, labelOf, useSchemeSync, type ViewModel } from './parts';
 import { LAYOUTS } from './layouts';
+import { WarningGate } from './WarningGate';
 
 export function ViewPage() {
   const boot = readBoot<ViewBoot>();
@@ -33,6 +34,7 @@ function DesignedView({ boot }: { boot: ViewBoot }) {
   const [css, setCss] = useState(boot.css || '');
   const [loaded, setLoaded] = useState(false);
   const [zoom, setZoom] = useState<DOMRect | null>(null);
+  const [revealed, setRevealed] = useState(false);
   const setSeed = useThemeSeed();
   const syncScheme = useSchemeSync();
   const sample = useMemo(() => (boot.sample ? sampleView(boot.sampleUser || boot.site.title) : null), [boot]);
@@ -90,7 +92,11 @@ function DesignedView({ boot }: { boot: ViewBoot }) {
           '& .MuiTypography-root, & .MuiButtonBase-root, & .MuiInputBase-root, & .MuiChip-label': { fontFamily: 'inherit' },
         }}
       >
-        <Layout model={model} loaded={loaded} onLoaded={() => setLoaded(true)} zooming={!!zoom} onZoom={setZoom} />
+        {typeof file.warning === 'string' && !revealed && !preview ? (
+          <WarningGate model={model} onReveal={() => setRevealed(true)} />
+        ) : (
+          <Layout model={model} loaded={loaded} onLoaded={() => setLoaded(true)} zooming={!!zoom} onZoom={setZoom} />
+        )}
       </Box>
       <AnimatePresence>
         {zoom && file.type === 'image' && (

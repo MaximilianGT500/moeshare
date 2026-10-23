@@ -17,7 +17,7 @@ import type { ExpiryChoice, FileItem, TagCount, UploadOptionsInfo } from '../../
 import { formatDateTime } from '../../lib/format';
 import { t } from '../../lib/i18n';
 import { GrowTransition } from '../../components/transitions';
-import { ExpirySelect, ProtectionFields, TagInput } from '../../components/ShareOptions';
+import { ExpirySelect, ProtectionFields, TagInput, WarningFields } from '../../components/ShareOptions';
 import { SYNTAXES } from './TextDialog';
 import { c } from '../../theme/tokens';
 
@@ -40,6 +40,7 @@ export function EditFileDialog({
   const [protection, setProtection] = useState({ passwordEnabled: false, password: '', once: false });
   const [syntax, setSyntax] = useState('auto');
   const [listed, setListed] = useState(false);
+  const [warning, setWarning] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -51,6 +52,7 @@ export function EditFileDialog({
     setProtection({ passwordEnabled: file.password, password: '', once: Boolean(file.maxViews) });
     setSyntax(file.syntax || 'auto');
     setListed(Boolean(file.listed));
+    setWarning(typeof file.warning === 'string' ? file.warning : null);
     setError('');
   }, [file]);
 
@@ -64,6 +66,8 @@ export function EditFileDialog({
     if (protection.once !== Boolean(file.maxViews)) patch.maxViews = protection.once ? 1 : null;
     if (file.type === 'text') patch.syntax = syntax;
     if (info.profiles && listed !== Boolean(file.listed)) patch.listed = listed;
+    const nextWarning = warning === null ? null : warning.trim();
+    if (nextWarning !== (typeof file.warning === 'string' ? file.warning : null)) patch.warning = nextWarning;
     setBusy(true);
     setError('');
     try {
@@ -135,6 +139,7 @@ export function EditFileDialog({
             )}
           </Box>
           <ProtectionFields value={protection} onChange={setProtection} hasPassword={file.password} />
+          <WarningFields value={warning} onChange={setWarning} />
           {info.profiles && (
             <Box>
               <FormControlLabel

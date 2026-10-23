@@ -37,7 +37,7 @@ async function publicAlbum(req) {
 router.get('/a/:code', async (req, res) => {
   const row = await publicAlbum(req);
   if (!row) return renderMessage(res, 404, MISSING);
-  const access = albums.access(req, row);
+  const access = await albums.access(req, row);
   if (access.state === 'hidden') return renderMessage(res, 404, MISSING);
   if (access.state === 'blocked') return renderMessage(res, 451, BLOCKED, { title: 'Inhalt gesperrt' });
   if (access.state === 'locked') {
@@ -63,6 +63,7 @@ router.get('/a/:code', async (req, res) => {
     data: {
       ...view,
       owner: Boolean(access.owner),
+      dashboard: (req.user && Number(req.user.id) === Number(row.user_id)) || access.member ? `/dashboard#album=${row.id}` : null,
       design: style.design,
       css: style.css,
       report: settings.get('reports.enabled') ? { kind: 'album', target: row.code } : null,
@@ -75,7 +76,7 @@ router.get('/a/:code/zip', async (req, res) => {
   if (!settings.get('zip.enabled')) throw notFound('Der ZIP-Download ist auf diesem Server abgeschaltet.');
   const row = await publicAlbum(req);
   if (!row) throw notFound(MISSING);
-  const access = albums.access(req, row);
+  const access = await albums.access(req, row);
   if (access.state === 'hidden') throw notFound(MISSING);
   if (access.state === 'blocked') throw new HttpError(451, BLOCKED);
   if (access.state === 'locked') return res.redirect(302, `/a/${encodeURIComponent(row.code)}`);
@@ -110,6 +111,12 @@ router.get('/api/albums/:id/stats', signedIn, enabled, async (req, res) => {
   const album = await albums.get(req.user, req.params.id);
   res.json(await stats.series('a', album.id, { days: req.query.days }));
 });
+router.get('/api/albums/:id/zip', signedIn, enabled, async (req, res) => {
+  if (!settings.get('zip.enabled')) throw notFound('Der ZIP-Download ist auf diesem Server abgeschaltet.');
+  const { row, records } = await albums.archiveRecords(req.user, req.params.id);
+  if (!records.length) throw notFound('In diesem Album gibt es nichts zum Herunterladen.');
+  return zips.send(res, records, row.title);
+});
 router.post('/api/albums/:id/files', signedIn, enabled, async (req, res) =>
   res.json({ album: await albums.addFiles(req.user, req.params.id, req.body.fileIds) })
 );
@@ -119,5 +126,12 @@ router.delete('/api/albums/:id/files', signedIn, enabled, async (req, res) =>
 router.put('/api/albums/:id/order', signedIn, enabled, async (req, res) =>
   res.json({ album: await albums.reorder(req.user, req.params.id, req.body.fileIds) })
 );
+router.post('/api/albums/:id/members', signedIn, enabled, async (req, res) =>
+  res.json({ album: await albums.addMember(req.user, req.params.id, req.body.username) })
+);
+router.delete('/api/albums/:id/members/:userId', signedIn, enabled, async (req, res) =>
+  res.json({ album: await albums.removeMember(req.user, req.params.id, req.params.userId) })
+);
+router.post('/api/albums/:id/leave', signedIn, enabled, async (req, res) => res.json(await albums.leave(req.user, req.params.id)));
 
 module.exports = router;

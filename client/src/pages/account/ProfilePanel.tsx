@@ -14,8 +14,9 @@ import Typography from '@mui/material/Typography';
 import StorageRounded from '@mui/icons-material/StorageRounded';
 import InsertDriveFileRounded from '@mui/icons-material/InsertDriveFileRounded';
 import DeleteForeverRounded from '@mui/icons-material/DeleteForeverRounded';
+import DownloadRounded from '@mui/icons-material/DownloadRounded';
 import type { AccountOverview, AuditEvent } from '../../lib/types';
-import { deleteAccount, errorMessage, fetchActivity } from '../../lib/api';
+import { deleteAccount, errorMessage, exportUrl, fetchActivity, probeExport } from '../../lib/api';
 import { formatBytes } from '../../lib/format';
 import { SettingRow, SettingsSection } from '../../components/SettingsKit';
 import { QuotaMeter } from '../../components/QuotaMeter';
@@ -101,6 +102,59 @@ function DeleteAccountDialog({ open, onClose, username }: { open: boolean; onClo
   );
 }
 
+function ExportSection() {
+  const sudo = useSudo();
+  const toast = useToast();
+  const [busy, setBusy] = useState<'all' | 'data' | null>(null);
+
+  const start = async (withFiles: boolean) => {
+    setBusy(withFiles ? 'all' : 'data');
+    try {
+      await sudo(() => probeExport());
+      window.location.assign(exportUrl(withFiles));
+      toast(t('Der Download startet gleich. Bei vielen Dateien kann das etwas dauern.'), { variant: 'info', duration: 6000 });
+    } catch (failure) {
+      if (!isCancelled(failure)) toast(errorMessage(failure), { variant: 'error' });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <SettingsSection
+      id="export"
+      title={t('Deine Daten')}
+      description={t(
+        'Lade alles herunter, was MoeShare über dich gespeichert hat: Dateien, ältere Fassungen, Alben, Links und deinen Verlauf.'
+      )}
+    >
+      <SettingRow
+        icon={<DownloadRounded />}
+        label={t('Datenexport als ZIP')}
+        description={t('Die Liste der Inhalte liegt als JSON bei, damit du sie woanders weiterverwenden kannst.')}
+      >
+        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+          <Button
+            variant="tonal"
+            onClick={() => start(true)}
+            disabled={!!busy}
+            startIcon={busy === 'all' ? <CircularProgress size={16} color="inherit" /> : <DownloadRounded />}
+          >
+            {t('Mit allen Dateien')}
+          </Button>
+          <Button
+            onClick={() => start(false)}
+            disabled={!!busy}
+            startIcon={busy === 'data' ? <CircularProgress size={16} color="inherit" /> : null}
+          >
+            {t('Nur die Angaben')}
+          </Button>
+        </Box>
+      </SettingRow>
+    </SettingsSection>
+  );
+}
+
 export function ProfilePanel({ account }: { account: AccountOverview }) {
   const toast = useToast();
   const [events, setEvents] = useState<AuditEvent[]>(account.activity);
@@ -166,6 +220,8 @@ export function ProfilePanel({ account }: { account: AccountOverview }) {
           )}
         </Box>
       </SettingsSection>
+
+      {account.choices.export && <ExportSection />}
 
       <SettingsSection id="loeschen" title={t('Konto löschen')}>
         <SettingRow

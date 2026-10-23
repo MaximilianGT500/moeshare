@@ -17,7 +17,7 @@ const log = logger.scope('settings');
 const META_IMPORTED = '_meta.importedAt';
 const META_REVISION = '_meta.revision';
 
-const WEBHOOK_EVENTS = ['upload', 'delete', 'user', 'security', 'processing', 'report', 'system'];
+const WEBHOOK_EVENTS = ['upload', 'delete', 'user', 'security', 'processing', 'report', 'system', 'virus', 'album', 'import'];
 const EMAIL_PATTERN = /^[^\s@<>"',;]+@[^\s@<>"',;]+\.[^\s@<>"',;]{2,}$/;
 const HOME_STATS = ['files', 'storage', 'views', 'users', 'images', 'videos', 'audio', 'today'];
 
@@ -89,6 +89,41 @@ const DEFINITIONS = {
   },
   'uploads.formats.video': { type: 'list', item: extension, max: 40, default: ['.mp4', '.webm', '.mov', '.mkv', '.avi', '.wmv'] },
   'uploads.formats.audio': { type: 'list', item: extension, max: 40, default: ['.mp3', '.wav', '.ogg', '.aac', '.flac', '.m4a', '.opus'] },
+  'uploads.chunked': { type: 'bool', default: true },
+  'uploads.resumeHours': { type: 'int', min: 1, max: 168, default: 24 },
+  'uploads.deduplicate': { type: 'bool', default: true },
+  'uploads.versions': { type: 'bool', default: true },
+  'uploads.versionsKeep': { type: 'int', min: 1, max: 100, default: 10 },
+
+  'images.optimize': { type: 'bool', default: false },
+  'images.format': { type: 'enum', values: ['keep', 'webp', 'avif'], default: 'webp' },
+  'images.quality': { type: 'int', min: 40, max: 100, default: 82 },
+  'images.maxDimension': { type: 'int', min: 0, max: 30000, default: 0 },
+  'images.keepOriginal': { type: 'bool', default: false },
+  'images.watermarks': { type: 'bool', default: true },
+
+  'search.content': { type: 'bool', default: true },
+  'export.enabled': { type: 'bool', default: true },
+
+  'clamav.enabled': { type: 'bool', default: false },
+  'clamav.host': {
+    type: 'string',
+    default: '127.0.0.1',
+    max: 191,
+    pattern: /^[A-Za-z0-9.:_[\]-]+$/,
+    patternMessage: 'Bitte nur einen Hostnamen oder eine IP-Adresse eingeben, z. B. clamav oder 127.0.0.1.',
+  },
+  'clamav.port': { type: 'int', min: 1, max: 65535, default: 3310 },
+  'clamav.socket': {
+    type: 'string',
+    default: '',
+    allowEmpty: true,
+    max: 300,
+    pattern: /^(\/\S+|\\\\[.?]\\pipe\\\S+)$/,
+    patternMessage: 'Der Socket ist ein absoluter Pfad wie /run/clamav/clamd.ctl.',
+  },
+  'clamav.maxBytes': { type: 'bytes', default: 25 * 1024 * 1024 },
+  'clamav.onError': { type: 'enum', values: ['reject', 'allow'], default: 'reject' },
 
   'auth.registration': { type: 'enum', values: ['closed', 'invite', 'open'], default: 'invite' },
   'auth.sessionDays': { type: 'int', min: 1, max: 365, default: 30 },
@@ -476,6 +511,14 @@ function validatePatch(patch) {
   if (touches('webhook.enabled', 'webhook.url') && merged['webhook.enabled'] && !merged['webhook.url']) {
     fail('webhook.enabled', 'Trage zuerst eine Webhook-Adresse ein.');
   }
+  if (
+    touches('clamav.enabled', 'clamav.host', 'clamav.socket') &&
+    merged['clamav.enabled'] &&
+    !merged['clamav.host'] &&
+    !merged['clamav.socket']
+  ) {
+    fail('clamav.enabled', 'Trage zuerst ein, wo ClamAV erreichbar ist.');
+  }
   if (touches('mail.enabled', 'mail.host', 'mail.from') && merged['mail.enabled']) {
     if (!merged['mail.host']) fail('mail.enabled', 'Trage zuerst den Mailserver ein.');
     if (!merged['mail.from']) fail('mail.enabled', 'Trage zuerst eine Absenderadresse ein.');
@@ -628,6 +671,7 @@ function startSync(intervalMs = 2000) {
 }
 
 module.exports = {
+  WEBHOOK_EVENTS,
   load,
   get,
   all,

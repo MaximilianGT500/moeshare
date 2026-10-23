@@ -6,6 +6,7 @@ const db = require('../lib/db');
 const cache = require('../lib/cache');
 const { badRequest, conflict, notFound } = require('../lib/errors');
 const { ensureUserDirs } = require('../lib/storage');
+const passwords = require('../lib/passwords');
 const settings = require('./settingsService');
 const files = require('./fileService');
 const identities = require('./identityService');
@@ -73,8 +74,9 @@ async function verifyPassword(user, password) {
     await bcrypt.compare(password, timingHash);
     return false;
   }
-  const ok = await bcrypt.compare(password, user.password);
-  if (ok && bcrypt.getRounds(user.password) < BCRYPT_COST && Buffer.byteLength(password, 'utf8') <= 72) {
+  const ok = await passwords.verify(user.password, password);
+  const outdated = !passwords.isBcrypt(user.password) || user.password.startsWith('$2y$') || bcrypt.getRounds(user.password) < BCRYPT_COST;
+  if (ok && outdated && Buffer.byteLength(password, 'utf8') <= 72) {
     db.run('UPDATE users SET password = ? WHERE id = ?', [await hashPassword(password), user.id]).catch(() => {});
   }
   return ok;
@@ -178,7 +180,15 @@ const effectiveLimits = (user) => ({
   maxFileBytes: user.max_file_bytes || settings.get('uploads.maxFileBytes') || null,
 });
 
-const usageBytes = (username) => db.count('SELECT COALESCE(SUM(size_bytes), 0) FROM file_data WHERE username = ?', [username]);
+async function usageBytes(username) {
+  const [own, versions] = await Promise.all([
+    db.count('SELECT COALESCE(SUM(size_bytes), 0) FROM file_data WHERE username = ? AND deduped = 0', [username]),
+    db.count('SELECT COALESCE(SUM(v.size_bytes), 0) FROM file_versions v JOIN file_data f ON f.id = v.file_id WHERE f.username = ?', [
+      username,
+    ]),
+  ]);
+  return own + versions;
+}
 
 function toAdminUser(row, linked = []) {
   const limits = effectiveLimits(row);
@@ -265,6 +275,7 @@ module.exports = {
   validatePassword,
   verifyPassword,
   generatePassword,
+  hashPassword,
   create,
   setPassword,
   update,

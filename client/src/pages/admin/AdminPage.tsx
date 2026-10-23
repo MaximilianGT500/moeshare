@@ -232,6 +232,8 @@ function Admin({ boot }: { boot: AdminBoot }) {
               currentUserTotp={boot.sudo.totp}
               storage={boot.storage}
               backups={boot.backups}
+              webhooks={boot.webhooks}
+              imports={boot.imports}
               onSaved={(next) => {
                 setSettings(next);
                 if (next.values['auth.enforceMfa'] !== 'off' && !boot.sudo.totp) window.location.assign('/account?setup=mfa');

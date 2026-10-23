@@ -58,6 +58,7 @@ export const SearchField = forwardRef<HTMLInputElement, SearchFieldProps>(functi
           color: c.onSurface,
           fontSize: dense ? '0.9rem' : '1rem',
           '& input::placeholder': { color: c.onSurfaceVariant, opacity: 1 },
+          '& input::-webkit-search-cancel-button': { display: 'none' },
         }}
         slotProps={{ input: { 'aria-label': placeholder, type: 'search', enterKeyHint: 'search' } }}
       />

@@ -34,7 +34,12 @@ const emails = require('../services/emailService');
 const mail = require('../services/mailService');
 const db = require('../lib/db');
 const media = require('../lib/media');
+const passwords = require('../lib/passwords');
 const { counts: tableCounts } = require('../lib/db/transfer');
+const scans = require('../services/scanService');
+const importer = require('../services/importService');
+const jobs = require('../services/jobService');
+const redirects = require('../services/redirectService');
 
 const router = express.Router();
 const admin = requireApi({ admin: true });
@@ -63,6 +68,7 @@ const AUDIT_CATEGORIES = {
     'domain_added',
     'domain_verified',
     'domain_removed',
+    'virus_found',
   ],
   admin: [
     'user_created',
@@ -82,6 +88,8 @@ const AUDIT_CATEGORIES = {
     'content_blocked',
     'content_unblocked',
     'domain_revoked',
+    'import_finished',
+    'webhook_changed',
   ],
 };
 
@@ -144,6 +152,7 @@ router.get('/admin', requirePage({ admin: true }), async (req, res) => {
     backupState,
     openReports,
     domainItems,
+    webhookTargets,
   ] = await Promise.all([
     files.globalStats(),
     files.userStats(req.user.username),
@@ -158,6 +167,7 @@ router.get('/admin', requirePage({ admin: true }), async (req, res) => {
     backupInfo(),
     reports.openCount(),
     domainList(req),
+    webhook.list(),
   ]);
   renderPage(res, {
     page: 'admin',
@@ -181,9 +191,19 @@ router.get('/admin', requirePage({ admin: true }), async (req, res) => {
       moderation: { open: openReports, enabled: reports.enabled() },
       domains: domainItems,
       mail: { ready: mail.ready() },
+      webhooks: { targets: webhookTargets, kinds: webhook.KINDS, events: settings.WEBHOOK_EVENTS },
+      imports: importInfo(),
     },
   });
 });
+
+function importInfo() {
+  return {
+    sources: Object.values(importer.IMPORTERS).map(({ id, label }) => ({ id, label })),
+    argon2: passwords.argon2Supported,
+    redirects: redirects.count(),
+  };
+}
 
 router.get('/api/admin/database', admin, async (req, res) => {
   res.json(await databaseInfo());
@@ -507,7 +527,7 @@ router.patch('/api/admin/settings', adminSudo, async (req, res) => {
 router.post('/api/admin/settings/webhook-test', admin, async (req, res) => {
   const url = text(req.body.url, 300).trim();
   if (url) settings.validatePatch({ 'webhook.url': url });
-  const problem = await webhook.test(url || undefined);
+  const problem = await webhook.testDiscordUrl(url || settings.get('webhook.url'));
   if (problem) throw badRequest(problem);
   res.json({ ok: true });
 });
@@ -522,6 +542,87 @@ router.post('/api/admin/settings/mail-test', admin, async (req, res) => {
   } catch (error) {
     throw badRequest(tr(req, 'Der Versand ist fehlgeschlagen: {reason}', { reason: tr(req, error.message) }));
   }
+});
+
+router.get('/api/admin/webhooks', admin, async (req, res) => {
+  res.json({ targets: await webhook.list() });
+});
+
+router.post('/api/admin/webhooks', adminSudo, async (req, res) => {
+  const target = await webhook.create(req.body || {});
+  audit.log('webhook_changed', {
+    userId: null,
+    actorId: req.user.id,
+    req,
+    details: { name: target.name, kind: target.kind, change: 'created' },
+  });
+  res.json({ ok: true, target, targets: await webhook.list() });
+});
+
+router.patch('/api/admin/webhooks/:id', adminSudo, async (req, res) => {
+  const target = await webhook.update(req.params.id, req.body || {});
+  audit.log('webhook_changed', {
+    userId: null,
+    actorId: req.user.id,
+    req,
+    details: { name: target.name, kind: target.kind, change: 'updated' },
+  });
+  res.json({ ok: true, target, targets: await webhook.list() });
+});
+
+router.delete('/api/admin/webhooks/:id', adminSudo, async (req, res) => {
+  await webhook.remove(req.params.id);
+  audit.log('webhook_changed', { userId: null, actorId: req.user.id, req, details: { change: 'removed' } });
+  res.json({ ok: true, targets: await webhook.list() });
+});
+
+router.post('/api/admin/webhooks/test', admin, async (req, res) => {
+  const failure = await webhook.test(null, req.body || {});
+  if (failure) throw badRequest(tr(req, failure.message));
+  res.json({ ok: true });
+});
+
+router.post('/api/admin/webhooks/:id/test', admin, async (req, res) => {
+  const body = req.body && Object.keys(req.body).length ? req.body : null;
+  const failure = await webhook.test(req.params.id, body);
+  if (failure) throw badRequest(tr(req, failure.message));
+  res.json({ ok: true, targets: await webhook.list() });
+});
+
+router.post('/api/admin/clamav/test', admin, async (req, res) => {
+  const body = req.body || {};
+  const patch = {};
+  for (const key of ['host', 'port', 'socket']) if (body[key] !== undefined && body[key] !== '') patch[`clamav.${key}`] = body[key];
+  const valid = settings.validatePatch(patch);
+  try {
+    res.json(
+      await scans.test({
+        host: valid['clamav.host'],
+        port: valid['clamav.port'],
+        socket: body.socket === '' ? '' : valid['clamav.socket'],
+      })
+    );
+  } catch (error) {
+    throw badRequest(
+      tr(req, 'ClamAV ist nicht erreichbar: {reason}', {
+        reason: error.code === 'ETIMEDOUT' ? tr(req, 'Zeitüberschreitung') : tr(req, error.message),
+      })
+    );
+  }
+});
+
+router.post('/api/admin/import/preview', adminSudo, async (req, res) => {
+  res.json({ ok: true, preview: await importer.preview(req.body || {}) });
+});
+
+router.post('/api/admin/import', adminSudo, async (req, res) => {
+  res.status(202).json({ ok: true, job: importer.start(req.user, req.body || {}) });
+});
+
+router.get('/api/admin/jobs/:id', admin, async (req, res) => {
+  const job = await jobs.get(req.user, req.params.id, { admin: true });
+  if (job.error) job.error = { ...job.error, message: tr(req, job.error.message) };
+  res.json({ job });
 });
 
 router.get('/api/admin/audit', admin, async (req, res) => {
