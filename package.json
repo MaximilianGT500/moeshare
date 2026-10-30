@@ -25,7 +25,7 @@
     "express-rate-limit": "^8.7.1",
     "helmet": "^8.3.0",
     "mime-types": "^3.0.2",
-    "multer": "^2.4.0",
+    "multer": "^2.5.0",
     "mysql2": "^3.24.6",
     "nodemailer": "^10.2.0",
     "pg": "^8.23.1",
