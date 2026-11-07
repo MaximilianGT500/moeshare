@@ -290,9 +290,8 @@ function CaddyfileTool({ onLoaded }: { onLoaded: () => void }) {
           maxRows={24}
           fullWidth
           aria-label={t('Caddyfile')}
-          slotProps={{
-            htmlInput: { spellCheck: false, style: { fontFamily: fonts.mono, fontSize: '0.8125rem', lineHeight: 1.6, tabSize: 4 } },
-          }}
+          slotProps={{ htmlInput: { spellCheck: false } }}
+          sx={{ '& textarea': { fontFamily: fonts.mono, fontSize: { xs: '1rem', sm: '0.8125rem' }, lineHeight: 1.6, tabSize: 4 } }}
         />
         {result && (
           <Alert severity={result.ok ? (result.warnings.length ? 'warning' : 'success') : 'error'}>
@@ -644,7 +643,7 @@ export function CaddyPanel({ settings, onSettings }: { settings: SettingsPayload
       </SettingsSection>
 
       {overview?.connected && summary && (
-        <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', lg: '1fr 1fr' } }}>
+        <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: 'minmax(0, 1fr)', lg: 'repeat(2, minmax(0, 1fr))' } }}>
           <Card icon={<RouteRounded />} title={t('Seiten in Caddy')}>
             {summary.sites.length ? (
               summary.sites.map((site, index) => (

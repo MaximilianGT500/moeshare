@@ -390,6 +390,10 @@ export function FilesPanel({
               load(0, next);
             }}
             labelRowsPerPage={t('Pro Seite')}
+            sx={{
+              '& .MuiTablePagination-selectLabel': { display: { xs: 'none', sm: 'block' } },
+              '& .MuiTablePagination-input': { display: { xs: 'none', sm: 'inline-flex' } },
+            }}
             labelDisplayedRows={({ from, to, count }) =>
               t('{from}–{to} von {count}', { from: formatNumber(from), to: formatNumber(to), count: formatNumber(count) })
             }

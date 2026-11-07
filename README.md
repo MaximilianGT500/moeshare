@@ -1,5 +1,5 @@
 <div align="center">
-  <a href="https://moeshare.eu"><img height="128" alt="MoeShare" src="public/icons/icon-512.png"></a>
+  <a href="https://moeshare.moestudio.net"><img height="128" alt="MoeShare" src="public/icons/icon-512.png"></a>
   <h1>MoeShare</h1>
   <p>Dein eigener Uploader für ShareX: Dateien hochladen, schön teilen und alles im Browser verwalten.</p>
 
@@ -19,7 +19,7 @@
 
 MoeShare nimmt Bilder, Videos, Audio, Texte und beliebige Dateien von ShareX, aus dem Browser oder per Link entgegen und macht daraus Links mit schöner Vorschau, auch in Discord. Dazu kürzt es lange Adressen und sammelt Dateien in Alben, die du auch mit anderen Konten teilen kannst. Jede Person gestaltet ihre Vorschauseiten selbst und kann eine eigene Domain verbinden. Eingerichtet wird alles im Browser: Beim ersten Start führt dich ein Assistent durch Datenbank, Admin-Konto und Einstellungen, eine `.env` brauchst du nicht. Wer von Zipline, XBackBone oder Chibisafe kommt, nimmt Konten, Dateien und alte Links mit.
 
-Mehr zum Projekt, Screenshots und eine Kurzanleitung gibt es auf [moeshare.eu](https://moeshare.eu). Was sich in jeder Version geändert hat, steht im [Changelog](https://moeshare.eu/changelog.html).
+Mehr zum Projekt, Screenshots und eine Kurzanleitung gibt es auf [moeshare.moestudio.net](https://moeshare.moestudio.net). Was sich in jeder Version geändert hat, steht im [Changelog](https://moeshare.moestudio.net/changelog.html).
 
 Offizielle Instance: [v3.moeshare.eu](https://v3.moeshare.eu).
 
@@ -69,6 +69,7 @@ Offizielle Instance: [v3.moeshare.eu](https://v3.moeshare.eu).
 - [Hinter einem Reverse-Proxy](#hinter-einem-reverse-proxy)
 - [Caddy verwalten](#caddy-verwalten)
 - [Metriken für Prometheus](#metriken-für-prometheus)
+- [Versionsprüfung](#versionsprüfung)
 - [Update von einer älteren Version](#update-von-einer-älteren-version)
 - [Datensicherung](#datensicherung)
 - [Kommandozeile](#kommandozeile)
@@ -145,13 +146,13 @@ Am schnellsten geht es mit dem [Installationsskript](#mit-dem-installationsskrip
 Auf einem Linux-Server mit Debian, Ubuntu, Fedora, Rocky, Alma, openSUSE, Arch oder Alpine richtet ein Skript alles ein: Docker oder Node.js, die Dateien von MoeShare, eine `.env` mit zufälligen Passwörtern für die Datenbank, Caddy für HTTPS und, ohne Docker, einen systemd-Dienst mit eigenem Benutzer.
 
 ```bash
-curl -fsSL https://moeshare.eu/install.sh | sudo bash
+curl -fsSL https://moeshare.moestudio.net/install.sh | sudo bash
 ```
 
 Das Skript fragt nach Installationsart, Domain und Datenbank und zeigt am Ende den Link zum Einrichtungsassistenten. Ohne Rückfragen geht es mit Optionen:
 
 ```bash
-curl -fsSL https://moeshare.eu/install.sh | sudo bash -s -- --docker --domain share.example.com --email du@example.com --db postgres -y
+curl -fsSL https://moeshare.moestudio.net/install.sh | sudo bash -s -- --docker --domain share.example.com --email du@example.com --db postgres -y
 ```
 
 | Option | Bedeutung |
@@ -168,7 +169,7 @@ curl -fsSL https://moeshare.eu/install.sh | sudo bash -s -- --docker --domain sh
 | `--no-start` | alles vorbereiten, aber nicht starten |
 | `-y` | keine Fragen, Standardwerte nehmen |
 
-Mit Domain bindet das Skript MoeShare nur an `127.0.0.1`, erreichbar ist es dann ausschließlich über Caddy. Ein Update holst du mit `curl -fsSL https://moeshare.eu/install.sh | sudo bash -s -- --update`. Das Skript liegt auch im Repository als [`install.sh`](install.sh), wer es vorher lesen möchte, lädt es erst herunter und startet es dann mit `sudo bash install.sh`.
+Mit Domain bindet das Skript MoeShare nur an `127.0.0.1`, erreichbar ist es dann ausschließlich über Caddy. Ein Update holst du mit `curl -fsSL https://moeshare.moestudio.net/install.sh | sudo bash -s -- --update`. Das Skript liegt auch im Repository als [`install.sh`](install.sh), wer es vorher lesen möchte, lädt es erst herunter und startet es dann mit `sudo bash install.sh`.
 
 ### Mit Docker
 
@@ -628,6 +629,7 @@ Umgebungsvariablen sind nur noch optional. Du kannst sie als `.env` im Projektor
 | `NO_COLOR` / `FORCE_COLOR` | | Farben im Log abschalten oder erzwingen. Ohne Angabe gibt es Farben nur im Terminal. |
 | `TZ` | Systemzeit | Zeitzone für die Zeitstempel im Log, etwa `Europe/Berlin` |
 | `GLITCHTIP_DSN` | Projekt-GlitchTip | Ziel für Fehlerberichte, siehe [Protokoll und Fehlerberichte](#protokoll-und-fehlerberichte). `off` schaltet sie ganz ab. |
+| `UPDATE_CHECK_URL` | `https://moeshare.moestudio.net/version.json` | Woher die [Versionsprüfung](#versionsprüfung) die neueste Version holt. `off` schaltet sie fest ab. |
 | `URL_FETCH_ALLOW_PRIVATE` | `false` | „Hochladen per Link“ darf auch Adressen im internen Netz abrufen. Nur im eigenen Netz einschalten. |
 | `DNS_SERVERS` | DNS des Systems | DNS-Server für die Prüfung [eigener Domains](#eigene-domains), durch Kommas getrennt, etwa `1.1.1.1,9.9.9.9` |
 | `PUID` / `PGID` | `1000` | Nur Docker: Benutzer und Gruppe, denen `db/` und `uploads/` gehören |
@@ -699,7 +701,7 @@ Impressum und Datenschutzerklärung trägst du unter **Admin › Einstellungen �
 
 Der Name aus **Admin › Einstellungen › Allgemein** steht überall, wo sonst MoeShare stünde: in Seitentiteln, E-Mails, Benachrichtigungen, Dateinamen von Sicherungen und Exporten, ShareX-Konfigurationen und in den DNS-Einträgen für eigene Domains. Aus „Bilder Kiste“ wird dort `bilder-kiste`, der TXT-Eintrag heißt dann `_bilder-kiste.domain` mit dem Wert `bilder-kiste-verify=…`. Einträge mit `_moeshare` aus älteren Versionen erkennt MoeShare weiter. Webhooks schicken ihre Header als `X-Webhook-Event` und `X-Webhook-Signature`, bestehende Ziele zusätzlich noch die alten `X-MoeShare-…`, bis du das in der Liste abschaltest.
 
-Ohne eigenes Logo zeigt MoeShare sein Symbol als Favicon, im Menü und als App-Symbol. Unter **Admin › Einstellungen › Allgemein › Versionshinweise** schaltest du „Läuft mit MoeShare“ und die öffentliche Versionsnummer ab, dann sehen sie nur Admins unter **Admin › System**. Einmal am Tag fragt der Server bei GitHub nach der neuesten Version und zeigt Admins einen Hinweis mit Link zum Changelog. Das schaltest du unter **Einstellungen › System › Auf neue Versionen hinweisen** ab.
+Ohne eigenes Logo zeigt MoeShare sein Symbol als Favicon, im Menü und als App-Symbol. Unter **Admin › Einstellungen › Allgemein › Versionshinweise** schaltest du „Läuft mit MoeShare“ und die öffentliche Versionsnummer ab, dann sehen sie nur Admins unter **Admin › System**. Ob es eine neue Version gibt, sagt dir die [Versionsprüfung](#versionsprüfung).
 
 ## Ankündigungen und Wartungsmodus
 
@@ -842,9 +844,30 @@ scrape_configs:
 
 Ohne Token antwortet `/metrics` mit 401, abgeschaltet gar nicht.
 
+## Versionsprüfung
+
+Einmal am Tag fragt MoeShare unter `https://moeshare.moestudio.net/version.json` nach, ob es eine neue Version gibt. Abgerufen wird nur diese Datei, ohne Angaben über deinen Server, seinen Namen oder die installierte Version. Gibt es eine neue Version, sehen Admins einen Hinweis im Dashboard und im Admin-Bereich. Einmal pro Version feuern außerdem die [Benachrichtigungen](#benachrichtigungen) für Systemmeldungen, und Admins, die Systemmeldungen per E-Mail bekommen, erhalten eine Nachricht. Sicherheitsupdates sind als solche markiert.
+
+Unter **Admin › System › Updates** stehen die installierte und die neueste Version mit den wichtigsten Neuerungen, wann zuletzt geprüft wurde und der passende Befehl zum Aktualisieren, je nachdem, ob MoeShare mit Docker, dem Installationsskript oder Git läuft. „Jetzt prüfen“ fragt sofort nach. Auf der Kommandozeile zeigt `node cli.js version` dasselbe.
+
+Abschalten lässt sich die Prüfung dort oder unter **Admin › Einstellungen › System › Nach neuen Versionen suchen**, danach stellt MoeShare keine Anfrage mehr. Mit `UPDATE_CHECK_URL=off` ist sie fest aus. Mit einer eigenen Adresse fragt MoeShare dort nach, etwa für einen Fork. Die Datei sieht so aus, Pflicht ist nur `version`:
+
+```json
+{
+  "version": "3.4.1",
+  "date": "2026-11-07",
+  "changelog": "https://moeshare.moestudio.net/changelog.html#v3.4.1",
+  "security": false,
+  "notes": {
+    "de": ["Versionsprüfung mit Hinweis im Dashboard"],
+    "en": ["Version check with a notice in the dashboard"]
+  }
+}
+```
+
 ## Update von einer älteren Version
 
-Was neu ist und worauf du beim Update achten musst, steht im [Changelog](https://moeshare.eu/changelog.html).
+Was neu ist und worauf du beim Update achten musst, steht im [Changelog](https://moeshare.moestudio.net/changelog.html).
 
 1. MoeShare stoppen und eine Sicherung von `db/` und `uploads/` anlegen. Wer schon Version 3 nutzt, nimmt dafür `node cli.js backup --uploads`.
 2. Den neuen Stand holen (`git pull` oder `docker compose pull`).
@@ -853,7 +876,7 @@ Was neu ist und worauf du beim Update achten musst, steht im [Changelog](https:/
 
 Beim ersten Start sichert MoeShare die Datenbank automatisch nach `db/backups/` und bringt sie auf den neuen Stand. Bestehende Discord-Verknüpfungen bleiben dabei erhalten. Werte aus einer alten `.env` (zum Beispiel `SITE_TITLE` oder `MAX_FILE_SIZE_MB`) werden einmalig übernommen, danach meldet das Log, welche Variablen du entfernen kannst. Bisherige ShareX-Tokens funktionieren weiter. Für Konten aus älteren Versionen ist zunächst auch die Anmeldung mit dem Token möglich, damit sich alle ein Passwort setzen können. Unter **Admin › Einstellungen › Anmeldung** schaltest du das ab.
 
-Beim Update auf 3.4 legt MoeShare die Tabellen für Datei-Anfragen, Ankündigungen, Untertitel und Zertifikate an. Eigene Domains brauchen ab jetzt ein [Impressum und eine Datenschutzerklärung](#impressum-und-datenschutz-für-eigene-domains), Domains, die schon verbunden sind, haben dafür 14 Tage Zeit und laufen so lange weiter. TXT-Einträge mit `_moeshare` gelten weiter, auch wenn deine Instanz anders heißt. Eigene Webhooks bekommen die Header `X-Webhook-Event` und `X-Webhook-Signature` und bis zum Abschalten zusätzlich die alten `X-MoeShare-…`. Zeigte das Logo auf das Logo von moeshare.eu, nutzt MoeShare jetzt sein eingebautes Symbol. Für Videos aus älteren Versionen startest du unter **Admin › System › Videos** „Alle Videos prüfen“ oder `node cli.js videos`. Wer eine eigene Caddyfile nutzt, gibt für **Admin › Caddy** die Admin-API frei, siehe [Caddy verwalten](#caddy-verwalten).
+Beim Update auf 3.4 legt MoeShare die Tabellen für Datei-Anfragen, Ankündigungen, Untertitel und Zertifikate an. Eigene Domains brauchen ab jetzt ein [Impressum und eine Datenschutzerklärung](#impressum-und-datenschutz-für-eigene-domains), Domains, die schon verbunden sind, haben dafür 14 Tage Zeit und laufen so lange weiter. TXT-Einträge mit `_moeshare` gelten weiter, auch wenn deine Instanz anders heißt. Eigene Webhooks bekommen die Header `X-Webhook-Event` und `X-Webhook-Signature` und bis zum Abschalten zusätzlich die alten `X-MoeShare-…`. Zeigte das Logo auf das alte Logo von moeshare.eu, nutzt MoeShare jetzt sein eingebautes Symbol. Für Videos aus älteren Versionen startest du unter **Admin › System › Videos** „Alle Videos prüfen“ oder `node cli.js videos`. Wer eine eigene Caddyfile nutzt, gibt für **Admin › Caddy** die Admin-API frei, siehe [Caddy verwalten](#caddy-verwalten). Ab 3.4.1 fragt die [Versionsprüfung](#versionsprüfung) bei moeshare.moestudio.net statt bei GitHub nach, eine abgeschaltete Prüfung bleibt aus.
 
 Beim Update auf 3.3 legt MoeShare die Tabellen für Profilbilder, eigene Pfade, Einmal-Links und Integrationen an. Die Anmeldung mit Passwort bleibt eingeschaltet. Einmal-Links und der Anmeldelink per E-Mail sind danach erlaubt, unter **Admin › Einstellungen › Anmeldung** schaltest du beides ab. Benachrichtigungen, die bisher als „MoeShare“ geschrieben haben, nutzen jetzt den Namen deiner Instanz.
 
@@ -898,6 +921,7 @@ Wer lieber selbst sichert, nimmt diese Ordner mit:
 | `node cli.js restore <datei> [--force] [--ohne-dateien]` | Spielt eine Sicherung ein |
 | `node cli.js storage <s3\|lokal>` | Verschiebt vorhandene Dateien nach S3 oder zurück auf den Server |
 | `node cli.js videos` | Prüft vorhandene Videos: Abmessungen, Vorschaubilder und [Fassungen für alle Browser](#videos-für-alle-browser) |
+| `node cli.js version` | Zeigt die installierte Version und fragt nach, ob es eine neuere gibt, siehe [Versionsprüfung](#versionsprüfung) |
 | `node cli.js import <zipline\|xbackbone\|chibisafe> --db <adresse> --files <ordner>` | Übernimmt einen anderen Uploader, siehe [Import](#import-aus-anderen-uploadern). Mit `--probe` nur ein Probelauf, `--ohne-admins` macht niemanden zum Admin, `--waisen-ueberspringen` lässt Dateien ohne Besitzer weg, `--als <admin>` bestimmt, wem sie gehören. |
 
 Mit Docker heißen die Befehle `docker compose exec moeshare moeshare register`, `… moeshare login-link max`, `… moeshare backup` und so weiter. Sie laufen dort mit dem Benutzer, dem die Datenbank gehört. Für `copy-db` und `restore` muss MoeShare gestoppt sein, nimm dafür `docker compose run --rm moeshare moeshare …`. Legst du das erste Konto mit `register` an, ist der Installationsassistent nicht mehr nötig und die Einstellungen machst du danach im Browser.

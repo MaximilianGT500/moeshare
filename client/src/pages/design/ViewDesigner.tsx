@@ -435,7 +435,15 @@ export function ViewDesigner({ user, data }: { user: SessionUser; data: ViewDesi
             </SettingsSection>
 
             <SettingsSection title={t('Was die Seite zeigt')} description={t('Der Knopf zum Melden bleibt immer sichtbar.')}>
-              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, columnGap: 2, px: { xs: 2, sm: 3 }, py: 1.5 }}>
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'repeat(2, minmax(0, 1fr))' },
+                  columnGap: 2,
+                  px: { xs: 2, sm: 3 },
+                  py: 1.5,
+                }}
+              >
                 {data.choices.elements.map((element) => (
                   <FormControlLabel
                     key={element}
@@ -515,9 +523,9 @@ export function ViewDesigner({ user, data }: { user: SessionUser; data: ViewDesi
                         spellCheck: false,
                         maxLength: data.maxCss,
                         'aria-label': t('Eigenes CSS'),
-                        style: { fontFamily: fonts.mono, fontSize: '0.8125rem', lineHeight: 1.6 },
                       },
                     }}
+                    sx={{ '& textarea': { fontFamily: fonts.mono, fontSize: { xs: '1rem', sm: '0.8125rem' }, lineHeight: 1.6 } }}
                   />
                 </Box>
               ) : (

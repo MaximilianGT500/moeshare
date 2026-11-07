@@ -1643,10 +1643,19 @@ export function SettingsPanel({
     system: (
       <Stack spacing={4}>
         <SettingsSection title={t('Betrieb')}>
-          {toggle(
-            'system.updateCheck',
-            t('Auf neue Versionen hinweisen'),
-            t('Fragt einmal am Tag bei GitHub nach der neuesten Version und zeigt Admins einen Hinweis mit den Neuerungen.')
+          {initial.environment.updateCheck === 'off' ? (
+            <SettingRow
+              label={t('Nach neuen Versionen suchen')}
+              description={t('Abgeschaltet über die Umgebungsvariable UPDATE_CHECK_URL.')}
+            />
+          ) : (
+            toggle(
+              'system.updateCheck',
+              t('Nach neuen Versionen suchen'),
+              t(
+                'Fragt einmal am Tag nach, ob es eine neue Version gibt, ohne Angaben über deinen Server. Admins sehen neue Versionen im Dashboard und unter System, dort steht auch der Befehl zum Aktualisieren.'
+              )
+            )
           )}
           {toggle(
             'system.trustProxy',
@@ -1756,7 +1765,7 @@ export function SettingsPanel({
     <Box
       sx={{
         display: 'grid',
-        gridTemplateColumns: { xs: '1fr', md: '220px minmax(0, 1fr)' },
+        gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: '220px minmax(0, 1fr)' },
         gap: { xs: 2, md: 4 },
         alignItems: 'start',
         pb: 10,

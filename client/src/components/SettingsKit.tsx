@@ -24,8 +24,8 @@ export function SettingsSection({
 }) {
   return (
     <Box component="section" id={id} aria-labelledby={id ? `${id}-title` : undefined} sx={{ scrollMarginTop: 96 }}>
-      <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: 2, mb: 1.5, px: { xs: 0.5, sm: 1 } }}>
-        <Box sx={{ flex: 1, minWidth: 0 }}>
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', columnGap: 2, rowGap: 1, mb: 1.5, px: { xs: 0.5, sm: 1 } }}>
+        <Box sx={{ flex: description && action ? '1 1 260px' : '1 1 auto', minWidth: 0 }}>
           <Typography id={id ? `${id}-title` : undefined} variant="h6" component="h2">
             {title}
           </Typography>

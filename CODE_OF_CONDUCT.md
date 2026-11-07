@@ -1,5 +1,5 @@
 <div align="center">
-  <h1><a href="https://github.com/MaximilianGT500/moeshare" target="_blank"><img height="300" alt="LOGO" src="https://moeshare.eu/assets/img/logo.png"></a></h1>
+  <h1><a href="https://github.com/MaximilianGT500/moeshare" target="_blank"><img height="300" alt="LOGO" src="https://moeshare.moestudio.net/assets/img/logo.png"></a></h1>
 </div>
 
 # Verhaltenskodex - MoeShare

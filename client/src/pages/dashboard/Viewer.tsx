@@ -115,7 +115,7 @@ function useViewport() {
 
 function DetailRow({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <Box sx={{ display: 'grid', gridTemplateColumns: '112px 1fr', gap: 1.5, py: 1 }}>
+    <Box sx={{ display: 'grid', gridTemplateColumns: '112px minmax(0, 1fr)', gap: 1.5, py: 1 }}>
       <Typography variant="body2" sx={{ color: 'text.secondary' }}>
         {label}
       </Typography>
@@ -550,7 +550,6 @@ export function Viewer({
               {t('Link kopieren')}
             </CopyTextButton>
           )}
-          {phone && <CopyIconButton value={file.urls.view} sx={glassButton} />}
           <Tooltip title={t('Teilen')}>
             <IconButton
               aria-label={t('Teilen')}
@@ -580,12 +579,14 @@ export function Viewer({
               </IconButton>
             </Tooltip>
           )}
-          <Tooltip title={trash ? t('In den Papierkorb (Entf)') : t('Löschen')}>
-            <IconButton aria-label={trash ? t('In den Papierkorb') : t('Löschen')} onClick={() => onDelete(file)} sx={glassButton}>
-              <DeleteOutlineRounded />
-            </IconButton>
-          </Tooltip>
-          {(onVersions || onWarning || ((onClip || onSubtitles) && file.type === 'video')) && (
+          {!phone && (
+            <Tooltip title={trash ? t('In den Papierkorb (Entf)') : t('Löschen')}>
+              <IconButton aria-label={trash ? t('In den Papierkorb') : t('Löschen')} onClick={() => onDelete(file)} sx={glassButton}>
+                <DeleteOutlineRounded />
+              </IconButton>
+            </Tooltip>
+          )}
+          {(phone || onVersions || onWarning || ((onClip || onSubtitles) && file.type === 'video')) && (
             <Tooltip title={t('Mehr')}>
               <IconButton
                 aria-label={t('Weitere Aktionen')}
@@ -675,6 +676,19 @@ export function Viewer({
                 <WarningAmberRounded />
               </ListItemIcon>
               {typeof file.warning === 'string' ? t('Inhaltswarnung entfernen') : t('Inhaltswarnung setzen')}
+            </MenuItem>
+          )}
+          {phone && (
+            <MenuItem
+              onClick={() => {
+                setMoreAnchor(null);
+                onDelete(file);
+              }}
+            >
+              <ListItemIcon>
+                <DeleteOutlineRounded />
+              </ListItemIcon>
+              {trash ? t('In den Papierkorb') : t('Löschen')}
             </MenuItem>
           )}
         </Menu>

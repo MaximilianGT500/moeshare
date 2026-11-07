@@ -310,7 +310,13 @@ export function InvitesPanel({
           </Typography>
         </Box>
       ) : (
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr', xl: '1fr 1fr 1fr' }, gap: 1.5 }}>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'repeat(2, minmax(0, 1fr))', xl: 'repeat(3, minmax(0, 1fr))' },
+            gap: 1.5,
+          }}
+        >
           <AnimatePresence initial={false}>
             {[...invites].sort(byRelevance).map((invite, index) => {
               const active = invite.state === 'active';

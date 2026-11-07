@@ -64,6 +64,26 @@ function glitchtipTarget() {
 
 const glitchtip = glitchtipTarget();
 
+const UPDATE_SOURCE = 'https://moeshare.moestudio.net/version.json';
+
+function updateSource() {
+  const value = String(env.UPDATE_CHECK_URL || '').trim();
+  if (!value) return { url: UPDATE_SOURCE, custom: false, problem: null };
+  if (DISABLED.includes(value.toLowerCase())) return { url: null, custom: false, problem: null };
+  if (/^https?:\/\/\S+$/i.test(value)) return { url: value, custom: value !== UPDATE_SOURCE, problem: null };
+  return { url: UPDATE_SOURCE, custom: false, problem: `UPDATE_CHECK_URL=${value} ist keine Adresse, verwendet wird ${UPDATE_SOURCE}.` };
+}
+
+const updateCheck = updateSource();
+
+function installKind() {
+  const value = String(env.MOESHARE_INSTALL || '')
+    .trim()
+    .toLowerCase();
+  if (['docker', 'script'].includes(value)) return value;
+  return fs.existsSync(path.join(root, '.git')) ? 'git' : 'other';
+}
+
 const DATABASE_FILE = path.join(root, 'db', 'database.json');
 const DEFAULT_DATABASE = path.join(root, 'db', 'datenbank.sqlite');
 
@@ -101,6 +121,8 @@ function githubRepository(url) {
 module.exports = {
   version: pkg.version,
   repository: githubRepository(pkg.repository && pkg.repository.url),
+  updateCheck: { url: updateCheck.url, custom: updateCheck.custom },
+  install: installKind(),
   port: Number.parseInt(env.PORT, 10) || 3000,
   devServer: (env.UI_DEV_SERVER || '').replace(/\/+$/, ''),
   allowPrivateFetch: env.URL_FETCH_ALLOW_PRIVATE === 'true',
@@ -117,7 +139,7 @@ module.exports = {
     level: logLevel.value,
     format: logFormat.value,
     color: colorPreference(),
-    problems: [logLevel.invalid, logFormat.invalid, glitchtip.problem].filter(Boolean),
+    problems: [logLevel.invalid, logFormat.invalid, glitchtip.problem, updateCheck.problem].filter(Boolean),
   },
   discord: {
     api: (env.DISCORD_API_BASE || 'https://discord.com/api').replace(/\/+$/, ''),

@@ -33,7 +33,13 @@ import { DomainLegalDialog } from './DomainLegalDialog';
 function RecordLine({ label, value }: { label: string; value: string }) {
   return (
     <Box
-      sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '96px 1fr auto' }, alignItems: 'center', columnGap: 1.5, rowGap: 0.25 }}
+      sx={{
+        display: 'grid',
+        gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: '96px minmax(0, 1fr) auto' },
+        alignItems: 'center',
+        columnGap: 1.5,
+        rowGap: 0.25,
+      }}
     >
       <Typography variant="caption" sx={{ color: 'text.secondary' }}>
         {label}

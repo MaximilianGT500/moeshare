@@ -127,7 +127,13 @@ const settingsPayload = (req) => ({
     })
   ),
   redirectUris: oauth.redirectUris(),
-  environment: { port: config.port, logLevel: logger.level, logFormat: logger.format, errorReports: errorReports.destination() },
+  environment: {
+    port: config.port,
+    logLevel: logger.level,
+    logFormat: logger.format,
+    errorReports: errorReports.destination(),
+    updateCheck: config.updateCheck.url ? (config.updateCheck.custom ? 'custom' : 'default') : 'off',
+  },
 });
 
 async function databaseInfo() {
@@ -219,7 +225,7 @@ router.get('/admin', requirePage({ admin: true }), async (req, res) => {
       webhooks: { targets: webhookTargets, kinds: webhook.KINDS, events: settings.WEBHOOK_EVENTS },
       imports: importInfo(),
       access: { pending: pendingLinks, enabled: links.enabled(), passwordLogin: settings.get('auth.passwordLogin') },
-      update: updates.info(),
+      update: await updates.info(),
       announcements: await announcementService.list(),
       videos: { running: videoService.running(), ffmpeg: media.ffmpegAvailable },
     },
@@ -419,13 +425,12 @@ router.post('/api/admin/metrics/token', adminSudo, async (req, res) => {
   res.json({ token, url: `${settings.get('site.baseUrl')}/metrics`, ...settings.forAdmin() });
 });
 
-router.get('/api/admin/update', admin, (req, res) => {
-  res.json(updates.info());
+router.get('/api/admin/update', admin, async (req, res) => {
+  res.json(await updates.info());
 });
 
 router.post('/api/admin/update/check', admin, async (req, res) => {
-  await updates.check();
-  res.json(updates.info());
+  res.json(await updates.check());
 });
 
 router.get('/api/admin/videos', admin, async (req, res) => {

@@ -186,7 +186,7 @@ export function SubtitlesDialog({ file, onClose }: { file: FileItem | null; onCl
               <Typography variant="body2" sx={{ fontWeight: 600, wordBreak: 'break-all' }}>
                 {picked.name}
               </Typography>
-              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'repeat(2, minmax(0, 1fr))' }, gap: 2 }}>
                 <TextField select size="small" label={t('Sprache')} value={language} onChange={(event) => setLanguage(event.target.value)}>
                   {LANGUAGES.map(([code, name]) => (
                     <MenuItem key={code} value={code}>

@@ -936,7 +936,13 @@ function AlbumDetail({
           </Typography>
         </Box>
       ) : (
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(auto-fill, minmax(160px, 1fr))' }, gap: 1.5 }}>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', sm: 'repeat(auto-fill, minmax(160px, 1fr))' },
+            gap: 1.5,
+          }}
+        >
           {items.map((file, index) => (
             <AlbumThumb
               key={file.id}
@@ -1052,13 +1058,20 @@ export function AlbumsView({
           </Button>
         </Box>
       ) : (
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(auto-fill, minmax(220px, 1fr))' }, gap: 2 }}>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', sm: 'repeat(auto-fill, minmax(220px, 1fr))' },
+            gap: 2,
+          }}
+        >
           {albums.map((album) => (
             <ButtonBase
               key={album.id}
               onClick={() => onOpen(album.id)}
               sx={{
                 display: 'block',
+                minWidth: 0,
                 textAlign: 'left',
                 borderRadius: `${radius.md}px`,
                 '&:hover img': { transform: 'scale(1.03)' },
@@ -1068,7 +1081,7 @@ export function AlbumsView({
               <AlbumCover album={album} />
               <Box sx={{ px: 0.5, pt: 1 }}>
                 <Typography variant="subtitle1" noWrap sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                  <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <Box component="span" sx={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {album.title}
                   </Box>
                   <Box component="span" sx={{ color: 'text.secondary', display: 'inline-flex', flexShrink: 0 }}>

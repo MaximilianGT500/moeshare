@@ -129,9 +129,17 @@ function missingPrivacy(config: LegalConfig): string[] {
 }
 
 function ModePicker({ value, onChange, kind }: { value: LegalMode; onChange: (mode: LegalMode) => void; kind: Kind }) {
+  const phone = useMediaQuery('(max-width:599.95px)', { noSsr: true });
   return (
     <Box>
-      <ToggleButtonGroup exclusive size="small" value={value} onChange={(_event, next) => next && onChange(next)} sx={{ flexWrap: 'wrap' }}>
+      <ToggleButtonGroup
+        exclusive
+        size="small"
+        value={value}
+        onChange={(_event, next) => next && onChange(next)}
+        orientation={phone ? 'vertical' : 'horizontal'}
+        fullWidth={phone}
+      >
         <ToggleButton value="template">{t('Vorlage ausfüllen')}</ToggleButton>
         <ToggleButton value="text">{t('Eigener Text')}</ToggleButton>
         <ToggleButton value="url">{t('Link zu deiner Seite')}</ToggleButton>
@@ -170,7 +178,7 @@ function Fields<T extends object>({
 }) {
   const values = data as Record<string, string | undefined>;
   return (
-    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'repeat(2, minmax(0, 1fr))' }, gap: 2 }}>
       {specs.map((field) => {
         const error = showMissing && missing.includes(field.key);
         return (
@@ -451,7 +459,7 @@ export function DomainLegalDialog({
         </Box>
       </DialogContent>
       <DialogActions sx={{ px: 3, py: 2, gap: 1, flexWrap: 'wrap' }}>
-        <Typography variant="body2" sx={{ flex: 1, minWidth: 160, color: complete ? c.success : 'text.secondary' }}>
+        <Typography variant="body2" sx={{ flex: { xs: '1 1 100%', sm: 1 }, minWidth: 160, color: complete ? c.success : 'text.secondary' }}>
           {complete ? t('Alles da, was nötig ist.') : t('Noch nicht vollständig.')}
         </Typography>
         <Button onClick={onClose} disabled={busy}>
@@ -459,7 +467,7 @@ export function DomainLegalDialog({
         </Button>
         {tab !== 'privacy' && tab !== 'preview' && (
           <Button onClick={() => setTab('privacy')} disabled={busy}>
-            {t('Weiter zum Datenschutz')}
+            {phone ? t('Weiter') : t('Weiter zum Datenschutz')}
           </Button>
         )}
         <Button

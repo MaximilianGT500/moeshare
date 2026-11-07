@@ -329,6 +329,22 @@ export function createAppTheme(seed: string) {
           root: {
             borderRadius: radius.tile,
             alignItems: 'center',
+            '@media (max-width: 599.95px)': {
+              '&:has(> .MuiAlert-action .MuiButton-root)': {
+                display: 'grid',
+                gridTemplateColumns: 'auto minmax(0, 1fr)',
+                alignItems: 'start',
+                '& > .MuiAlert-message': { gridColumn: 2 },
+                '& > .MuiAlert-action': {
+                  gridColumn: 2,
+                  margin: 0,
+                  padding: '0 0 6px',
+                  justifyContent: 'flex-start',
+                  flexWrap: 'wrap',
+                  gap: 4,
+                },
+              },
+            },
             variants: [
               {
                 props: { variant: 'standard', severity: 'error' },
@@ -352,9 +368,23 @@ export function createAppTheme(seed: string) {
       },
       MuiToggleButtonGroup: {
         styleOverrides: {
-          root: { borderRadius: radius.full },
-          firstButton: { borderTopLeftRadius: radius.full, borderBottomLeftRadius: radius.full, paddingLeft: 18 },
-          lastButton: { borderTopRightRadius: radius.full, borderBottomRightRadius: radius.full, paddingRight: 18 },
+          root: { borderRadius: radius.full, '&.MuiToggleButtonGroup-vertical': { borderRadius: radius.md } },
+          firstButton: {
+            '.MuiToggleButtonGroup-horizontal > &': {
+              borderTopLeftRadius: radius.full,
+              borderBottomLeftRadius: radius.full,
+              paddingLeft: 18,
+            },
+            '.MuiToggleButtonGroup-vertical > &': { borderTopLeftRadius: radius.md, borderTopRightRadius: radius.md },
+          },
+          lastButton: {
+            '.MuiToggleButtonGroup-horizontal > &': {
+              borderTopRightRadius: radius.full,
+              borderBottomRightRadius: radius.full,
+              paddingRight: 18,
+            },
+            '.MuiToggleButtonGroup-vertical > &': { borderBottomLeftRadius: radius.md, borderBottomRightRadius: radius.md },
+          },
         },
       },
       MuiToggleButton: {

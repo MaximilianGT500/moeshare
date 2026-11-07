@@ -160,7 +160,7 @@ function RequestDialog({
             helperText={fieldError('message') || t('Optional. Zum Beispiel, welche Dateien du brauchst.')}
             slotProps={{ htmlInput: { maxLength: 2000 } }}
           />
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'repeat(2, minmax(0, 1fr))' }, gap: 2 }}>
             <ExpirySelect
               value={expires}
               onChange={setExpires}

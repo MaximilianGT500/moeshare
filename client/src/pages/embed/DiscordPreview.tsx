@@ -154,7 +154,7 @@ export function DiscordPreview({
                     transition: 'border-color 220ms ease, background-color 240ms ease',
                     p: '8px 16px 16px 12px',
                     display: 'grid',
-                    gridTemplateColumns: !large && visualMedia ? '1fr auto' : '1fr',
+                    gridTemplateColumns: !large && visualMedia ? 'minmax(0, 1fr) auto' : 'minmax(0, 1fr)',
                     columnGap: 2,
                   }}
                 >

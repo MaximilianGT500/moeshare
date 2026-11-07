@@ -265,7 +265,14 @@ function TargetDialog({
       </DialogTitle>
       <DialogContent>
         {!draft ? (
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', sm: 'repeat(3, 1fr)' }, gap: 1.5, pt: 0.5 }}>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', sm: 'repeat(3, minmax(0, 1fr))' },
+              gap: 1.5,
+              pt: 0.5,
+            }}
+          >
             {kinds.map((kind) => (
               <ButtonBase
                 key={kind}
@@ -490,7 +497,7 @@ export function WebhookTargets({ initial, kinds, events }: { initial: WebhookTar
               key={target.id}
               sx={{
                 display: 'flex',
-                alignItems: { xs: 'flex-start', sm: 'center' },
+                alignItems: { xs: 'stretch', sm: 'center' },
                 flexDirection: { xs: 'column', sm: 'row' },
                 gap: { xs: 1, sm: 2 },
                 px: { xs: 2, sm: 3 },

@@ -145,7 +145,7 @@ export function TextDialog({
         {t('Neuer Text')}
       </DialogTitle>
       <DialogContent>
-        <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', sm: '1fr 220px' }, mt: 0.5 }}>
+        <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'minmax(0, 1fr) 220px' }, mt: 0.5 }}>
           <TextField
             label={t('Titel (optional)')}
             value={title}
@@ -192,7 +192,7 @@ export function TextDialog({
               ? t('Zu lang: höchstens {max} sind erlaubt.', { max: formatBytes(info.textMaxBytes || 0) })
               : t('{size} · Strg+Enter speichert', { size: formatBytes(bytes) }))
           }
-          sx={{ mt: 2, '& textarea': { fontFamily: fonts.mono, fontSize: '0.875rem', lineHeight: 1.55 } }}
+          sx={{ mt: 2, '& textarea': { fontFamily: fonts.mono, fontSize: { xs: '1rem', sm: '0.875rem' }, lineHeight: 1.55 } }}
           slotProps={{ htmlInput: { spellCheck: false, 'aria-label': t('Inhalt') } }}
         />
         <Button

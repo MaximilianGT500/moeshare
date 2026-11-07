@@ -532,7 +532,7 @@ export function UploadsStep({ values, set, errors, ffmpeg }: SettingsStepProps &
           </Typography>
         )}
       </Box>
-      <Box sx={{ display: 'grid', gap: 2.5, gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' } }}>
+      <Box sx={{ display: 'grid', gap: 2.5, gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'repeat(2, minmax(0, 1fr))' } }}>
         <Box>
           <Label hint={t('Pro Upload.')}>{t('Größte Datei')}</Label>
           <BytesField

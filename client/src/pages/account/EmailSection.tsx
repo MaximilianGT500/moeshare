@@ -209,7 +209,7 @@ export function EmailSection({
           id="notify-system"
           icon={<DnsOutlined />}
           label={t('Systemmeldungen')}
-          description={t('Eine E-Mail, wenn ein Zertifikat bald abläuft oder Caddy ein Problem meldet.')}
+          description={t('Eine E-Mail, wenn ein Zertifikat bald abläuft, Caddy ein Problem meldet oder eine neue Version erscheint.')}
           checked={notify.system}
           disabled={saving}
           onChange={(on) => toggle('system', on)}

@@ -4,10 +4,13 @@ import Alert from '@mui/material/Alert';
 import AlertTitle from '@mui/material/AlertTitle';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
+import IconButton from '@mui/material/IconButton';
 import type { SxProps, Theme } from '@mui/material/styles';
+import CloseRounded from '@mui/icons-material/CloseRounded';
 import type { SiteAnnouncement, SiteInfo } from '../lib/types';
 import { ease } from '../theme/tokens';
 import { t } from '../lib/i18n';
+import { readDismissedUpdate, writeDismissedUpdate } from '../lib/updates';
 
 const STORAGE_KEY = 'ms-dismissed-announcements';
 
@@ -30,9 +33,11 @@ const keyOf = (item: SiteAnnouncement) => `${item.id}:${item.updatedAt}`;
 
 export function Announcements({ site, admin = false, sx }: { site: SiteInfo; admin?: boolean; sx?: SxProps<Theme> }) {
   const [dismissed, setDismissed] = useState<string[]>(readDismissed);
+  const [dismissedUpdate, setDismissedUpdate] = useState(readDismissedUpdate);
   const items = (site.announcements || []).filter((item) => !dismissed.includes(keyOf(item)));
   const maintenance = Boolean(site.maintenance);
-  if (!items.length && !maintenance) return null;
+  const update = admin && site.update && dismissedUpdate !== site.update.version ? site.update : null;
+  if (!items.length && !maintenance && !update) return null;
 
   const dismiss = (item: SiteAnnouncement) => {
     const next = [...dismissed, keyOf(item)];
@@ -40,8 +45,35 @@ export function Announcements({ site, admin = false, sx }: { site: SiteInfo; adm
     writeDismissed(next);
   };
 
+  const dismissUpdate = (version: string) => {
+    setDismissedUpdate(version);
+    writeDismissedUpdate(version);
+  };
+
   return (
     <Box sx={[{ display: 'grid', gap: 1.25 }, ...(Array.isArray(sx) ? sx : [sx])]} role="region" aria-label={t('Hinweise')}>
+      {update && (
+        <Alert
+          severity={update.security ? 'warning' : 'info'}
+          action={
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <Button color="inherit" size="small" href={update.changelog} target="_blank" rel="noopener noreferrer">
+                {t('Neuerungen')}
+              </Button>
+              <Button color="inherit" size="small" href="/admin#system">
+                {t('Aktualisieren')}
+              </Button>
+              <IconButton color="inherit" size="small" aria-label={t('Ausblenden')} onClick={() => dismissUpdate(update.version)}>
+                <CloseRounded fontSize="small" />
+              </IconButton>
+            </Box>
+          }
+        >
+          {update.security
+            ? t('Sicherheitsupdate: MoeShare {version} ist erschienen.', { version: update.version })
+            : t('MoeShare {version} ist erschienen.', { version: update.version })}
+        </Alert>
+      )}
       {maintenance && (
         <Alert
           severity="warning"

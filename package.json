@@ -1,6 +1,6 @@
 {
   "name": "moeshare",
-  "version": "3.4.0",
+  "version": "3.4.1",
   "description": "Selbst gehosteter ShareX-Uploader für Dateien, Texte und Kurzlinks, mit Weboberfläche, Alben, Embed Builder und Benutzerverwaltung.",
   "main": "index.js",
   "engines": {
@@ -61,7 +61,7 @@
   "bugs": {
     "url": "https://github.com/MaximilianGT500/moeshare/issues"
   },
-  "homepage": "https://moeshare.eu",
+  "homepage": "https://moeshare.moestudio.net",
   "allowScripts": {
     "bcrypt": true,
     "sqlite3": true

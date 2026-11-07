@@ -3,6 +3,7 @@
 const config = require('../config');
 const settings = require('../services/settingsService');
 const announcements = require('../services/announcementService');
+const updates = require('../services/updateService');
 const { tagsFor } = require('./uiAssets');
 const { escapeHtml } = require('./format');
 const i18n = require('./i18n');
@@ -126,6 +127,7 @@ ${messages ? `  <script nonce="${escapeHtml(nonce)}" src="${escapeHtml(messages)
 const languageOf = (res) => (res.req && res.req.language) || settings.get('site.language');
 
 const NOTICE_PAGES = new Set(['home', 'login', 'dashboard', 'account', 'admin', 'design', 'request']);
+const UPDATE_PAGES = new Set(['dashboard', 'account']);
 
 const SCHEMES = ['dark', 'light'];
 
@@ -138,6 +140,7 @@ function renderPage(res, { page, title, titleRaw = null, data = {}, head = '', n
   if (!custom && NOTICE_PAGES.has(page)) {
     site.announcements = announcements.current(admin ? 'admin' : viewer ? 'user' : 'visitor');
     if (admin && settings.get('maintenance.enabled')) site.maintenance = true;
+    if (admin && UPDATE_PAGES.has(page)) site.update = updates.notice();
   }
   const assets = tagsFor(page, res.locals.cspNonce);
   if (!assets) return res.status(503).type('html').send(missingUiPage(site.title));

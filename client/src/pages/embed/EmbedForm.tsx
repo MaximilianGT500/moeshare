@@ -195,7 +195,7 @@ export function EmbedForm({ value, onChange, errors, disabled }: Props) {
               {t('Leere Felder lässt Discord weg. Platzhalter füllt {name} beim Teilen mit den Daten der Datei.', { name: siteName() })}
             </Typography>
             <Stack spacing={2}>
-              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'repeat(2, minmax(0, 1fr))' }, gap: 2 }}>
                 {field('siteName', t('Seitenname'), { max: LIMITS.siteName })}
                 {field('siteUrl', t('Link des Seitennamens'), { url: true, placeholder: 'https://' })}
                 {field('author', t('Autor'), { max: LIMITS.author })}

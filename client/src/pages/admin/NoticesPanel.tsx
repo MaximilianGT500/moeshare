@@ -18,6 +18,7 @@ import ToggleButton from '@mui/material/ToggleButton';
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
+import useMediaQuery from '@mui/material/useMediaQuery';
 import AddRounded from '@mui/icons-material/AddRounded';
 import CampaignRounded from '@mui/icons-material/CampaignRounded';
 import DeleteOutlineRounded from '@mui/icons-material/DeleteOutlineRounded';
@@ -96,6 +97,7 @@ function AnnouncementDialog({
   onSaved: (list: Announcement[]) => void;
 }) {
   const toast = useToast();
+  const phone = useMediaQuery('(max-width:599.95px)', { noSsr: true });
   const [title, setTitle] = useState(item?.title || '');
   const [text, setText] = useState(item?.text || '');
   const [level, setLevel] = useState<AnnouncementLevel>(item?.level || 'info');
@@ -134,7 +136,7 @@ function AnnouncementDialog({
   };
 
   return (
-    <Dialog open={open} onClose={busy ? undefined : onClose} fullWidth maxWidth="sm">
+    <Dialog open={open} onClose={busy ? undefined : onClose} fullWidth maxWidth="sm" fullScreen={phone}>
       <DialogTitle>{item ? t('Ankündigung bearbeiten') : t('Neue Ankündigung')}</DialogTitle>
       <DialogContent>
         <Stack spacing={2.5} sx={{ pt: 1 }}>
@@ -163,7 +165,14 @@ function AnnouncementDialog({
             <Typography variant="body2" sx={{ fontWeight: 700, mb: 1 }}>
               {t('Art')}
             </Typography>
-            <ToggleButtonGroup exclusive size="small" value={level} onChange={(_event, next) => next && setLevel(next)}>
+            <ToggleButtonGroup
+              exclusive
+              size="small"
+              value={level}
+              onChange={(_event, next) => next && setLevel(next)}
+              orientation={phone ? 'vertical' : 'horizontal'}
+              fullWidth={phone}
+            >
               {LEVELS.map((entry) => (
                 <ToggleButton key={entry.value} value={entry.value}>
                   {entry.label}
@@ -184,7 +193,7 @@ function AnnouncementDialog({
               </MenuItem>
             ))}
           </TextField>
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'repeat(2, minmax(0, 1fr))' }, gap: 2 }}>
             <TextField
               type="datetime-local"
               label={t('Ab')}

@@ -309,6 +309,7 @@ export interface SystemInfo {
 export interface SiteInfo {
   announcements?: SiteAnnouncement[];
   maintenance?: boolean;
+  update?: UpdateNotice | null;
   title: string;
   favicon: string;
   version: string | null;
@@ -818,7 +819,13 @@ export interface SettingsPayload {
   secrets: Record<string, boolean>;
   localizedDefaults?: Record<string, { value: string; localized: string }>;
   redirectUris: Record<string, string>;
-  environment: { port: number; logLevel: string; logFormat: string; errorReports: 'project' | 'custom' | 'off' };
+  environment: {
+    port: number;
+    logLevel: string;
+    logFormat: string;
+    errorReports: 'project' | 'custom' | 'off';
+    updateCheck: 'default' | 'custom' | 'off';
+  };
 }
 
 type PageName =
@@ -953,10 +960,23 @@ export interface AdminBoot extends BootBase {
 
 export interface UpdateInfo {
   enabled: boolean;
+  disabledBy: 'env' | 'setting' | null;
   current: string;
   latest: string | null;
+  date: string | null;
   available: string | null;
+  security: boolean;
+  notes: { de: string[]; en: string[] };
   checkedAt: number | null;
+  error: string | null;
+  changelog: string;
+  source: string | null;
+  install: 'docker' | 'script' | 'git' | 'other';
+}
+
+export interface UpdateNotice {
+  version: string;
+  security: boolean;
   changelog: string;
 }
 

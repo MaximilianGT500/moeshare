@@ -102,7 +102,7 @@ usage() {
     cat <<EOF
 MoeShare installer
 
-Usage: curl -fsSL https://moeshare.eu/install.sh | sudo bash -s -- [options]
+Usage: curl -fsSL https://moeshare.moestudio.net/install.sh | sudo bash -s -- [options]
 
   --docker            run MoeShare with Docker (recommended)
   --node              run MoeShare with Node.js and systemd
@@ -122,7 +122,7 @@ EOF
     cat <<EOF
 Installationsskript für MoeShare
 
-Aufruf: curl -fsSL https://moeshare.eu/install.sh | sudo bash -s -- [Optionen]
+Aufruf: curl -fsSL https://moeshare.moestudio.net/install.sh | sudo bash -s -- [Optionen]
 
   --docker            MoeShare mit Docker betreiben (empfohlen)
   --node              MoeShare mit Node.js und systemd betreiben
@@ -528,6 +528,7 @@ User=$SERVICE_USER
 Group=$SERVICE_USER
 WorkingDirectory=$DIR
 Environment=NODE_ENV=production
+Environment=MOESHARE_INSTALL=script
 Environment=PORT=$PORT
 ExecStart=$node_bin index.js
 Restart=on-failure
@@ -643,7 +644,7 @@ update() {
     fail "$(t "In $DIR wurde keine Installation gefunden. Den Ordner gibst du mit --dir an." "No installation found in $DIR. Set the folder with --dir.")"
   fi
   step "$(t 'Fertig, MoeShare ist auf dem neuesten Stand.' 'Done, MoeShare is up to date.')"
-  say "$(t 'Was neu ist, steht im Changelog:' 'What is new is in the changelog:') https://moeshare.eu/changelog.html"
+  say "$(t 'Was neu ist, steht im Changelog:' 'What is new is in the changelog:') https://moeshare.moestudio.net/changelog.html"
 }
 
 finish() {
@@ -668,7 +669,7 @@ finish() {
     if has_systemd; then say "$(t 'Logs' 'Logs'):       journalctl -u moeshare -f"; else say "$(t 'Start' 'Start'):      cd $DIR && sudo -u $SERVICE_USER PORT=$PORT node index.js"; fi
     say "$(t 'Sicherung' 'Backup'):  cd $DIR && sudo -u $SERVICE_USER node cli.js backup --uploads"
   fi
-  say "$(t 'Update' 'Update'):     curl -fsSL https://moeshare.eu/install.sh | sudo bash -s -- --update$([ "$DIR" != /opt/moeshare ] && printf ' --dir %s' "$DIR")"
+  say "$(t 'Update' 'Update'):     curl -fsSL https://moeshare.moestudio.net/install.sh | sudo bash -s -- --update$([ "$DIR" != /opt/moeshare ] && printf ' --dir %s' "$DIR")"
   [ -n "$DOMAIN" ] && say "" && note "$(t "Zeigt $DOMAIN auf diesen Server, holt Caddy das Zertifikat beim ersten Aufruf selbst." "Once $DOMAIN points to this server, Caddy fetches the certificate on the first visit.")"
   return 0
 }
@@ -676,7 +677,7 @@ finish() {
 main() {
   parse "$@"
   [ "$(uname -s)" = "Linux" ] || fail "$(t 'Das Skript läuft nur unter Linux.' 'This script only runs on Linux.')"
-  [ "$(id -u)" -eq 0 ] || fail "$(t 'Bitte als root starten, zum Beispiel: curl -fsSL https://moeshare.eu/install.sh | sudo bash' 'Please run as root, for example: curl -fsSL https://moeshare.eu/install.sh | sudo bash')"
+  [ "$(id -u)" -eq 0 ] || fail "$(t 'Bitte als root starten, zum Beispiel: curl -fsSL https://moeshare.moestudio.net/install.sh | sudo bash' 'Please run as root, for example: curl -fsSL https://moeshare.moestudio.net/install.sh | sudo bash')"
   command -v curl >/dev/null 2>&1 || fail "$(t 'curl fehlt. Installiere es zuerst.' 'curl is missing. Install it first.')"
   say "${BOLD}MoeShare${RESET} $(t 'Installation' 'installer')"
   if [ "$ACTION" = "update" ]; then

@@ -285,7 +285,7 @@ function Uploader({ info, onChanged }: { info: PublicRequest; onChanged: () => v
 
   return (
     <Box sx={{ display: 'grid', gap: 2.5, mt: 3 }}>
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'repeat(2, minmax(0, 1fr))' }, gap: 2 }}>
         <TextField
           label={info.askName ? t('Dein Name') : t('Dein Name (optional)')}
           value={name}

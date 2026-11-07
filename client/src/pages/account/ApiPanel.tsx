@@ -112,7 +112,14 @@ export function ApiPanel({
         <Box sx={{ px: { xs: 2, sm: 3 }, py: 3 }}>
           <Box
             component="ol"
-            sx={{ listStyle: 'none', m: 0, p: 0, display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, gap: 2.5 }}
+            sx={{
+              listStyle: 'none',
+              m: 0,
+              p: 0,
+              display: 'grid',
+              gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'repeat(3, minmax(0, 1fr))' },
+              gap: 2.5,
+            }}
           >
             {STEPS.map((step, index) => (
               <Box component="li" key={step.title} sx={{ display: 'flex', gap: 1.5 }}>

@@ -3,9 +3,14 @@ import { m } from 'motion/react';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
+import CircularProgress from '@mui/material/CircularProgress';
+import FormControlLabel from '@mui/material/FormControlLabel';
 import LinearProgress from '@mui/material/LinearProgress';
 import Link from '@mui/material/Link';
+import Switch from '@mui/material/Switch';
 import Typography from '@mui/material/Typography';
+import SystemUpdateAltRounded from '@mui/icons-material/SystemUpdateAltRounded';
+import ContentCopyRounded from '@mui/icons-material/ContentCopyRounded';
 import MovieFilterRounded from '@mui/icons-material/MovieFilterRounded';
 import MemoryRounded from '@mui/icons-material/MemoryRounded';
 import DeveloperBoardRounded from '@mui/icons-material/DeveloperBoardRounded';
@@ -13,11 +18,23 @@ import ScheduleRounded from '@mui/icons-material/ScheduleRounded';
 import DnsRounded from '@mui/icons-material/DnsRounded';
 import WarningAmberRounded from '@mui/icons-material/WarningAmberRounded';
 import StorageRounded from '@mui/icons-material/StorageRounded';
-import type { DatabaseInfo, Job, SystemInfo, UpdateInfo } from '../../lib/types';
-import { ApiError, checkForUpdate, errorMessage, fetchSystem, fetchVideoInfo, repairVideos, waitForJob } from '../../lib/api';
+import type { DatabaseInfo, Job, SettingsPayload, SystemInfo, UpdateInfo } from '../../lib/types';
+import {
+  ApiError,
+  checkForUpdate,
+  errorMessage,
+  fetchSystem,
+  fetchUpdateInfo,
+  fetchVideoInfo,
+  repairVideos,
+  saveSettings,
+  waitForJob,
+} from '../../lib/api';
 import { useToast } from '../../components/Toaster';
-import { formatBytes, formatDuration, formatNumber, relativeMs } from '../../lib/format';
-import { t, tn } from '../../lib/i18n';
+import { CopyIconButton } from '../../components/CopyButton';
+import { formatBytes, formatDate, formatDuration, formatNumber, relativeMs } from '../../lib/format';
+import { language, t, tn } from '../../lib/i18n';
+import { updateError, updateNotes, updateSteps } from '../../lib/updates';
 import { c, ease, fonts, radius } from '../../theme/tokens';
 
 export function Card({ icon, title, children, wide = false }: { icon: ReactNode; title: string; children: ReactNode; wide?: boolean }) {
@@ -246,44 +263,193 @@ function VideoCard({ initial }: { initial: { running: string | null; ffmpeg: boo
   );
 }
 
-function VersionValue({ current, initial }: { current: string; initial: UpdateInfo }) {
+const releaseDate = (value: string | null) => (value ? formatDate(new Date(`${value}T12:00:00`)) : '');
+
+function UpdateCard({
+  info,
+  onInfo,
+  settings,
+  onSettings,
+}: {
+  info: UpdateInfo;
+  onInfo: (next: UpdateInfo) => void;
+  settings: SettingsPayload;
+  onSettings: (next: SettingsPayload) => void;
+}) {
   const toast = useToast();
-  const [info, setInfo] = useState(initial);
   const [busy, setBusy] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const fixed = info.disabledBy === 'env';
+  const steps = info.available ? updateSteps(info.install) : null;
+  const notes = info.available ? updateNotes(info.notes, language) : [];
+  const failed = info.enabled && Boolean(info.error);
+
   const recheck = async () => {
     setBusy(true);
     try {
       const next = await checkForUpdate();
-      setInfo(next);
-      toast(next.available ? t('Version {version} ist verfügbar', { version: next.available }) : t('Du nutzt die neueste Version.'));
+      onInfo(next);
+      if (next.error) toast(updateError(next.error), { variant: 'error' });
+      else toast(next.available ? t('Version {version} ist erschienen', { version: next.available }) : t('Du nutzt die neueste Version.'));
     } catch (failure) {
       toast(errorMessage(failure), { variant: 'error' });
     } finally {
       setBusy(false);
     }
   };
+
+  const toggle = async (on: boolean) => {
+    setSaving(true);
+    try {
+      onSettings(await saveSettings({ 'system.updateCheck': on }));
+      onInfo(on ? await checkForUpdate() : await fetchUpdateInfo());
+      toast(on ? t('Versionsprüfung ist an') : t('Versionsprüfung ist aus'));
+    } catch (failure) {
+      toast(errorMessage(failure), { variant: 'error' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const status = !info.enabled
+    ? fixed
+      ? t('Abgeschaltet über die Umgebungsvariable UPDATE_CHECK_URL. MoeShare fragt nicht nach neuen Versionen.')
+      : t('Abgeschaltet. MoeShare fragt nicht nach neuen Versionen.')
+    : info.available
+      ? info.date
+        ? t('Erschienen am {date}, hier läuft noch {current}.', { date: releaseDate(info.date), current: info.current })
+        : t('Hier läuft noch {current}.', { current: info.current })
+      : info.latest
+        ? t('Das ist die neueste Version, geprüft {when}.', { when: relativeMs(info.checkedAt) })
+        : info.checkedAt
+          ? t('Die neueste Version ist noch unbekannt.')
+          : t('Noch nicht geprüft.');
+
   return (
-    <Box component="span" sx={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-end', gap: 0.25 }}>
-      <Box component="span" sx={{ fontFamily: fonts.mono, fontSize: '0.8125rem' }}>
-        v{current}
+    <Card icon={<SystemUpdateAltRounded />} title={t('Updates')}>
+      <Box sx={{ display: 'flex', alignItems: 'baseline', flexWrap: 'wrap', gap: 1.25, mb: 1 }}>
+        <Typography sx={{ fontSize: '2.25rem', fontWeight: 800, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>
+          {info.available || info.current}
+        </Typography>
+        {info.enabled && (info.available || info.latest) && (
+          <Box
+            component="span"
+            sx={{
+              px: 1.25,
+              py: 0.25,
+              borderRadius: `${radius.full}px`,
+              fontSize: '0.75rem',
+              fontWeight: 700,
+              bgcolor: info.security ? c.warningContainer : info.available ? c.primaryContainer : c.successContainer,
+              color: info.security ? c.onWarningContainer : info.available ? c.onPrimaryContainer : c.onSuccessContainer,
+            }}
+          >
+            {info.security ? t('Sicherheitsupdate') : info.available ? t('Neu erschienen') : t('Aktuell')}
+          </Box>
+        )}
       </Box>
-      {info.enabled && (
-        <Box component="span" sx={{ fontSize: '0.75rem', fontWeight: 400, color: info.available ? c.primary : 'text.secondary' }}>
-          {info.available ? (
-            <Link href={info.changelog} target="_blank" rel="noopener noreferrer">
-              {t('v{version} ist erschienen', { version: info.available })}
-            </Link>
-          ) : info.checkedAt ? (
-            t('aktuell, geprüft {when}', { when: relativeMs(info.checkedAt) })
+      <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+        {status}
+      </Typography>
+
+      {failed && (
+        <Alert severity="warning" sx={{ mt: 2 }}>
+          {updateError(info.error)} {t('Zuletzt versucht {when}.', { when: relativeMs(info.checkedAt) })}
+        </Alert>
+      )}
+
+      {info.security && (
+        <Alert severity="warning" sx={{ mt: 2 }}>
+          {t('Das Update schließt Sicherheitslücken. Spiel es bald ein.')}
+        </Alert>
+      )}
+
+      {notes.length > 0 && (
+        <Box component="ul" sx={{ m: 0, mt: 2, pl: 2.5, display: 'grid', gap: 0.5 }}>
+          {notes.map((note) => (
+            <Typography key={note} component="li" variant="body2">
+              {note}
+            </Typography>
+          ))}
+        </Box>
+      )}
+
+      {info.available && (
+        <Box sx={{ mt: 2 }}>
+          <Typography variant="subtitle2" component="h4" sx={{ mb: 0.75 }}>
+            {t('So aktualisierst du')}
+          </Typography>
+          {steps ? (
+            <>
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1,
+                  pl: 1.5,
+                  pr: 0.5,
+                  py: 0.5,
+                  borderRadius: `${radius.md}px`,
+                  bgcolor: c.surfaceContainerHighest,
+                }}
+              >
+                <Box
+                  component="code"
+                  sx={{ flex: 1, minWidth: 0, fontFamily: fonts.mono, fontSize: '0.8125rem', overflowWrap: 'anywhere', py: 0.75 }}
+                >
+                  {steps.command}
+                </Box>
+                <CopyIconButton
+                  value={steps.command}
+                  label={t('Befehl kopieren')}
+                  message={t('Befehl kopiert')}
+                  size="small"
+                  icon={<ContentCopyRounded fontSize="inherit" />}
+                />
+              </Box>
+              <Typography variant="caption" component="p" sx={{ color: 'text.secondary', mt: 0.75 }}>
+                {steps.note} {t('Leg vorher eine Sicherung an.')}
+              </Typography>
+            </>
           ) : (
-            t('noch nicht geprüft')
-          )}{' '}
-          <Link component="button" type="button" onClick={recheck} disabled={busy} sx={{ fontSize: 'inherit', verticalAlign: 'baseline' }}>
-            {t('prüfen')}
+            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+              {t('Lade die neue Version herunter, führe npm install aus und starte MoeShare neu. Leg vorher eine Sicherung an.')}
+            </Typography>
+          )}
+          <Link href={info.changelog} target="_blank" rel="noopener noreferrer" variant="body2" sx={{ display: 'inline-block', mt: 1.5 }}>
+            {t('Alle Neuerungen im Changelog')}
           </Link>
         </Box>
       )}
-    </Box>
+
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1, mt: 2.5 }}>
+        <FormControlLabel
+          sx={{ mr: 0 }}
+          control={
+            <Switch
+              checked={info.enabled}
+              disabled={fixed || saving || settings.values['system.updateCheck'] === undefined}
+              onChange={(event) => toggle(event.target.checked)}
+            />
+          }
+          label={t('Nach neuen Versionen suchen')}
+        />
+        <Button
+          variant="outlined"
+          size="small"
+          onClick={recheck}
+          disabled={!info.enabled || busy || saving}
+          startIcon={busy ? <CircularProgress size={14} color="inherit" /> : undefined}
+        >
+          {t('Jetzt prüfen')}
+        </Button>
+      </Box>
+      {info.enabled && info.source && (
+        <Typography variant="caption" component="p" sx={{ color: 'text.secondary', mt: 1 }}>
+          {t('Fragt einmal am Tag bei {source} nach, ohne Angaben über deinen Server.', { source: info.source })}
+        </Typography>
+      )}
+    </Card>
   );
 }
 
@@ -292,12 +458,18 @@ export function SystemPanel({
   database,
   ffmpeg,
   update,
+  onUpdate,
+  settings,
+  onSettings,
   videos,
 }: {
   initial: SystemInfo;
   database: DatabaseInfo;
   ffmpeg: string | null;
   update: UpdateInfo;
+  onUpdate: (next: UpdateInfo) => void;
+  settings: SettingsPayload;
+  onSettings: (next: SettingsPayload) => void;
   videos: { running: string | null; ffmpeg: boolean };
 }) {
   const [info, setInfo] = useState(initial);
@@ -350,7 +522,13 @@ export function SystemPanel({
         </Typography>
       </Box>
 
-      <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', md: '1fr 1fr', xl: 'repeat(3, 1fr)' } }}>
+      <Box
+        sx={{
+          display: 'grid',
+          gap: 2,
+          gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'repeat(2, minmax(0, 1fr))', xl: 'repeat(3, minmax(0, 1fr))' },
+        }}
+      >
         <Card icon={<MemoryRounded />} title={t('Arbeitsspeicher')}>
           <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mb: 1.5 }}>
             <Typography sx={{ fontSize: '2.25rem', fontWeight: 800, lineHeight: 1 }}>{memPercent} %</Typography>
@@ -419,6 +597,8 @@ export function SystemPanel({
           </Typography>
         </Card>
 
+        <UpdateCard info={update} onInfo={onUpdate} settings={settings} onSettings={onSettings} />
+
         <VideoCard initial={videos} />
 
         <Card icon={<DnsRounded />} title={t('Server')} wide>
@@ -426,7 +606,7 @@ export function SystemPanel({
             <Row label={t('Hostname')} value={info.hostname} mono />
             <Row label={t('Betriebssystem')} value={`${info.platform} ${info.release} (${info.arch})`} />
             <Row label="Node.js" value={info.nodeVersion} mono />
-            <Row label={t('Version')} value={<VersionValue current={info.appVersion} initial={update} />} />
+            <Row label={t('Version')} value={info.appVersion} mono />
             <Row label={t('FFmpeg')} value={ffmpeg || t('nicht gefunden, Videos bekommen keine Vorschau')} mono={!!ffmpeg} />
           </Box>
         </Card>

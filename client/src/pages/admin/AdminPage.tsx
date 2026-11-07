@@ -3,11 +3,13 @@ import { AnimatePresence, m } from 'motion/react';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
+import IconButton from '@mui/material/IconButton';
 import Tab from '@mui/material/Tab';
 import Typography from '@mui/material/Typography';
+import CloseRounded from '@mui/icons-material/CloseRounded';
 import { readBoot } from '../../lib/boot';
 import type { AdminBoot, GlobalStats, SettingsPayload, UpdateInfo } from '../../lib/types';
-import { checkForUpdate, errorMessage, fetchAdminStats } from '../../lib/api';
+import { fetchAdminStats } from '../../lib/api';
 import { formatBytes, formatNumber, storageSummary } from '../../lib/format';
 import { AppShell } from '../../components/AppShell';
 import { AnimatedNumber } from '../../components/AnimatedNumber';
@@ -26,9 +28,9 @@ import { AccessPanel } from './AccessPanel';
 import { AccessProvider } from './LoginLinkDialog';
 import { NoticesPanel } from './NoticesPanel';
 import { CaddyPanel } from './CaddyPanel';
-import { useToast } from '../../components/Toaster';
 import { c, ease, radius } from '../../theme/tokens';
 import { t, tn } from '../../lib/i18n';
+import { readDismissedUpdate, writeDismissedUpdate } from '../../lib/updates';
 
 type TabKey =
   | 'benutzer'
@@ -56,61 +58,40 @@ const ALL_TABS: TabKey[] = [
   'system',
 ];
 
-const DISMISSED_UPDATE = 'ms-dismissed-update';
-
-function readDismissedUpdate() {
-  try {
-    return window.localStorage.getItem(DISMISSED_UPDATE) || '';
-  } catch {
-    return '';
-  }
-}
-
-function UpdateNotice({ initial }: { initial: UpdateInfo }) {
-  const toast = useToast();
-  const [info, setInfo] = useState(initial);
+function UpdateNotice({ info, onOpen }: { info: UpdateInfo; onOpen: () => void }) {
   const [dismissed, setDismissed] = useState(readDismissedUpdate);
-  const [busy, setBusy] = useState(false);
-  if (!info.enabled || !info.available || dismissed === info.available) return null;
-
-  const dismiss = () => {
-    const version = info.available || '';
-    setDismissed(version);
-    try {
-      window.localStorage.setItem(DISMISSED_UPDATE, version);
-    } catch {}
-  };
-
-  const recheck = async () => {
-    setBusy(true);
-    try {
-      const next = await checkForUpdate();
-      setInfo(next);
-      if (!next.available) toast(t('Du nutzt die neueste Version.'));
-    } catch (failure) {
-      toast(errorMessage(failure), { variant: 'error' });
-    } finally {
-      setBusy(false);
-    }
-  };
+  const version = info.available;
+  if (!info.enabled || !version || dismissed === version) return null;
 
   return (
     <Alert
-      severity="info"
-      onClose={dismiss}
+      severity={info.security ? 'warning' : 'info'}
       sx={{ mt: 1, mb: 2, alignItems: 'center' }}
       action={
         <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
           <Button color="inherit" size="small" href={info.changelog} target="_blank" rel="noopener noreferrer">
-            {t('Was ist neu?')}
+            {t('Neuerungen')}
           </Button>
-          <Button color="inherit" size="small" onClick={recheck} disabled={busy}>
-            {t('Erneut prüfen')}
+          <Button color="inherit" size="small" onClick={onOpen}>
+            {t('Aktualisieren')}
           </Button>
+          <IconButton
+            color="inherit"
+            size="small"
+            aria-label={t('Ausblenden')}
+            onClick={() => {
+              setDismissed(version);
+              writeDismissedUpdate(version);
+            }}
+          >
+            <CloseRounded fontSize="small" />
+          </IconButton>
         </Box>
       }
     >
-      {t('Version {latest} ist erschienen. Hier läuft noch {current}.', { latest: info.available, current: info.current })}
+      {info.security
+        ? t('Sicherheitsupdate: Version {latest} ist erschienen. Hier läuft noch {current}.', { latest: version, current: info.current })
+        : t('Version {latest} ist erschienen. Hier läuft noch {current}.', { latest: version, current: info.current })}
     </Alert>
   );
 }
@@ -156,6 +137,7 @@ function Admin({ boot }: { boot: AdminBoot }) {
   const [activeInvites, setActiveInvites] = useState(boot.invites.filter((i) => i.state === 'active').length);
   const [settings, setSettings] = useState<SettingsPayload>(boot.settings);
   const [settingsSection, setSettingsSection] = useState<string | undefined>(undefined);
+  const [update, setUpdate] = useState<UpdateInfo>(boot.update);
   const values = settings.values;
 
   useEffect(() => {
@@ -252,11 +234,11 @@ function Admin({ boot }: { boot: AdminBoot }) {
         }
         accountSummary={storageSummary(boot.userStats)}
       >
-        <UpdateNotice initial={boot.update} />
+        <UpdateNotice info={update} onOpen={() => select('system')} />
         <Box
           sx={{
             display: 'grid',
-            gridTemplateColumns: { xs: '1fr 1fr', lg: 'repeat(4, 1fr)' },
+            gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(4, minmax(0, 1fr))' },
             borderRadius: `${radius.lg}px`,
             bgcolor: c.surfaceContainerLow,
             overflow: 'hidden',
@@ -369,7 +351,10 @@ function Admin({ boot }: { boot: AdminBoot }) {
                 initial={boot.system}
                 database={boot.database}
                 ffmpeg={boot.storage.ffmpeg}
-                update={boot.update}
+                update={update}
+                onUpdate={setUpdate}
+                settings={settings}
+                onSettings={setSettings}
                 videos={boot.videos}
               />
             )}

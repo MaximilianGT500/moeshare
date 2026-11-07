@@ -380,8 +380,10 @@ function LinkRow({ link, onDelete, onEdit, onStats }: { link: ShortLink; onDelet
     <Box
       sx={{
         display: 'flex',
+        flexWrap: { xs: 'wrap', sm: 'nowrap' },
         alignItems: 'center',
-        gap: 1.5,
+        columnGap: 1.5,
+        rowGap: 0.5,
         minWidth: 0,
         px: { xs: 1.5, sm: 2 },
         py: 1.5,
@@ -404,7 +406,7 @@ function LinkRow({ link, onDelete, onEdit, onStats }: { link: ShortLink; onDelet
       >
         <InsertLinkRounded />
       </Box>
-      <Box sx={{ flex: 1, minWidth: 0 }}>
+      <Box sx={{ flex: { xs: '1 1 100%', sm: 1 }, minWidth: 0 }}>
         <Typography variant="subtitle2" noWrap sx={{ fontFamily: fonts.mono }}>
           {link.short.replace(/^https?:\/\//, '')}
         </Typography>
@@ -441,24 +443,26 @@ function LinkRow({ link, onDelete, onEdit, onStats }: { link: ShortLink; onDelet
           )}
         </Box>
       </Box>
-      {onStats && (
-        <Tooltip title={t('Statistik')}>
-          <IconButton aria-label={t('Statistik')} onClick={onStats}>
-            <BarChartRounded />
+      <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0, ml: { xs: -1, sm: 0 } }}>
+        {onStats && (
+          <Tooltip title={t('Statistik')}>
+            <IconButton aria-label={t('Statistik')} onClick={onStats}>
+              <BarChartRounded />
+            </IconButton>
+          </Tooltip>
+        )}
+        <CopyIconButton value={link.short} label={t('Kurzlink kopieren')} message={t('Kurzlink kopiert')} />
+        <Tooltip title={t('Bearbeiten')}>
+          <IconButton aria-label={t('Kurzlink bearbeiten')} onClick={onEdit}>
+            <EditOutlined />
           </IconButton>
         </Tooltip>
-      )}
-      <CopyIconButton value={link.short} label={t('Kurzlink kopieren')} message={t('Kurzlink kopiert')} />
-      <Tooltip title={t('Bearbeiten')}>
-        <IconButton aria-label={t('Kurzlink bearbeiten')} onClick={onEdit}>
-          <EditOutlined />
-        </IconButton>
-      </Tooltip>
-      <Tooltip title={t('Löschen')}>
-        <IconButton aria-label={t('Kurzlink löschen')} onClick={onDelete}>
-          <DeleteOutlineRounded />
-        </IconButton>
-      </Tooltip>
+        <Tooltip title={t('Löschen')}>
+          <IconButton aria-label={t('Kurzlink löschen')} onClick={onDelete}>
+            <DeleteOutlineRounded />
+          </IconButton>
+        </Tooltip>
+      </Box>
     </Box>
   );
 }

@@ -7,7 +7,7 @@ import { mix } from '../lib/color';
 import { AmbientBackdrop } from './Ambient';
 import { BrandMark } from './BrandMark';
 import { ThemeToggleButton } from './ThemeToggle';
-import { SiteFooter } from './SiteFooter';
+import { FooterLinks, SiteFooter } from './SiteFooter';
 import { ReportButton } from './ReportDialog';
 import { c } from '../theme/tokens';
 
@@ -107,7 +107,13 @@ export function OwnerPage({
         </Box>
         <Box className="ms-footer" sx={{ position: 'relative', zIndex: 1, px: 2, pb: 3, display: 'grid', justifyItems: 'center', gap: 1 }}>
           {site.report && report && <ReportButton target={report} />}
-          {tools.shows('footer') && <SiteFooter site={site} />}
+          {tools.shows('footer') ? (
+            <SiteFooter site={site} />
+          ) : (
+            <Box sx={{ color: 'text.secondary' }}>
+              <FooterLinks links={site.legal || []} />
+            </Box>
+          )}
         </Box>
       </Box>
     </DesignProvider>

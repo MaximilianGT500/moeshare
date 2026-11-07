@@ -365,6 +365,25 @@ async function videos() {
   );
 }
 
+async function version() {
+  const config = require('./src/config');
+  const updates = require('./src/services/updateService');
+  say(`\nMoeShare ${config.version}`);
+  const info = await updates.check({ notify: false });
+  if (!info.enabled) {
+    return say(
+      info.disabledBy === 'env'
+        ? 'Die Versionsprüfung ist über UPDATE_CHECK_URL abgeschaltet.\n'
+        : 'Die Versionsprüfung ist abgeschaltet, einschalten kannst du sie unter Admin › Einstellungen › System.\n'
+    );
+  }
+  if (info.error && !info.latest) return say(`${updates.describe(info.error)}\n`);
+  if (!info.available) return say('Das ist die neueste Version.\n');
+  say(`${info.security ? 'Sicherheitsupdate' : 'Neue Version'}: ${info.available}${info.date ? `, erschienen am ${info.date}` : ''}`);
+  for (const note of info.notes.de.length ? info.notes.de : info.notes.en) console.log(`  • ${note}`);
+  say(`Neuerungen: ${info.changelog}\n`);
+}
+
 const COMMANDS = {
   register,
   token,
@@ -378,6 +397,7 @@ const COMMANDS = {
   storage: moveStorage,
   import: importData,
   videos,
+  version,
 };
 
 async function main() {
@@ -396,6 +416,7 @@ async function main() {
     say('  storage <s3|lokal>   verschiebt vorhandene Dateien nach S3 oder zurück');
     say('  import <quelle>      übernimmt Konten und Dateien aus Zipline, XBackBone oder Chibisafe');
     say('  videos               prüft vorhandene Videos: Abmessungen, Vorschaubilder und Fassungen für alle Browser');
+    say('  version              zeigt die Version und fragt nach, ob es eine neuere gibt');
     process.exit(1);
   }
   await db.ready;

@@ -21,12 +21,13 @@ RUN --mount=type=cache,target=/root/.npm npm ci --omit=dev --no-audit --no-fund
 FROM node:${NODE_VERSION}-slim
 LABEL org.opencontainers.image.title="MoeShare" \
   org.opencontainers.image.description="Selbst gehosteter ShareX-Uploader mit Weboberfläche" \
-  org.opencontainers.image.url="https://moeshare.eu" \
+  org.opencontainers.image.url="https://moeshare.moestudio.net" \
   org.opencontainers.image.source="https://github.com/MaximilianGT500/moeshare" \
   org.opencontainers.image.licenses="MIT"
 ENV NODE_ENV=production \
   PORT=3000 \
-  FFMPEG_PATH=/usr/local/bin/ffmpeg
+  FFMPEG_PATH=/usr/local/bin/ffmpeg \
+  MOESHARE_INSTALL=docker
 RUN apt-get update \
   && apt-get upgrade -y --no-install-recommends \
   && rm -rf /var/lib/apt/lists/*

@@ -317,7 +317,7 @@ export function ClipDialog({
               </Box>
             </Box>
 
-            <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' } }}>
+            <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'repeat(2, minmax(0, 1fr))' } }}>
               <Box>
                 <Typography variant="subtitle2" sx={{ mb: 1 }}>
                   {t('Format')}
