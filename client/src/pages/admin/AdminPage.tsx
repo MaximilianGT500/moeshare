@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { AnimatePresence, m } from 'motion/react';
+import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
 import Tab from '@mui/material/Tab';
 import Typography from '@mui/material/Typography';
 import { readBoot } from '../../lib/boot';
-import type { AdminBoot, GlobalStats, SettingsPayload } from '../../lib/types';
-import { fetchAdminStats } from '../../lib/api';
+import type { AdminBoot, GlobalStats, SettingsPayload, UpdateInfo } from '../../lib/types';
+import { checkForUpdate, errorMessage, fetchAdminStats } from '../../lib/api';
 import { formatBytes, formatNumber, storageSummary } from '../../lib/format';
 import { AppShell } from '../../components/AppShell';
 import { AnimatedNumber } from '../../components/AnimatedNumber';
@@ -22,10 +24,24 @@ import { SystemPanel } from './SystemPanel';
 import { ReportsPanel } from './ReportsPanel';
 import { AccessPanel } from './AccessPanel';
 import { AccessProvider } from './LoginLinkDialog';
+import { NoticesPanel } from './NoticesPanel';
+import { CaddyPanel } from './CaddyPanel';
+import { useToast } from '../../components/Toaster';
 import { c, ease, radius } from '../../theme/tokens';
 import { t, tn } from '../../lib/i18n';
 
-type TabKey = 'benutzer' | 'einladungen' | 'zugaenge' | 'dateien' | 'meldungen' | 'startseite' | 'einstellungen' | 'aktivitaet' | 'system';
+type TabKey =
+  | 'benutzer'
+  | 'einladungen'
+  | 'zugaenge'
+  | 'dateien'
+  | 'meldungen'
+  | 'startseite'
+  | 'hinweise'
+  | 'einstellungen'
+  | 'aktivitaet'
+  | 'caddy'
+  | 'system';
 const ALL_TABS: TabKey[] = [
   'benutzer',
   'einladungen',
@@ -33,10 +49,71 @@ const ALL_TABS: TabKey[] = [
   'dateien',
   'meldungen',
   'startseite',
+  'hinweise',
   'einstellungen',
   'aktivitaet',
+  'caddy',
   'system',
 ];
+
+const DISMISSED_UPDATE = 'ms-dismissed-update';
+
+function readDismissedUpdate() {
+  try {
+    return window.localStorage.getItem(DISMISSED_UPDATE) || '';
+  } catch {
+    return '';
+  }
+}
+
+function UpdateNotice({ initial }: { initial: UpdateInfo }) {
+  const toast = useToast();
+  const [info, setInfo] = useState(initial);
+  const [dismissed, setDismissed] = useState(readDismissedUpdate);
+  const [busy, setBusy] = useState(false);
+  if (!info.enabled || !info.available || dismissed === info.available) return null;
+
+  const dismiss = () => {
+    const version = info.available || '';
+    setDismissed(version);
+    try {
+      window.localStorage.setItem(DISMISSED_UPDATE, version);
+    } catch {}
+  };
+
+  const recheck = async () => {
+    setBusy(true);
+    try {
+      const next = await checkForUpdate();
+      setInfo(next);
+      if (!next.available) toast(t('Du nutzt die neueste Version.'));
+    } catch (failure) {
+      toast(errorMessage(failure), { variant: 'error' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Alert
+      severity="info"
+      onClose={dismiss}
+      sx={{ mt: 1, mb: 2, alignItems: 'center' }}
+      action={
+        <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+          <Button color="inherit" size="small" href={info.changelog} target="_blank" rel="noopener noreferrer">
+            {t('Was ist neu?')}
+          </Button>
+          <Button color="inherit" size="small" onClick={recheck} disabled={busy}>
+            {t('Erneut prüfen')}
+          </Button>
+        </Box>
+      }
+    >
+      {t('Version {latest} ist erschienen. Hier läuft noch {current}.', { latest: info.available, current: info.current })}
+    </Alert>
+  );
+}
 
 const tabsFor = (boot: AdminBoot) => ALL_TABS.filter((key) => key !== 'meldungen' || boot.moderation.enabled || boot.moderation.open > 0);
 
@@ -138,8 +215,10 @@ function Admin({ boot }: { boot: AdminBoot }) {
     zugaenge: pendingLinks ? t('Zugänge ({count})', { count: formatNumber(pendingLinks) }) : t('Zugänge'),
     meldungen: openReports ? t('Meldungen ({count})', { count: formatNumber(openReports) }) : t('Meldungen'),
     startseite: t('Startseite'),
+    hinweise: values['maintenance.enabled'] ? t('Hinweise (Wartung)') : t('Hinweise'),
     einstellungen: t('Einstellungen'),
     aktivitaet: t('Aktivität'),
+    caddy: t('Caddy'),
     system: t('System'),
   };
 
@@ -173,6 +252,7 @@ function Admin({ boot }: { boot: AdminBoot }) {
         }
         accountSummary={storageSummary(boot.userStats)}
       >
+        <UpdateNotice initial={boot.update} />
         <Box
           sx={{
             display: 'grid',
@@ -262,6 +342,7 @@ function Admin({ boot }: { boot: AdminBoot }) {
                 }}
               />
             )}
+            {tab === 'hinweise' && <NoticesPanel initial={boot.announcements} settings={settings} onSettings={setSettings} />}
             {tab === 'einstellungen' && (
               <SettingsPanel
                 initial={settings}
@@ -282,7 +363,16 @@ function Admin({ boot }: { boot: AdminBoot }) {
             {tab === 'aktivitaet' && (
               <ActivityPanel initial={boot.audit} retentionDays={(values['system.auditRetentionDays'] as number) || 90} />
             )}
-            {tab === 'system' && <SystemPanel initial={boot.system} database={boot.database} ffmpeg={boot.storage.ffmpeg} />}
+            {tab === 'caddy' && <CaddyPanel settings={settings} onSettings={setSettings} />}
+            {tab === 'system' && (
+              <SystemPanel
+                initial={boot.system}
+                database={boot.database}
+                ffmpeg={boot.storage.ffmpeg}
+                update={boot.update}
+                videos={boot.videos}
+              />
+            )}
           </m.div>
         </AnimatePresence>
       </AppShell>

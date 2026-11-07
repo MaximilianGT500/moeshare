@@ -12,6 +12,8 @@ const settings = require('../services/settingsService');
 const setup = require('../services/setupService');
 const home = require('../services/homeService');
 const avatars = require('../services/avatarService');
+const legalService = require('../services/legalService');
+const appIcon = require('../lib/appIcon');
 
 const router = express.Router();
 
@@ -44,6 +46,24 @@ router.get('/', async (req, res) => {
 
 for (const { key, label, path } of LEGAL_PAGES) {
   router.get(path, (req, res, next) => {
+    const domain = req.customDomain;
+    if (domain && domain.legal) {
+      const external = legalService.pageUrl(key, domain.legal);
+      if (external) return res.redirect(external);
+      const own = legalService.pageText(key, domain.legal, req.language === 'en' ? 'en' : 'de');
+      if (!own) return next();
+      return renderPage(res, {
+        page: 'legal',
+        title: label,
+        data: { legal: { title: tr(req, label), text: own, heading: domain.domain } },
+      });
+    }
+    if (domain) {
+      const fallback =
+        settings.get(`legal.${key}Url`) || (settings.get(`legal.${key}Text`) ? `${settings.get('site.baseUrl')}${path}` : null);
+      if (fallback) return res.redirect(/^https?:\/\//.test(fallback) ? fallback : `${settings.get('site.baseUrl')}${fallback}`);
+      return next();
+    }
     const text = settings.get(`legal.${key}Text`);
     const url = settings.get(`legal.${key}Url`);
     if (url && url !== path) return res.redirect(url);
@@ -57,21 +77,9 @@ router.get('/api/home', async (req, res) => {
   res.json(await home.publicStats());
 });
 
-function readableOn(hex) {
-  const [r, g, b] = [1, 3, 5].map((offset) => Number.parseInt(hex.slice(offset, offset + 2), 16) / 255);
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.6 ? '#1d1a23' : '#ffffff';
-}
-
 router.get('/favicon.svg', (req, res) => {
-  const color = settings.get('site.uiColor');
-  const letter = escapeHtml(settings.get('site.title').trim().charAt(0).toUpperCase() || 'M');
-  res.set('Cache-Control', 'public, max-age=300');
-  res
-    .type('image/svg+xml')
-    .send(
-      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="32" fill="${color}"/>` +
-        `<text x="32" y="43" font-family="system-ui, sans-serif" font-size="32" font-weight="800" text-anchor="middle" fill="${readableOn(color)}">${letter}</text></svg>`
-    );
+  res.set('Cache-Control', 'public, max-age=86400');
+  res.type('image/svg+xml').send(appIcon.SVG);
 });
 
 router.post('/api/language', sameOriginOnly, async (req, res) => {
@@ -82,6 +90,12 @@ router.post('/api/language', sameOriginOnly, async (req, res) => {
   res.json({ ok: true, language });
 });
 
-router.get('/healthz', (req, res) => res.json({ status: 'ok', version: config.version, uptime: Math.round(process.uptime()) }));
+router.get('/healthz', (req, res) =>
+  res.json({
+    status: 'ok',
+    ...(settings.get('site.showVersion') ? { version: config.version } : {}),
+    uptime: Math.round(process.uptime()),
+  })
+);
 
 module.exports = router;

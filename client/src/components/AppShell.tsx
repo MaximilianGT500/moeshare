@@ -21,6 +21,7 @@ import AccountCircleOutlined from '@mui/icons-material/AccountCircleOutlined';
 import ManageAccountsRounded from '@mui/icons-material/ManageAccountsRounded';
 import { BrandMark } from './BrandMark';
 import { SiteFooter } from './SiteFooter';
+import { Announcements } from './Announcements';
 import { ThemeModeSelector, ThemeToggleButton } from './ThemeToggle';
 import { LanguageSelector } from './LanguageSwitch';
 import { UserAvatar } from './UserAvatar';
@@ -252,9 +253,11 @@ export function AppShell({
         <Box sx={{ flex: 1 }} />
         <ThemeToggleButton />
         <AccountButton user={user} summary={accountSummary} />
-        <Typography variant="caption" sx={{ color: 'text.secondary', opacity: 0.7, mt: 0.5, fontSize: '0.6875rem' }}>
-          v{site.version}
-        </Typography>
+        {site.version && (
+          <Typography variant="caption" sx={{ color: 'text.secondary', opacity: 0.7, mt: 0.5, fontSize: '0.6875rem' }}>
+            v{site.version}
+          </Typography>
+        )}
       </Box>
 
       <Box
@@ -295,6 +298,7 @@ export function AppShell({
           minWidth: 0,
         }}
       >
+        <Announcements site={site} admin={user.isAdmin} sx={{ mt: 1, mb: 2 }} />
         {children}
         <SiteFooter site={site} sx={{ mt: 8 }} />
       </Box>

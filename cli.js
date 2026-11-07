@@ -340,6 +340,31 @@ async function passwordLogin() {
   );
 }
 
+async function videos() {
+  const media = require('./src/lib/media');
+  const videoService = require('./src/services/videoService');
+  if (!media.ffmpegAvailable) throw new Error('FFmpeg wurde nicht gefunden. Installiere es oder setze FFMPEG_PATH.');
+  const records = await videoService.videoRecords();
+  say(`\n${records.length} Videos werden geprüft …`);
+  const result = { sizes: 0, posters: 0, web: 0, skipped: 0, failed: 0 };
+  for (const [index, record] of records.entries()) {
+    try {
+      const outcome = await videoService.repairOne(record);
+      if (outcome.size) result.sizes += 1;
+      if (outcome.poster) result.posters += 1;
+      if (outcome.web) result.web += 1;
+      if (outcome.skipped) result.skipped += 1;
+    } catch (error) {
+      result.failed += 1;
+      console.log(`  ${record.username}/${record.filename}: ${error.message}`);
+    }
+    if ((index + 1) % 10 === 0 || index + 1 === records.length) console.log(`  ${index + 1} von ${records.length}`);
+  }
+  say(
+    `\nFertig: ${result.sizes} Abmessungen korrigiert, ${result.posters} Vorschaubilder neu, ${result.web} Browser-Fassungen erstellt, ${result.skipped} übersprungen (nicht lokal), ${result.failed} fehlgeschlagen.\n`
+  );
+}
+
 const COMMANDS = {
   register,
   token,
@@ -352,6 +377,7 @@ const COMMANDS = {
   restore,
   storage: moveStorage,
   import: importData,
+  videos,
 };
 
 async function main() {
@@ -369,6 +395,7 @@ async function main() {
     say('  restore <datei>      spielt eine Sicherung ein (--force überschreibt, --ohne-dateien nur die Datenbank)');
     say('  storage <s3|lokal>   verschiebt vorhandene Dateien nach S3 oder zurück');
     say('  import <quelle>      übernimmt Konten und Dateien aus Zipline, XBackBone oder Chibisafe');
+    say('  videos               prüft vorhandene Videos: Abmessungen, Vorschaubilder und Fassungen für alle Browser');
     process.exit(1);
   }
   await db.ready;

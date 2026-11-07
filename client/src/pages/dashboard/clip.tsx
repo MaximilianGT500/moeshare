@@ -71,11 +71,14 @@ export function ClipDialog({
   const [width, setWidth] = useState(480);
   const [job, setJob] = useState<{ progress: number } | null>(null);
   const [error, setError] = useState('');
+  const [natural, setNatural] = useState(0);
   const rangeRef = useRef(range);
   rangeRef.current = range;
+  const ratio = natural || (file && file.width && file.height ? file.width / file.height : 16 / 9);
 
   useEffect(() => {
     if (!file) return;
+    setNatural(0);
     setDuration(0);
     setRange([0, 0]);
     setTime(0);
@@ -211,20 +214,21 @@ export function ClipDialog({
                 borderRadius: `${radius.md}px`,
                 overflow: 'hidden',
                 bgcolor: '#000',
-                aspectRatio: file.width && file.height ? `${file.width} / ${file.height}` : '16 / 9',
-                maxHeight: { xs: '34vh', sm: '40vh' },
+                aspectRatio: `${ratio}`,
                 mx: 'auto',
-                width: '100%',
+                width: { xs: `min(100%, calc(34vh * ${ratio}))`, sm: `min(100%, calc(40vh * ${ratio}))` },
               }}
             >
               <video
                 ref={video}
-                src={file.urls.direct}
+                src={file.urls.playback || file.urls.direct}
                 poster={file.urls.preview}
                 playsInline
                 preload="auto"
                 onLoadedMetadata={(event) => {
-                  const total = event.currentTarget.duration;
+                  const element = event.currentTarget;
+                  const total = element.duration;
+                  if (element.videoWidth && element.videoHeight) setNatural(element.videoWidth / element.videoHeight);
                   if (Number.isFinite(total) && total > 0) {
                     setDuration(total);
                     setRange([0, total]);

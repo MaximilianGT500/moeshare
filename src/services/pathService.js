@@ -17,7 +17,7 @@ const RESERVED = new Set(
     'help home i i18n icons images img impressum imprint info js legal login logout manifest.webmanifest media moderation news ' +
     'oauth oembed p password privacy profile profiles public raw register report reports reset robots.txt root rss s search ' +
     'security settings setup share share-target shares sharex signin signup sitemap.xml static status support sw.js system terms ' +
-    'u upload uploads user users v view views www .well-known healthz'
+    'u upload uploads user users v view views www .well-known healthz r requests metrics maintenance subtitles'
   ).split(' ')
 );
 

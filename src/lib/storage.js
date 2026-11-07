@@ -22,7 +22,7 @@ function baseNameOf(filename) {
 function userDirs(username) {
   if (!isValidUsername(username)) throw new Error(`Ungültiger Benutzername: ${username}`);
   const root = path.join(config.paths.uploads, username);
-  return { root, previewDir: path.join(root, 'preview'), hlsDir: path.join(root, 'm3u8') };
+  return { root, previewDir: path.join(root, 'preview'), hlsDir: path.join(root, 'm3u8'), webDir: path.join(root, 'web') };
 }
 
 function filePaths(username, filename) {
@@ -37,12 +37,14 @@ function filePaths(username, filename) {
     playlist: path.join(dirs.hlsDir, `${base}.m3u8`),
     hlsStarted: path.join(dirs.hlsDir, `conversionStarted-${base}`),
     hlsComplete: path.join(dirs.hlsDir, `conversionComplete-${base}`),
+    web: path.join(dirs.webDir, `${base}.mp4`),
+    webStarted: path.join(dirs.webDir, `conversionStarted-${base}`),
   };
 }
 
 function ensureUserDirs(username) {
   const dirs = userDirs(username);
-  for (const dir of [dirs.root, dirs.previewDir, dirs.hlsDir]) fs.mkdirSync(dir, { recursive: true });
+  for (const dir of [dirs.root, dirs.previewDir, dirs.hlsDir, dirs.webDir]) fs.mkdirSync(dir, { recursive: true });
   return dirs;
 }
 

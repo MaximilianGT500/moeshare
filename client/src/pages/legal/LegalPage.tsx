@@ -1,58 +1,16 @@
-import { Fragment, type ReactNode } from 'react';
 import { m } from 'motion/react';
 import Box from '@mui/material/Box';
 import ButtonBase from '@mui/material/ButtonBase';
-import Link from '@mui/material/Link';
 import Typography from '@mui/material/Typography';
 import { readBoot } from '../../lib/boot';
 import type { LegalBoot } from '../../lib/types';
 import { AmbientBackdrop } from '../../components/Ambient';
 import { BrandMark } from '../../components/BrandMark';
+import { LegalText } from '../../components/LegalText';
 import { SiteFooter } from '../../components/SiteFooter';
 import { ThemeToggleButton } from '../../components/ThemeToggle';
 import { mix } from '../../lib/color';
 import { c, ease, radius } from '../../theme/tokens';
-
-const TOKEN = /(https?:\/\/[^\s<>()]+[^\s<>().,;:!?]|[\w.+-]+@[\w-]+(?:\.[\w-]+)+)/g;
-
-function linkify(line: string): ReactNode[] {
-  return line.split(TOKEN).map((part, index) => {
-    if (index % 2 === 0) return part;
-    const email = !part.startsWith('http');
-    return (
-      <Link
-        key={index}
-        href={email ? `mailto:${part}` : part}
-        target={email ? undefined : '_blank'}
-        rel={email ? undefined : 'noopener noreferrer'}
-        underline="hover"
-        sx={{ wordBreak: 'break-word' }}
-      >
-        {part}
-      </Link>
-    );
-  });
-}
-
-function Paragraphs({ text }: { text: string }) {
-  return (
-    <>
-      {text
-        .split(/\n{2,}/)
-        .filter((block) => block.trim())
-        .map((block, index) => (
-          <Typography key={index} variant="body1" sx={{ mt: index ? 2 : 0, lineHeight: 1.7 }}>
-            {block.split('\n').map((line, lineIndex) => (
-              <Fragment key={lineIndex}>
-                {lineIndex > 0 && <br />}
-                {linkify(line)}
-              </Fragment>
-            ))}
-          </Typography>
-        ))}
-    </>
-  );
-}
 
 export function LegalPage() {
   const boot = readBoot<LegalBoot>();
@@ -67,8 +25,8 @@ export function LegalPage() {
         <ButtonBase component="a" href="/" nativeButton={false} aria-label={site.title} sx={{ borderRadius: '50%' }}>
           <BrandMark src={site.favicon} title={site.title} size={34} />
         </ButtonBase>
-        <Typography variant="subtitle1" sx={{ fontWeight: 800, flex: 1 }}>
-          {site.title}
+        <Typography variant="subtitle1" sx={{ fontWeight: 800, flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>
+          {legal.heading || site.title}
         </Typography>
         <ThemeToggleButton />
       </Box>
@@ -91,7 +49,7 @@ export function LegalPage() {
               maxWidth: '75ch',
             }}
           >
-            <Paragraphs text={legal.text} />
+            <LegalText text={legal.text} />
           </Box>
         </m.article>
       </Box>

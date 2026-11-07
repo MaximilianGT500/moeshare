@@ -1,5 +1,8 @@
-import { forwardRef, useEffect, useRef, type CSSProperties } from 'react';
+import { forwardRef, useEffect, useRef, useState, type CSSProperties } from 'react';
+import Box from '@mui/material/Box';
+import type { SxProps, Theme } from '@mui/material/styles';
 import { useForkRef } from '@mui/material/utils';
+import type { Subtitle } from '../lib/types';
 
 interface VideoPlayerProps {
   src: string;
@@ -8,11 +11,12 @@ interface VideoPlayerProps {
   autoPlay?: boolean;
   style?: CSSProperties;
   className?: string;
+  tracks?: Subtitle[];
   onLoadedMetadata?: (video: HTMLVideoElement) => void;
 }
 
 export const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(function VideoPlayer(
-  { src, hls, poster, autoPlay = false, style, className, onLoadedMetadata },
+  { src, hls, poster, autoPlay = false, style, className, tracks, onLoadedMetadata },
   ref
 ) {
   const local = useRef<HTMLVideoElement | null>(null);
@@ -67,6 +71,79 @@ export const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(functi
       preload="metadata"
       style={style}
       onLoadedMetadata={(event) => onLoadedMetadata?.(event.currentTarget)}
-    />
+    >
+      {(tracks || []).map((track) => (
+        <track key={track.id} kind="subtitles" src={track.url} srcLang={track.language} label={track.label} default={track.default} />
+      ))}
+    </video>
   );
 });
+
+interface VideoFrameProps {
+  src: string;
+  hls?: string | null;
+  poster?: string | null;
+  width?: number | null;
+  height?: number | null;
+  maxHeight: string;
+  limit?: string;
+  autoPlay?: boolean;
+  className?: string;
+  tracks?: Subtitle[];
+  sx?: SxProps<Theme>;
+}
+
+const differs = (a: number, b: number) => !b || Math.abs(a - b) / b > 0.01;
+
+export function VideoFrame({
+  src,
+  hls,
+  poster,
+  width,
+  height,
+  maxHeight,
+  limit = '100%',
+  autoPlay,
+  className,
+  tracks,
+  sx,
+}: VideoFrameProps) {
+  const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
+  const stored = width && height ? width / height : 0;
+  const w = natural?.w || width || 0;
+  const h = natural?.h || height || 0;
+  const ratio = w && h ? w / h : 16 / 9;
+  const widest = w ? Math.max(320, Math.min(w, 1600)) : 1280;
+  return (
+    <Box
+      className={className}
+      sx={[
+        {
+          position: 'relative',
+          width: `min(${limit}, ${widest}px, calc(${maxHeight} * ${ratio}))`,
+          aspectRatio: `${ratio}`,
+          maxWidth: '100%',
+          mx: 'auto',
+          bgcolor: '#000',
+          overflow: 'hidden',
+          lineHeight: 0,
+        },
+        ...(Array.isArray(sx) ? sx : [sx]),
+      ]}
+    >
+      <VideoPlayer
+        src={src}
+        hls={hls}
+        poster={poster}
+        autoPlay={autoPlay}
+        tracks={tracks}
+        style={{ display: 'block', width: '100%', height: '100%', objectFit: 'contain' }}
+        onLoadedMetadata={(video) => {
+          if (video.videoWidth && video.videoHeight && differs(video.videoWidth / video.videoHeight, stored)) {
+            setNatural({ w: video.videoWidth, h: video.videoHeight });
+          }
+        }}
+      />
+    </Box>
+  );
+}

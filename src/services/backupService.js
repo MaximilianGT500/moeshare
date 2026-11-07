@@ -6,6 +6,7 @@ const path = require('path');
 const readline = require('readline');
 const tar = require('tar');
 const config = require('../config');
+const brand = require('../lib/brand');
 const db = require('../lib/db');
 const ephemeral = require('../lib/ephemeral');
 const logger = require('../lib/logger');
@@ -19,7 +20,8 @@ const settings = require('./settingsService');
 const log = logger.scope('backup');
 
 const FORMAT = 1;
-const NAME = /^moeshare-backup-\d{8}-\d{6}(-[a-z]+)?\.tar\.gz$/;
+const NAME = /^[a-z0-9-]{1,40}-backup-\d{8}-\d{6}(-[a-z]+)?\.tar\.gz$/;
+const AUTOMATIC = /-auto\.tar\.gz$/;
 const LOCK = 'backup';
 const LOCK_MS = 6 * 60 * 60 * 1000;
 const BATCH = 400;
@@ -85,7 +87,7 @@ async function countUploads() {
 async function create({ includeUploads = settings.get('backup.includeUploads'), reason = 'manual', actor = null } = {}) {
   if (current) throw conflict('Es läuft schon eine Sicherung.');
   const started = Date.now();
-  const name = `moeshare-backup-${stamp()}${reason === 'auto' ? '-auto' : ''}.tar.gz`;
+  const name = `${brand.slug()}-backup-${stamp()}${reason === 'auto' ? '-auto' : ''}.tar.gz`;
   current = { name, startedAt: started, phase: 'database', includeUploads, reason };
   let token = null;
   try {
@@ -93,7 +95,7 @@ async function create({ includeUploads = settings.get('backup.includeUploads'), 
   } finally {
     if (!token) current = null;
   }
-  if (!token) throw conflict('Ein anderer MoeShare-Prozess erstellt gerade eine Sicherung.');
+  if (!token) throw conflict('Ein anderer Prozess erstellt gerade eine Sicherung.');
   const folder = directory();
   const staging = path.join(folder, `.staging-${process.pid}-${started}`);
   const target = path.join(folder, name);
@@ -177,7 +179,7 @@ async function listLocal() {
   const items = [];
   for (const entry of entries.filter((name) => NAME.test(name))) {
     const { size, mtimeMs } = await fsp.stat(path.join(directory(), entry));
-    items.push({ name: entry, size, at: mtimeMs, location: 'local', auto: entry.includes('-auto') });
+    items.push({ name: entry, size, at: mtimeMs, location: 'local', auto: AUTOMATIC.test(entry) });
   }
   return items;
 }
@@ -189,7 +191,7 @@ async function listRemote() {
     const items = [];
     for await (const object of client.listAll(remotePrefix())) {
       const name = object.key.slice(remotePrefix().length);
-      if (NAME.test(name)) items.push({ name, size: object.size, at: object.modified || 0, location: 's3', auto: name.includes('-auto') });
+      if (NAME.test(name)) items.push({ name, size: object.size, at: object.modified || 0, location: 's3', auto: AUTOMATIC.test(name) });
     }
     return items;
   } finally {
@@ -299,9 +301,9 @@ async function restore(file, { force = false, uploads = true, onStep = () => {} 
       filter: (entry, info) => plain(info) && !entry.replace(/^\.\//, '').startsWith('uploads/'),
     });
     const manifest = JSON.parse(await fsp.readFile(path.join(work, 'manifest.json'), 'utf8').catch(() => '{}'));
-    if (manifest.app !== 'moeshare' || manifest.format !== FORMAT) throw badRequest('Das ist keine MoeShare-Sicherung.');
+    if (manifest.app !== 'moeshare' || manifest.format !== FORMAT) throw badRequest('Diese Datei ist keine passende Sicherung.');
     if (manifest.schema > LATEST_VERSION) {
-      throw badRequest(`Die Sicherung stammt von einer neueren MoeShare-Version (${manifest.version}). Aktualisiere MoeShare zuerst.`);
+      throw badRequest(`Die Sicherung stammt von einer neueren Version (${manifest.version}). Aktualisiere zuerst den Server.`);
     }
     await db.ready;
     if (!(await isEmpty(db))) {

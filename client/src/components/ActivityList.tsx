@@ -39,6 +39,11 @@ import TaskAltRounded from '@mui/icons-material/TaskAltRounded';
 import ForwardToInboxRounded from '@mui/icons-material/ForwardToInboxRounded';
 import HubRounded from '@mui/icons-material/HubRounded';
 import AccountCircleOutlined from '@mui/icons-material/AccountCircleOutlined';
+import MovieFilterRounded from '@mui/icons-material/MovieFilterRounded';
+import DnsRounded from '@mui/icons-material/DnsRounded';
+import CampaignRounded from '@mui/icons-material/CampaignRounded';
+import GavelRounded from '@mui/icons-material/GavelRounded';
+import MoveToInboxRounded from '@mui/icons-material/MoveToInboxRounded';
 import type { AuditEvent } from '../lib/types';
 import { formatDateTime, formatNumber, formatRelative } from '../lib/format';
 import { providerIcon, providerLabel } from '../lib/providers';
@@ -98,6 +103,16 @@ const SETTING_GROUPS: Record<string, string> = {
   clamav: t('Virenscan'),
   search: t('Suche'),
   export: t('Datenexport'),
+  caddy: t('Caddy'),
+  requests: t('Datei-Anfragen'),
+  metrics: t('Metriken'),
+  maintenance: t('Wartungsmodus'),
+};
+
+const ANNOUNCEMENT_CHANGES: Record<string, string> = {
+  created: t('Ankündigung veröffentlicht'),
+  updated: t('Ankündigung geändert'),
+  deleted: t('Ankündigung gelöscht'),
 };
 
 const WEBHOOK_CHANGES: Record<string, string> = {
@@ -379,6 +394,28 @@ function describeEvent(event: AuditEvent): Described {
         detail: str(d.name) || undefined,
         tone: d.change === 'removed' || d.change === 'rotated' ? 'warn' : 'neutral',
       };
+    case 'videos_repaired':
+      return { icon: <MovieFilterRounded />, title: t('Videos aufbereitet'), tone: 'neutral' };
+    case 'caddy_config_loaded':
+      return { icon: <DnsRounded />, title: t('Neue Konfiguration in Caddy geladen'), tone: 'warn' };
+    case 'announcement_changed':
+      return {
+        icon: <CampaignRounded />,
+        title: ANNOUNCEMENT_CHANGES[str(d.change)] || t('Ankündigung geändert'),
+        detail: str(d.title) || undefined,
+        tone: 'neutral',
+      };
+    case 'domain_legal_updated':
+      return {
+        icon: <GavelRounded />,
+        title: t('Impressum und Datenschutz einer Domain gespeichert'),
+        detail: [str(d.domain), d.complete === false ? t('noch unvollständig') : ''].filter(Boolean).join(', ') || undefined,
+        tone: d.complete === false ? 'warn' : 'good',
+      };
+    case 'upload_request_created':
+      return { icon: <MoveToInboxRounded />, title: t('Datei-Anfrage erstellt'), detail: str(d.title) || undefined, tone: 'neutral' };
+    case 'upload_request_deleted':
+      return { icon: <MoveToInboxRounded />, title: t('Datei-Anfrage gelöscht'), detail: str(d.title) || undefined, tone: 'neutral' };
     case 'avatar_changed':
       return {
         icon: <AccountCircleOutlined />,

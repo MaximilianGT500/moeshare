@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { AnimatePresence, m } from 'motion/react';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -11,17 +11,31 @@ import TokenRounded from '@mui/icons-material/TokenRounded';
 import DeleteOutlineRounded from '@mui/icons-material/DeleteOutlineRounded';
 import AddRounded from '@mui/icons-material/AddRounded';
 import CloudUploadRounded from '@mui/icons-material/CloudUploadRounded';
+import TerminalRounded from '@mui/icons-material/TerminalRounded';
+import ScreenshotMonitorRounded from '@mui/icons-material/ScreenshotMonitorRounded';
+import LaptopMacRounded from '@mui/icons-material/LaptopMacRounded';
+import PhoneIphoneRounded from '@mui/icons-material/PhoneIphoneRounded';
 import type { ApiTokenInfo } from '../../lib/types';
 import { createToken, errorMessage, revokeToken } from '../../lib/api';
 import { formatDate, relativeMs } from '../../lib/format';
 import { downloadShareX, type ShareXFeatures } from '../../lib/sharex';
 import { SettingRow, SettingsSection } from '../../components/SettingsKit';
 import { TokenNameDialog, TokenRevealDialog } from '../../components/TokenReveal';
+import { ClientSetupDialog } from '../../components/ClientSetupDialog';
+import { CLIENTS, type ClientKind } from '../../lib/clients';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { useToast } from '../../components/Toaster';
 import { isCancelled, useSudo } from '../../components/Sudo';
 import { c, ease, fonts, radius } from '../../theme/tokens';
 import { t } from '../../lib/i18n';
+
+const CLIENT_ICONS: Record<ClientKind, ReactNode> = {
+  flameshot: <ScreenshotMonitorRounded />,
+  spectacle: <ScreenshotMonitorRounded />,
+  macos: <LaptopMacRounded />,
+  shortcuts: <PhoneIphoneRounded />,
+  curl: <TerminalRounded />,
+};
 
 const STEPS = [
   { title: t('Konfiguration holen'), text: t('„ShareX einrichten“ erstellt ein Token und lädt die passende .sxcu-Datei herunter.') },
@@ -47,6 +61,17 @@ export function ApiPanel({
   const sudo = useSudo();
   const [naming, setNaming] = useState(false);
   const [revealed, setRevealed] = useState<string | null>(null);
+  const [client, setClient] = useState<{ kind: ClientKind; token: string } | null>(null);
+
+  const setupClient = async (kind: ClientKind, name: string) => {
+    try {
+      const result = await sudo(() => createToken(name));
+      setClient({ kind, token: result.token });
+      reload();
+    } catch (failure) {
+      if (!isCancelled(failure)) toast(errorMessage(failure), { variant: 'error' });
+    }
+  };
 
   const create = async (name: string, download = false) => {
     try {
@@ -124,6 +149,32 @@ export function ApiPanel({
       </SettingsSection>
 
       <SettingsSection
+        id="programme"
+        title={t('Andere Programme')}
+        description={t(
+          'Fertige Einstellungen für Linux, macOS, iPhone und eigene Skripte. Jedes Programm bekommt dabei ein eigenes Token.'
+        )}
+      >
+        {CLIENTS.map((item) => (
+          <SettingRow
+            key={item.kind}
+            icon={CLIENT_ICONS[item.kind]}
+            label={
+              <>
+                {item.name}
+                <Chip size="small" variant="outlined" label={item.platform} />
+              </>
+            }
+            description={item.description}
+          >
+            <Button variant="tonal" onClick={() => setupClient(item.kind, item.name)}>
+              {t('Einrichten')}
+            </Button>
+          </SettingRow>
+        ))}
+      </SettingsSection>
+
+      <SettingsSection
         id="tokens"
         title={t('API-Tokens')}
         description={t(
@@ -187,6 +238,13 @@ export function ApiPanel({
 
       <TokenNameDialog open={naming} onClose={() => setNaming(false)} onCreate={(name) => create(name)} />
       <TokenRevealDialog token={revealed} onClose={() => setRevealed(null)} siteTitle={siteTitle} baseUrl={baseUrl} features={features} />
+      <ClientSetupDialog
+        kind={client?.kind ?? null}
+        token={client?.token ?? null}
+        siteTitle={siteTitle}
+        baseUrl={baseUrl}
+        onClose={() => setClient(null)}
+      />
     </Stack>
   );
 }

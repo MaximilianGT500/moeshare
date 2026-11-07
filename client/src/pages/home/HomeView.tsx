@@ -19,6 +19,7 @@ import { AmbientBackdrop } from '../../components/Ambient';
 import { AnimatedNumber } from '../../components/AnimatedNumber';
 import { BrandMark } from '../../components/BrandMark';
 import { ThemeToggleButton } from '../../components/ThemeToggle';
+import { Announcements } from '../../components/Announcements';
 import { FooterLinks, reportLink } from '../../components/SiteFooter';
 import { LanguageLink } from '../../components/LanguageSwitch';
 import { formatBytes, formatNumber } from '../../lib/format';
@@ -246,6 +247,7 @@ export function HomeView({ site, home, stats, user, registration, preview = fals
         component="main"
         sx={{ position: 'relative', zIndex: 1, flex: 1, width: '100%', maxWidth: 1180, mx: 'auto', px: { xs: 2, md: 4 } }}
       >
+        {!preview && <Announcements site={site} sx={{ maxWidth: 720, mt: 1 }} />}
         <Box
           sx={{
             display: 'grid',

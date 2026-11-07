@@ -3,6 +3,7 @@
 const crypto = require('crypto');
 const axios = require('axios');
 const config = require('../config');
+const brand = require('../lib/brand');
 const ephemeral = require('../lib/ephemeral');
 const { HttpError } = require('../lib/errors');
 const { randomToken } = require('../lib/secrets');
@@ -14,7 +15,11 @@ const STATE_TTL_MS = 10 * 60 * 1000;
 const SIGNUP_TTL_MS = 15 * 60 * 1000;
 const DISCOVERY_TTL_MS = 60 * 60 * 1000;
 
-const http = axios.create({ timeout: 10000, headers: { 'User-Agent': `MoeShare/${config.version}`, Accept: 'application/json' } });
+const http = axios.create({ timeout: 10000, headers: { Accept: 'application/json' } });
+http.interceptors.request.use((options) => {
+  options.headers['User-Agent'] = brand.userAgent();
+  return options;
+});
 
 const failure = (message, code) => new HttpError(400, message, { code });
 const option = (provider, key) => settings.get(`auth.${provider}.${key}`);
@@ -220,7 +225,64 @@ async function oidcProfile(key, tokens, endpoints, nonce) {
   }
   const merged = { ...claims, ...info };
   const username = merged.preferred_username || merged.nickname || (merged.email ? String(merged.email).split('@')[0] : '');
-  return { profile: { subject: String(claims.sub), name: merged.name || username || labelOf(key), username } };
+  return {
+    profile: { subject: String(claims.sub), name: merged.name || username || labelOf(key), username },
+    membership: { groups: groupsOf(merged, option(key, 'groupsClaim') || 'groups') },
+  };
+}
+
+function claimValue(source, path) {
+  if (source && Object.prototype.hasOwnProperty.call(source, path)) return source[path];
+  return String(path)
+    .split('.')
+    .reduce((value, part) => (value && typeof value === 'object' ? value[part] : undefined), source);
+}
+
+function groupsOf(source, claim) {
+  const value = claimValue(source, claim);
+  const list = Array.isArray(value)
+    ? value
+    : typeof value === 'string'
+      ? value.split(/[\s,]+/)
+      : value && typeof value === 'object'
+        ? Object.keys(value)
+        : [];
+  return [
+    ...new Set(
+      list
+        .filter((item) => typeof item === 'string' || typeof item === 'number')
+        .map((item) => String(item).trim())
+        .filter(Boolean)
+    ),
+  ].slice(0, 200);
+}
+
+const groupKey = (name) => String(name).trim().replace(/^\/+/, '').toLowerCase();
+
+function inGroups(membership, wanted) {
+  if (!wanted.length) return false;
+  const have = new Set(((membership && membership.groups) || []).map(groupKey));
+  return wanted.some((group) => have.has(groupKey(group)));
+}
+
+const groupRules = () => ({
+  allowed: settings.get('auth.oidc.allowedGroups'),
+  admins: settings.get('auth.oidc.adminGroups'),
+  syncAdmins: settings.get('auth.oidc.syncAdmins'),
+});
+
+function allowedByGroups(key, membership) {
+  if (key !== 'oidc') return true;
+  const { allowed } = groupRules();
+  return !allowed.length || inGroups(membership, allowed);
+}
+
+function roleFromGroups(key, membership, current) {
+  if (key !== 'oidc') return current;
+  const { admins, syncAdmins } = groupRules();
+  if (!admins.length) return current;
+  if (inGroups(membership, admins)) return 'admin';
+  return syncAdmins ? 'mitglied' : current;
 }
 
 async function complete(key, { code, state }) {
@@ -240,6 +302,7 @@ async function complete(key, { code, state }) {
 }
 
 function meetsRequirements(key, membership) {
+  if (key === 'oidc') return allowedByGroups(key, membership);
   if (key !== 'discord' || !option('discord', 'guildId')) return true;
   if (!membership || !membership.member) return false;
   const required = option('discord', 'roleIds');
@@ -247,7 +310,8 @@ function meetsRequirements(key, membership) {
 }
 
 const membershipCountsAsInvite = (key) =>
-  key === 'discord' && Boolean(option('discord', 'guildId')) && option('discord', 'guildSkipsInvite');
+  (key === 'discord' && Boolean(option('discord', 'guildId')) && option('discord', 'guildSkipsInvite')) ||
+  (key === 'oidc' && settings.get('auth.oidc.allowedGroups').length > 0 && settings.get('auth.oidc.groupsSkipInvite'));
 
 async function holdSignup(data) {
   const id = randomToken(18);
@@ -281,6 +345,8 @@ module.exports = {
   complete,
   meetsRequirements,
   membershipCountsAsInvite,
+  allowedByGroups,
+  roleFromGroups,
   holdSignup,
   peekSignup,
   dropSignup,

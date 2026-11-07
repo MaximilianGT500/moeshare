@@ -76,7 +76,7 @@ export function SiteFooter({
       <FooterLinks links={links} inert={inert} />
       <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center', columnGap: 1.5, opacity: 0.8 }}>
         {site.copyright && <Typography variant="caption">{site.copyright}</Typography>}
-        {showVersion && <Typography variant="caption">{t('MoeShare {version}', { version: site.version })}</Typography>}
+        {showVersion && <Typography variant="caption">{t('Version {version}', { version: site.version })}</Typography>}
         <LanguageLink inert={inert} />
       </Box>
     </Box>

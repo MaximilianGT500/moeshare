@@ -10,6 +10,8 @@ const { client: safeHttp } = require('../lib/safeFetch');
 const settings = require('../services/settingsService');
 const i18n = require('../lib/i18n');
 const { escapeHtml } = require('../lib/format');
+const { ico } = require('../lib/ico');
+const appIcon = require('../lib/appIcon');
 
 const router = express.Router();
 const log = logger.scope('pwa');
@@ -22,6 +24,8 @@ const VARIANTS = {
   'apple-touch-icon.png': { size: 180, maskable: true },
 };
 const BACKGROUND = '#2b2235';
+const FAVICON_FILE = path.join(config.paths.public, 'favicon.ico');
+const ICO_SIZES = [16, 32, 48];
 const cache = new Map();
 
 const customFavicon = () => {
@@ -74,6 +78,38 @@ async function renderIcon(name) {
   cache.set(key, output);
   return output;
 }
+
+async function renderFavicon() {
+  const favicon = customFavicon();
+  if (!favicon) return fs.promises.readFile(FAVICON_FILE);
+  const key = `${favicon}|ico`;
+  if (cache.has(key)) return cache.get(key);
+  let output;
+  try {
+    const input = await sourceImage(favicon);
+    if (!input) throw new Error('Das Logo wurde nicht gefunden.');
+    const images = [];
+    for (const size of ICO_SIZES) {
+      const data = await sharp(input, { density: 300 })
+        .resize(size, size, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+        .png()
+        .toBuffer();
+      images.push({ size, data });
+    }
+    output = ico(images);
+  } catch (error) {
+    log.debug('Favicon aus dem Logo nicht möglich, nutze das Standardsymbol', { error });
+    output = await fs.promises.readFile(FAVICON_FILE);
+  }
+  if (cache.size > 40) cache.clear();
+  cache.set(key, output);
+  return output;
+}
+
+router.get('/favicon.ico', async (req, res) => {
+  res.set('Cache-Control', 'public, max-age=3600');
+  return res.type('image/x-icon').send(await renderFavicon());
+});
 
 router.get('/icons/:name', async (req, res, next) => {
   if (!VARIANTS[req.params.name]) return next();
@@ -139,8 +175,8 @@ router.get('/manifest.webmanifest', (req, res, next) => {
 
 const offlinePage = (language) =>
   `<!DOCTYPE html><html lang="${language}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Offline</title>` +
-  '<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#15121b;color:#e7e0ed;font-family:system-ui,sans-serif;padding:24px;text-align:center}</style></head>' +
-  `<body><main><h1>${escapeHtml(i18n.translate(language, 'Keine Verbindung'))}</h1><p>${escapeHtml(i18n.translate(language, 'Sobald du wieder online bist, geht es weiter.'))}</p></main></body></html>`;
+  '<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#15121b;color:#e7e0ed;font-family:system-ui,sans-serif;padding:24px;text-align:center}svg{width:72px;height:72px}</style></head>' +
+  `<body><main>${customFavicon() ? '' : appIcon.svg({ id: 'offline' })}<h1>${escapeHtml(i18n.translate(language, 'Keine Verbindung'))}</h1><p>${escapeHtml(i18n.translate(language, 'Sobald du wieder online bist, geht es weiter.'))}</p></main></body></html>`;
 
 const workerLanguage = (req) => {
   const match = /(?:^|;\s*)ms_lang=(de|en)(?:;|$)/.exec(req.get('cookie') || '');

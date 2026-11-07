@@ -37,7 +37,7 @@ export interface LayoutProps {
 
 const reveal = (loaded: boolean) => ({
   initial: { opacity: 0, scale: 0.97, y: 14, filter: 'blur(8px)' },
-  animate: loaded ? { opacity: 1, scale: 1, y: 0, filter: 'blur(0px)' } : undefined,
+  animate: loaded ? { opacity: 1, scale: 1, y: 0, filter: 'blur(0px)', transitionEnd: { filter: 'none' } } : undefined,
   transition: { duration: 0.7, ease: ease.emphasizedDecelerate },
 });
 

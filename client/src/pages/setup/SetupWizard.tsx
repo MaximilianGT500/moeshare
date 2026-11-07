@@ -431,7 +431,9 @@ export function SetupWizard({ boot }: { boot: SetupBoot }) {
     ),
   };
 
-  const submitLabel = step.key === 'welcome' ? t('Los geht’s') : step.key === 'review' ? t('MoeShare einrichten') : t('Weiter');
+  const named = (text: string) => text.replace(/\{name\}/g, title || 'MoeShare');
+  const submitLabel =
+    step.key === 'welcome' ? t('Los geht’s') : step.key === 'review' ? t('{name} einrichten', { name: title || 'MoeShare' }) : t('Weiter');
 
   return (
     <Box sx={{ position: 'relative', minHeight: '100dvh', overflow: 'hidden' }}>
@@ -478,9 +480,9 @@ export function SetupWizard({ boot }: { boot: SetupBoot }) {
                 noValidate
               >
                 <Typography variant="h4" component="h1">
-                  {step.title}
+                  {named(step.title)}
                 </Typography>
-                <Typography sx={{ color: 'text.secondary', mt: 1, maxWidth: '62ch' }}>{step.intro}</Typography>
+                <Typography sx={{ color: 'text.secondary', mt: 1, maxWidth: '62ch' }}>{named(step.intro)}</Typography>
                 <Box sx={{ mt: 3.5 }}>{content[step.key]}</Box>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 4, pt: 3, borderTop: `1px solid ${c.outlineVariant}` }}>
                   {index > 0 && (

@@ -2,12 +2,13 @@ import { useEffect, useState } from 'react';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
+import Link from '@mui/material/Link';
 import Skeleton from '@mui/material/Skeleton';
 import Typography from '@mui/material/Typography';
 import ContentCopyRounded from '@mui/icons-material/ContentCopyRounded';
 import type { UserDomain } from '../../lib/types';
 import { errorMessage, fetchAdminDomains, revokeDomain } from '../../lib/api';
-import { relativeMs } from '../../lib/format';
+import { formatDate, relativeMs } from '../../lib/format';
 import { t } from '../../lib/i18n';
 import { CopyIconButton } from '../../components/CopyButton';
 import { useConfirm } from '../../components/ConfirmDialog';
@@ -36,7 +37,10 @@ export function CaddyHint({ upstream }: { upstream: string }) {
       <Typography variant="caption" component="p" sx={{ color: 'text.secondary', mt: 1 }}>
         {t('Die Caddyfile aus dem Docker-Stack bringt diesen Block schon mit, dort heißt das Ziel moeshare:3000 statt {upstream}.', {
           upstream,
-        })}
+        })}{' '}
+        <Link href="#caddy" underline="hover">
+          {t('Zur Caddy-Verwaltung mit Zertifikaten und fertiger Caddyfile')}
+        </Link>
       </Typography>
     </Box>
   );
@@ -128,6 +132,23 @@ export function DomainList() {
             label={item.status === 'verified' ? t('Verbunden') : t('Wartet')}
             sx={item.status === 'verified' ? { bgcolor: c.primaryContainer, color: c.onPrimaryContainer } : undefined}
           />
+          {item.legal.complete ? (
+            <Chip size="small" variant="outlined" label={t('Impressum da')} />
+          ) : item.legal.required ? (
+            <Chip
+              size="small"
+              label={
+                item.legal.graceUntil
+                  ? t('Impressum fehlt, Frist bis {date}', { date: formatDate(new Date(item.legal.graceUntil)) })
+                  : t('Pausiert, Impressum fehlt')
+              }
+              sx={
+                item.legal.graceUntil
+                  ? { bgcolor: c.warningContainer, color: c.onWarningContainer }
+                  : { bgcolor: c.errorContainer, color: c.onErrorContainer }
+              }
+            />
+          ) : null}
           <Button size="small" color="error" onClick={() => revoke(item)} disabled={busy === item.id}>
             {t('Entfernen')}
           </Button>

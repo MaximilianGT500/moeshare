@@ -26,6 +26,10 @@ const extension = (item) => {
   return /^\.[a-z0-9]{1,10}$/.test(ext) ? ext : null;
 };
 const snowflake = (item) => (/^\d{5,25}$/.test(String(item).trim()) ? String(item).trim() : null);
+const oidcGroup = (item) => {
+  const text = String(item).trim();
+  return text && text.length <= 200 && !/[\r\n]/.test(text) ? text : null;
+};
 
 const clientId = (max = 200) => ({
   type: 'string',
@@ -51,6 +55,7 @@ const DEFINITIONS = {
   'site.domains': { type: 'domains', default: [], max: 10 },
   'site.pwa': { type: 'bool', default: true },
   'site.poweredBy': { type: 'bool', default: true },
+  'site.showVersion': { type: 'bool', default: true },
 
   'legal.imprintUrl': { type: 'url', default: '', allowEmpty: true, allowPath: true },
   'legal.imprintText': { type: 'string', default: '', allowEmpty: true, multiline: true, max: 20000 },
@@ -80,6 +85,7 @@ const DEFINITIONS = {
   'uploads.texts': { type: 'bool', default: true },
   'uploads.textMaxBytes': { type: 'bytes', default: 1024 * 1024 },
   'uploads.hls': { type: 'bool', default: false },
+  'uploads.webVideo': { type: 'enum', values: ['auto', 'off'], default: 'auto' },
   'uploads.dominantColor': { type: 'bool', default: true },
   'uploads.urlFetch': { type: 'bool', default: true },
   'uploads.formats.image': {
@@ -201,6 +207,17 @@ const DEFINITIONS = {
     patternMessage: 'Die Scopes beginnen mit openid und sind durch Leerzeichen getrennt.',
   },
   'auth.oidc.allowRegistration': { type: 'bool', default: false },
+  'auth.oidc.groupsClaim': {
+    type: 'string',
+    default: 'groups',
+    max: 100,
+    pattern: /^[\w:./-]{1,100}$/,
+    patternMessage: 'Der Name des Claims besteht aus Buchstaben, Ziffern und . : / _ -.',
+  },
+  'auth.oidc.allowedGroups': { type: 'list', item: oidcGroup, max: 30, default: [] },
+  'auth.oidc.adminGroups': { type: 'list', item: oidcGroup, max: 30, default: [] },
+  'auth.oidc.groupsSkipInvite': { type: 'bool', default: true },
+  'auth.oidc.syncAdmins': { type: 'bool', default: false },
 
   'embed.default': { type: 'embed', default: DEFAULT_TEMPLATE },
   'embed.allowUserTemplates': { type: 'bool', default: true },
@@ -224,6 +241,22 @@ const DEFINITIONS = {
     patternMessage: 'Bitte nur einen Hostnamen wie share.example.com eingeben.',
   },
   'domains.https': { type: 'bool', default: true },
+  'domains.legalRequired': { type: 'bool', default: true },
+
+  'caddy.adminUrl': { type: 'url', default: '', allowEmpty: true },
+  'caddy.tlsAddress': {
+    type: 'string',
+    default: '',
+    allowEmpty: true,
+    max: 200,
+    pattern: /^(?:\[[0-9a-f:.]+\]|[a-z0-9.-]+)(?::\d{1,5})?$/i,
+    patternMessage: 'Bitte einen Host wie caddy oder caddy:443 eingeben.',
+  },
+  'caddy.monitor': { type: 'bool', default: true },
+  'caddy.warnDays': { type: 'int', min: 1, max: 60, default: 14 },
+
+  'requests.enabled': { type: 'bool', default: true },
+  'requests.maxPerUser': { type: 'int', min: 1, max: 100, default: 20 },
 
   'trash.enabled': { type: 'bool', default: true },
   'trash.days': { type: 'int', min: 1, max: 365, default: 30 },
@@ -254,7 +287,7 @@ const DEFINITIONS = {
     allowEmpty: true,
     max: 191,
     pattern: EMAIL_PATTERN,
-    patternMessage: 'Bitte eine gültige E-Mail-Adresse wie moeshare@example.com eingeben.',
+    patternMessage: 'Bitte eine gültige E-Mail-Adresse wie name@example.com eingeben.',
   },
   'mail.fromName': { type: 'string', default: '', allowEmpty: true, max: 80 },
 
@@ -316,6 +349,27 @@ const DEFINITIONS = {
   'backup.target': { type: 'enum', values: ['local', 's3'], default: 'local' },
 
   'system.trustProxy': { type: 'bool', default: false },
+  'system.updateCheck': { type: 'bool', default: true },
+
+  'metrics.enabled': { type: 'bool', default: false },
+  'metrics.tokenHash': {
+    type: 'string',
+    default: '',
+    allowEmpty: true,
+    max: 64,
+    pattern: /^[a-f0-9]{64}$/,
+    patternMessage: 'Erzeuge den Schlüssel über den Knopf.',
+  },
+
+  'maintenance.enabled': { type: 'bool', default: false },
+  'maintenance.message': {
+    type: 'string',
+    default: 'Wir arbeiten gerade am Server. In Kürze ist alles wieder da.',
+    allowEmpty: true,
+    multiline: true,
+    max: 500,
+  },
+  'maintenance.allowViews': { type: 'bool', default: true },
   'system.errorReports': { type: 'bool', default: false },
   'system.logIps': { type: 'bool', default: true },
   'system.auditRetentionDays': { type: 'int', min: 7, max: 730, default: 90 },

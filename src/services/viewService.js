@@ -14,8 +14,16 @@ const storage = require('./storageService');
 const designs = require('./designService');
 const avatars = require('./avatarService');
 const profiles = require('./profileService');
+const subtitles = require('./subtitleService');
 
 const TEXT_PREVIEW_BYTES = 512 * 1024;
+
+function webState(record, type) {
+  if (type !== 'video') return { ready: false, converting: false };
+  const ready = storage.hasVariant(record, 'web');
+  const converting = !ready && record.storage !== 's3' && fs.existsSync(filePaths(record.username, record.filename).webStarted);
+  return { ready, converting };
+}
 
 function hlsState(record, type) {
   if (type !== 'video') return { ready: false, converting: false };
@@ -64,11 +72,17 @@ async function fileView(record, { access = { state: 'open' }, domain = null } = 
   const urls = files.urlsFor(record, { domain });
   const local = `/uploads/${username}/${filename}`;
   const hls = hlsState(record, type);
+  const web = webState(record, type);
   const dominant =
     typeof record.dominant_color === 'string' && record.dominant_color.toLowerCase() !== '#ffffff' ? record.dominant_color : null;
   const poster = `/uploads/${username}/preview/${baseNameOf(filename)}.jpg`;
   const slug = record.slug || filename;
-  const [style, profile, avatar] = await Promise.all([designs.forOwner(username), ownerProfile(username, domain), avatars.urlOf(username)]);
+  const [style, profile, avatar, tracks] = await Promise.all([
+    designs.forOwner(username),
+    ownerProfile(username, domain),
+    avatars.urlOf(username),
+    type === 'video' ? subtitles.list(record.id) : [],
+  ]);
   return {
     file: {
       id: record.id,
@@ -105,9 +119,12 @@ async function fileView(record, { access = { state: 'open' }, domain = null } = 
       display: type === 'image' && !isGif && storage.hasVariant(record, 'preview') ? `/uploads/${username}/preview/${filename}` : local,
       poster: type === 'video' && storage.hasVariant(record, 'poster') ? poster : null,
       hls: hls.ready ? `/uploads/${username}/m3u8/${path.basename(filePaths(username, filename).playlist)}` : null,
+      playback: web.ready ? `/uploads/${username}/web/${path.basename(filePaths(username, filename).web)}` : null,
     },
     accent: type === 'image' ? dominant : null,
     hlsConverting: hls.converting,
+    webConverting: web.converting,
+    subtitles: tracks.map(({ id, language, label, default: preferred, url }) => ({ id, language, label, default: preferred, url })),
     design: style.design,
     css: style.css,
     profile,

@@ -14,6 +14,17 @@ import type {
   ImportReport,
   Integration,
   Job,
+  Announcement,
+  CaddyAdapt,
+  CaddyState,
+  CertificateInfo,
+  LegalConfig,
+  LegalPreview,
+  PublicRequest,
+  Subtitle,
+  UpdateInfo,
+  UploadRequest,
+  UploadRequestInput,
   LoginLink,
   UploadSession,
   WatermarkConfig,
@@ -877,6 +888,7 @@ export interface WebhookInput {
   config?: Record<string, string>;
   events?: string[];
   enabled?: boolean;
+  legacyHeaders?: false;
 }
 
 export const createWebhook = (data: WebhookInput) =>
@@ -937,3 +949,92 @@ export const switchSetupDatabase = (token: string, url: string) =>
   post<DatabaseChoice & { ok: boolean; switched: boolean; accounts?: number; open: boolean }>('/api/setup/database', { token, url });
 export const completeSetup = (payload: SetupPayload & { createToken: boolean }) =>
   post<{ ok: boolean; redirect: string; username: string; token: string | null; baseUrl: string }>('/api/setup', payload);
+
+export const fetchUpdateInfo = () => api<UpdateInfo>('/api/admin/update');
+export const checkForUpdate = () => post<UpdateInfo>('/api/admin/update/check');
+
+export const fetchVideoInfo = () => api<{ videos: number; running: string | null; ffmpeg: boolean }>('/api/admin/videos');
+export const repairVideos = () => post<{ job: Job }>('/api/admin/videos/repair');
+
+export type AnnouncementInput = Partial<
+  Pick<Announcement, 'title' | 'text' | 'level' | 'audience' | 'startsAt' | 'endsAt' | 'dismissible'>
+>;
+export const fetchAnnouncements = () => api<{ announcements: Announcement[] }>('/api/admin/announcements');
+export const createAnnouncement = (data: AnnouncementInput) =>
+  post<{ announcement: Announcement; announcements: Announcement[] }>('/api/admin/announcements', data);
+export const updateAnnouncement = (id: number, data: AnnouncementInput) =>
+  patch<{ announcement: Announcement; announcements: Announcement[] }>(`/api/admin/announcements/${id}`, data);
+export const deleteAnnouncement = (id: number) => del<{ ok: boolean; announcements: Announcement[] }>(`/api/admin/announcements/${id}`);
+
+export const createMetricsToken = () =>
+  post<{ token: string; url: string; values: Record<string, SettingValue>; secrets: Record<string, boolean> }>('/api/admin/metrics/token');
+
+export const fetchCaddy = () => api<CaddyState>('/api/admin/caddy');
+export const checkCertificates = () => post<{ checking: boolean }>('/api/admin/caddy/check');
+export const checkCertificate = (domain: string) => post<{ certificate: CertificateInfo }>('/api/admin/caddy/check', { domain });
+export const adaptCaddyfile = (caddyfile: string) => post<CaddyAdapt>('/api/admin/caddy/adapt', { caddyfile });
+export const loadCaddyfile = (caddyfile: string) => post<{ ok: boolean; warnings: string[] }>('/api/admin/caddy/load', { caddyfile });
+export async function fetchCaddyfile(mode: 'docker' | 'native', email = '') {
+  const res = await fetch(`/api/admin/caddy/caddyfile?mode=${mode}&email=${encodeURIComponent(email)}`, { credentials: 'same-origin' });
+  if (!res.ok) throw await readError(res);
+  return res.text();
+}
+
+export const saveDomainLegal = (id: number, config: LegalConfig) =>
+  put<{ ok: boolean; domain: UserDomain; domains: DomainState }>(`/api/account/domains/${id}/legal`, config);
+export const previewDomainLegal = (id: number, config: LegalConfig, language?: 'de' | 'en') =>
+  post<LegalPreview>(`/api/account/domains/${id}/legal/preview`, { config, language });
+
+export const fetchUploadRequests = () => api<{ enabled: boolean; types: string[]; requests: UploadRequest[] }>('/api/upload-requests');
+export const createUploadRequest = (data: UploadRequestInput) => post<{ request: UploadRequest }>('/api/upload-requests', data);
+export const updateUploadRequest = (id: number, data: UploadRequestInput) =>
+  patch<{ request: UploadRequest }>(`/api/upload-requests/${id}`, data);
+export const deleteUploadRequest = (id: number) => del<{ ok: boolean }>(`/api/upload-requests/${id}`);
+export const fetchUploadRequest = (id: number) =>
+  api<{ request: UploadRequest; files: Array<FileItem & { uploader: string | null }> }>(`/api/upload-requests/${id}`);
+export const fetchPublicRequest = (code: string) => api<{ request: PublicRequest }>(`/api/requests/${encodeURIComponent(code)}`);
+export const unlockRequest = (code: string, password: string) =>
+  post<{ ok: boolean }>(`/r/${encodeURIComponent(code)}/unlock`, { password });
+
+export function uploadToRequest(
+  code: string,
+  file: File,
+  fields: { name?: string; note?: string },
+  onProgress: (fraction: number) => void
+): { promise: Promise<{ ok: boolean; name: string; size: number }>; abort: () => void } {
+  const xhr = new XMLHttpRequest();
+  const promise = new Promise<{ ok: boolean; name: string; size: number }>((resolve, reject) => {
+    const data = new FormData();
+    if (fields.name) data.append('name', fields.name);
+    if (fields.note) data.append('note', fields.note);
+    data.append('file', file, file.name);
+    xhr.open('POST', `/r/${encodeURIComponent(code)}/upload`);
+    xhr.setRequestHeader('Accept', 'application/json');
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) onProgress(event.loaded / event.total);
+    };
+    xhr.onerror = () => reject(new ApiError(t('Keine Verbindung zum Server.'), 0));
+    xhr.onabort = () => reject(new ApiError(t('Abgebrochen.'), 0, { code: 'aborted' }));
+    xhr.onload = () => {
+      let body: Record<string, unknown> = {};
+      try {
+        body = JSON.parse(xhr.responseText || '{}');
+      } catch {}
+      if (xhr.status >= 200 && xhr.status < 300) return resolve(body as { ok: boolean; name: string; size: number });
+      const message =
+        (typeof body.error === 'string' && body.error) ||
+        (xhr.status === 413 ? t('Die Datei ist zu groß.') : t('Die Anfrage ist fehlgeschlagen (HTTP {status}).', { status: xhr.status }));
+      return reject(new ApiError(message, xhr.status, { code: typeof body.code === 'string' ? body.code : '' }));
+    };
+    xhr.send(data);
+  });
+  return { promise, abort: () => xhr.abort() };
+}
+
+export const fetchSubtitles = (fileId: number) => api<{ subtitles: Subtitle[] }>(`/api/files/${fileId}/subtitles`);
+export const addSubtitle = (fileId: number, data: { language: string; label?: string; content: string; default?: boolean }) =>
+  post<{ subtitle: Subtitle; subtitles: Subtitle[] }>(`/api/files/${fileId}/subtitles`, data);
+export const updateSubtitle = (fileId: number, id: number, data: { language?: string; label?: string; default?: boolean }) =>
+  patch<{ subtitle: Subtitle; subtitles: Subtitle[] }>(`/api/files/${fileId}/subtitles/${id}`, data);
+export const deleteSubtitle = (fileId: number, id: number) =>
+  del<{ ok: boolean; subtitles: Subtitle[] }>(`/api/files/${fileId}/subtitles/${id}`);

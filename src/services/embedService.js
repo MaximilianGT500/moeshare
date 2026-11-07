@@ -150,13 +150,14 @@ function metaTags(record, embed, { domain = null, locale = 'de_DE' } = {}) {
     if (width && height) tags.push(tag('property', 'og:image:width', width), tag('property', 'og:image:height', height));
     tags.push(tag('name', 'twitter:card', embed.largeImage ? 'summary_large_image' : 'summary'));
   } else if (type === 'video') {
+    const source = urls.playback || urls.direct;
     tags.push(
       tag('property', 'og:type', 'video.other'),
-      tag('property', 'og:video', urls.direct),
-      tag('property', 'og:video:url', urls.direct),
-      tag('property', 'og:video:type', MIME[ext] || 'video/mp4')
+      tag('property', 'og:video', source),
+      tag('property', 'og:video:url', source),
+      tag('property', 'og:video:type', urls.playback ? 'video/mp4' : MIME[ext] || 'video/mp4')
     );
-    if (urls.direct.startsWith('https://')) tags.push(tag('property', 'og:video:secure_url', urls.direct));
+    if (source.startsWith('https://')) tags.push(tag('property', 'og:video:secure_url', source));
     if (width && height) tags.push(tag('property', 'og:video:width', width), tag('property', 'og:video:height', height));
     if (storage.hasVariant(record, 'poster')) tags.push(tag('property', 'og:image', urls.preview));
   } else if (type === 'audio') {

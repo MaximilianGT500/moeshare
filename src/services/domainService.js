@@ -9,15 +9,16 @@ const logger = require('../lib/logger');
 const secrets = require('../lib/secrets');
 const { client: safeHttp } = require('../lib/safeFetch');
 const { badRequest, conflict, forbidden, notFound } = require('../lib/errors');
+const brand = require('../lib/brand');
 const audit = require('./auditService');
+const legal = require('./legalService');
 const settings = require('./settingsService');
 
 const log = logger.scope('domains');
 
-const RECORD_PREFIX = '_moeshare';
-const VALUE_PREFIX = 'moeshare-verify=';
+const LEGACY_LABEL = 'moeshare';
 const REFRESH_MS = 30 * 1000;
-const PROBE_PATH = '/.well-known/moeshare/domain';
+const PROBE_PATTERN = /^\/\.well-known\/[a-z0-9-]{1,40}\/domain$/;
 const MINUTE = 60 * 1000;
 const HOUR = 60 * MINUTE;
 const AUTO_CHECK_MS = 7 * 24 * HOUR;
@@ -34,6 +35,12 @@ const baseHost = () => new URL(settings.get('site.baseUrl')).hostname.toLowerCas
 const globalHosts = () =>
   [settings.get('site.baseUrl'), ...settings.get('site.domains')].map((origin) => new URL(origin).hostname.toLowerCase());
 const target = () => settings.get('domains.target') || baseHost();
+
+const recordLabel = () => brand.slug();
+const recordName = (domain, label = recordLabel()) => `_${label}.${domain}`;
+const recordValue = (token, label = recordLabel()) => `${label}-verify=${token}`;
+const probePath = () => `/.well-known/${recordLabel()}/domain`;
+const labelsFor = (row) => [...new Set([recordLabel(), row.record_label, LEGACY_LABEL].filter(Boolean))];
 
 function instanceId() {
   return crypto.createHmac('sha256', secrets.loadKey()).update('moeshare-domain-probe').digest('hex').slice(0, 24);
@@ -63,18 +70,45 @@ function normalizeHost(input) {
   return host;
 }
 
+function legalState(row, now = Date.now()) {
+  const config = legal.parse(row.legal);
+  const check = legal.status(config);
+  const required = Boolean(settings.get('domains.legalRequired'));
+  const graceUntil = row.legal_grace_until ? Number(row.legal_grace_until) : null;
+  const grace = !check.complete && required && graceUntil !== null && graceUntil > now;
+  return {
+    config,
+    complete: check.complete,
+    missing: { imprint: check.imprint, privacy: check.privacy },
+    required,
+    graceUntil: grace ? graceUntil : null,
+    active: !required || check.complete || grace,
+    updatedAt: row.legal_updated_at ? Number(row.legal_updated_at) : null,
+  };
+}
+
 function present(row) {
+  const state = legalState(row);
   return {
     id: Number(row.id),
     domain: row.domain,
     origin: originOf(row.domain),
     status: row.status,
+    active: row.status === 'verified' && state.active,
+    legal: {
+      complete: state.complete,
+      required: state.required,
+      graceUntil: state.graceUntil,
+      missing: state.missing,
+      updatedAt: state.updatedAt,
+      config: state.config,
+    },
     createdAt: Number(row.created_at),
     verifiedAt: row.verified_at ? Number(row.verified_at) : null,
     checkedAt: row.checked_at ? Number(row.checked_at) : null,
     error: row.error || null,
     autoCheckUntil: row.status === 'pending' ? Number(row.created_at) + AUTO_CHECK_MS : null,
-    record: { type: 'TXT', name: `${RECORD_PREFIX}.${row.domain}`, value: `${VALUE_PREFIX}${row.token}` },
+    record: { type: 'TXT', name: recordName(row.domain), value: recordValue(row.token) },
     target: target(),
   };
 }
@@ -86,15 +120,24 @@ async function refresh() {
     return;
   }
   const rows = await db.all(
-    `SELECT d.domain, d.user_id, u.username FROM user_domains d JOIN users u ON u.id = d.user_id
+    `SELECT d.domain, d.user_id, d.legal, d.legal_grace_until, u.username FROM user_domains d JOIN users u ON u.id = d.user_id
      WHERE d.status = 'verified' AND u.status = 'active'`
   );
   const hosts = new Map();
   const users = new Map();
+  const now = Date.now();
   for (const row of rows) {
-    const entry = { domain: row.domain, origin: originOf(row.domain), userId: Number(row.user_id), username: row.username };
+    const state = legalState(row, now);
+    const entry = {
+      domain: row.domain,
+      origin: originOf(row.domain),
+      userId: Number(row.user_id),
+      username: row.username,
+      active: state.active,
+      legal: state.complete ? state.config : null,
+    };
     hosts.set(row.domain, entry);
-    users.set(row.username, [...(users.get(row.username) || []), entry]);
+    if (entry.active) users.set(row.username, [...(users.get(row.username) || []), entry]);
   }
   byHost = hosts;
   byUser = users;
@@ -105,7 +148,9 @@ function start() {
   timer = setInterval(() => refresh().catch((error) => log.debug('Domains nicht abgeglichen', { error })), REFRESH_MS);
   timer.unref();
   settings.onChange((keys) => {
-    if (keys.some((key) => key.startsWith('domains.') || key === 'site.baseUrl' || key === 'site.domains')) refresh().catch(() => {});
+    if (keys.some((key) => key.startsWith('domains.') || key.startsWith('legal.') || key === 'site.baseUrl' || key === 'site.domains')) {
+      refresh().catch(() => {});
+    }
   });
 }
 
@@ -160,6 +205,7 @@ async function add(user, input) {
     user_id: user.id,
     domain,
     token: secrets.randomToken(18),
+    record_label: recordLabel(),
     status: 'pending',
     created_at: Date.now(),
   });
@@ -173,14 +219,22 @@ function resolver() {
   return instance;
 }
 
-async function lookupTxt(domain) {
+async function lookupTxt(name) {
   try {
-    const records = await resolver().resolveTxt(`${RECORD_PREFIX}.${domain}`);
+    const records = await resolver().resolveTxt(name);
     return { values: records.map((chunks) => chunks.join('').trim()) };
   } catch (error) {
     if (['ENOTFOUND', 'ENODATA', 'NXDOMAIN'].includes(error.code)) return { values: [] };
     return { error: error.code || error.message };
   }
+}
+
+async function lookupRecords(row) {
+  const labels = labelsFor(row);
+  const results = await Promise.all(labels.map((label) => lookupTxt(recordName(row.domain, label))));
+  const values = results.flatMap((result) => result.values || []);
+  const failed = results.find((result) => result.error);
+  return { values, error: values.length ? null : failed ? failed.error : null, labels };
 }
 
 async function addresses(host) {
@@ -204,7 +258,7 @@ async function reachable(domain) {
   try {
     const response = await safeHttp({
       method: 'get',
-      url: `${originOf(domain)}${PROBE_PATH}`,
+      url: `${originOf(domain)}${probePath()}`,
       timeout: 5000,
       maxRedirects: 0,
       validateStatus: () => true,
@@ -217,14 +271,14 @@ async function reachable(domain) {
 }
 
 async function check(row) {
-  const expected = `${VALUE_PREFIX}${row.token}`;
-  const name = `${RECORD_PREFIX}.${row.domain}`;
-  const result = await lookupTxt(row.domain);
+  const name = recordName(row.domain);
+  const result = await lookupRecords(row);
+  const expected = new Set([row.token, ...result.labels.map((label) => recordValue(row.token, label))]);
   const now = Date.now();
   let error = null;
   if (result.error) error = `Die DNS-Abfrage ist fehlgeschlagen (${result.error}).`;
   else if (!result.values.length) error = `Kein TXT-Eintrag bei ${name} gefunden. Neue Einträge brauchen manchmal ein paar Minuten.`;
-  else if (!result.values.includes(expected)) error = 'Der TXT-Eintrag ist da, enthält aber einen anderen Wert.';
+  else if (!result.values.some((value) => expected.has(value))) error = 'Der TXT-Eintrag ist da, enthält aber einen anderen Wert.';
   if (error) {
     await db.run('UPDATE user_domains SET checked_at = ?, error = ? WHERE id = ?', [now, error, row.id]);
     return { error, newly: false };
@@ -273,6 +327,15 @@ async function checkPending() {
   return verified;
 }
 
+async function updateLegal(user, id, input) {
+  const row = await owned(user.id, id);
+  const config = legal.normalize(input);
+  await db.run('UPDATE user_domains SET legal = ?, legal_updated_at = ? WHERE id = ?', [JSON.stringify(config), Date.now(), row.id]);
+  await refresh();
+  log.info('Rechtliche Angaben einer Domain gespeichert', { user: user.username, domain: row.domain, complete: legal.complete(config) });
+  return present(await db.get('SELECT * FROM user_domains WHERE id = ?', [row.id]));
+}
+
 async function remove(user, id) {
   const row = await owned(user.id, id);
   await db.run('DELETE FROM user_domains WHERE id = ?', [row.id]);
@@ -296,18 +359,22 @@ async function removeAny(id) {
   return { ...present(row), userId: Number(row.user_id) || null };
 }
 
-function allowsCertificate(host) {
+function certificateReason(host) {
   const name = String(host || '')
     .toLowerCase()
     .replace(/\.$/, '');
-  if (!name) return false;
-  if (globalHosts().includes(name)) return true;
-  return Boolean(ownerOfHost(name));
+  if (!name) return 'empty';
+  if (globalHosts().includes(name)) return 'site';
+  if (ownerOfHost(name)) return 'custom';
+  return 'unknown';
 }
 
+const allowsCertificate = (host) => ['site', 'custom'].includes(certificateReason(host));
+
 module.exports = {
-  PROBE_PATH,
-  RECORD_PREFIX,
+  PROBE_PATTERN,
+  recordLabel,
+  probePath,
   enabled,
   refresh,
   start,
@@ -320,10 +387,12 @@ module.exports = {
   listForUser,
   add,
   verify,
+  updateLegal,
   checkPending,
   remove,
   listAll,
   removeAny,
   allowsCertificate,
+  certificateReason,
   instanceId,
 };

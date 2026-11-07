@@ -272,12 +272,12 @@ async function analyze(record) {
   const type = files.typeOf(record.filename, record.syntax).type;
   if (type === 'text') await search.index(record);
   if (type === 'image' || type === 'video') {
-    const { result } = await media.analyze(record.username, record.filename, type, {
+    const { result, info } = await media.analyze(record.username, record.filename, type, {
       preview: settings.get('uploads.preview'),
       dominantColor: settings.get('uploads.dominantColor'),
-      hls: false,
     });
     await files.update(record.username, record.filename, result);
+    if (type === 'video') await media.transcode(record.username, record.filename, { web: settings.get('uploads.webVideo'), info });
   }
   if (storage.activeDriver() === 's3') {
     const fresh = await files.findById(record.id);

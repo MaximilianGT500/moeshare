@@ -386,6 +386,7 @@ function publicFile(file) {
     view: file.urls.view,
     preview: guarded ? null : file.type === 'image' || file.type === 'video' ? file.urls.preview : null,
     direct: guarded ? null : file.urls.direct,
+    playback: guarded ? null : file.urls.playback || null,
     download: guarded ? null : file.urls.download,
   };
 }

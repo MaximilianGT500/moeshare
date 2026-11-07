@@ -1,9 +1,12 @@
+import type { ReactNode } from 'react';
 import { m } from 'motion/react';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Typography from '@mui/material/Typography';
 import HideImageRounded from '@mui/icons-material/HideImageRounded';
 import ArrowBackRounded from '@mui/icons-material/ArrowBackRounded';
+import ConstructionRounded from '@mui/icons-material/ConstructionRounded';
+import RefreshRounded from '@mui/icons-material/RefreshRounded';
 import { readBoot } from '../../lib/boot';
 import type { NotFoundBoot } from '../../lib/types';
 import { AmbientBackdrop } from '../../components/Ambient';
@@ -13,7 +16,7 @@ import { c, ease, elevation, fileTypeColor, fonts, radius } from '../../theme/to
 import { mix } from '../../lib/color';
 import { rich, t } from '../../lib/i18n';
 
-function EmptyStack() {
+function EmptyStack({ icon }: { icon: ReactNode }) {
   const back = [
     { rotate: -11, x: -58, y: 10, color: fileTypeColor.video },
     { rotate: 9, x: 56, y: 4, color: fileTypeColor.audio },
@@ -57,8 +60,41 @@ function EmptyStack() {
             '& svg': { fontSize: 52 },
           }}
         >
-          <HideImageRounded />
+          {icon}
         </Box>
+      </m.div>
+    </Box>
+  );
+}
+
+function Maintenance({ message, signedIn }: { message: string; signedIn: boolean }) {
+  return (
+    <Box>
+      <EmptyStack icon={<ConstructionRounded />} />
+      <m.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.25, duration: 0.6, ease: ease.emphasizedDecelerate }}
+      >
+        <Typography variant="h2" component="h1" sx={{ mt: 5, fontSize: { xs: '1.75rem', sm: '2.25rem' } }}>
+          {t('Gleich wieder da')}
+        </Typography>
+        <Typography variant="body1" sx={{ color: 'text.secondary', mt: 1.5, maxWidth: 460, mx: 'auto', whiteSpace: 'pre-line' }}>
+          {message || t('Wir arbeiten gerade am Server. In Kürze ist alles wieder da.')}
+        </Typography>
+        <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center', mt: 4, flexWrap: 'wrap' }}>
+          <Button variant="contained" startIcon={<RefreshRounded />} onClick={() => window.location.reload()}>
+            {t('Neu laden')}
+          </Button>
+          {!signedIn && (
+            <Button variant="tonal" href="/login">
+              {t('Als Admin anmelden')}
+            </Button>
+          )}
+        </Box>
+        <Typography variant="caption" component="p" sx={{ color: 'text.secondary', mt: 4, opacity: 0.7 }}>
+          {t('Wartungsmodus')}
+        </Typography>
       </m.div>
     </Box>
   );
@@ -85,54 +121,58 @@ export function NotFoundPage() {
         component="main"
         sx={{ position: 'relative', zIndex: 1, flex: 1, display: 'grid', placeItems: 'center', px: 2, pb: 8, textAlign: 'center' }}
       >
-        <Box>
-          <EmptyStack />
-          <m.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.25, duration: 0.6, ease: ease.emphasizedDecelerate }}
-          >
-            <Typography variant="h2" component="h1" sx={{ mt: 5, fontSize: { xs: '1.75rem', sm: '2.25rem' } }}>
-              {boot.message || t('Diese Seite gibt es nicht.')}
-            </Typography>
-            <Typography variant="body1" sx={{ color: 'text.secondary', mt: 1.5, maxWidth: 460, mx: 'auto' }}>
-              {missing
-                ? t(
-                    'Vielleicht wurde die Datei gelöscht oder der Link ist unvollständig. Prüfe die Adresse oder frag nach einem neuen Link.'
-                  )
-                : boot.requestId
-                  ? t('Lade die Seite neu. Bleibt der Fehler, findest du die Ursache im Server-Log unter der Fehler-ID unten.')
-                  : t('Lade die Seite neu. Bleibt der Fehler, steht im Server-Log, was passiert ist.')}
-            </Typography>
-            <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center', mt: 4, flexWrap: 'wrap' }}>
-              <Button
-                variant="contained"
-                startIcon={<ArrowBackRounded />}
-                onClick={() => (window.history.length > 1 ? window.history.back() : window.location.assign('/dashboard'))}
-              >
-                {t('Zurück')}
-              </Button>
-              <Button variant="tonal" href="/dashboard">
-                {t('Zum Dashboard')}
-              </Button>
-            </Box>
-            <Typography variant="caption" component="p" sx={{ color: 'text.secondary', mt: 4, opacity: 0.7 }}>
-              {boot.requestId
-                ? rich(
-                    'Fehler {status}, Fehler-ID {id}',
-                    {
-                      id: (
-                        <Box component="code" sx={{ fontFamily: fonts.mono, userSelect: 'all' }}>
-                          {boot.requestId}
-                        </Box>
-                      ),
-                    },
-                    { status }
-                  )
-                : t('Fehler {status}', { status })}
-            </Typography>
-          </m.div>
-        </Box>
+        {boot.maintenance ? (
+          <Maintenance message={boot.message} signedIn={Boolean(boot.signedIn)} />
+        ) : (
+          <Box>
+            <EmptyStack icon={<HideImageRounded />} />
+            <m.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.25, duration: 0.6, ease: ease.emphasizedDecelerate }}
+            >
+              <Typography variant="h2" component="h1" sx={{ mt: 5, fontSize: { xs: '1.75rem', sm: '2.25rem' } }}>
+                {boot.message || t('Diese Seite gibt es nicht.')}
+              </Typography>
+              <Typography variant="body1" sx={{ color: 'text.secondary', mt: 1.5, maxWidth: 460, mx: 'auto' }}>
+                {missing
+                  ? t(
+                      'Vielleicht wurde die Datei gelöscht oder der Link ist unvollständig. Prüfe die Adresse oder frag nach einem neuen Link.'
+                    )
+                  : boot.requestId
+                    ? t('Lade die Seite neu. Bleibt der Fehler, findest du die Ursache im Server-Log unter der Fehler-ID unten.')
+                    : t('Lade die Seite neu. Bleibt der Fehler, steht im Server-Log, was passiert ist.')}
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center', mt: 4, flexWrap: 'wrap' }}>
+                <Button
+                  variant="contained"
+                  startIcon={<ArrowBackRounded />}
+                  onClick={() => (window.history.length > 1 ? window.history.back() : window.location.assign('/dashboard'))}
+                >
+                  {t('Zurück')}
+                </Button>
+                <Button variant="tonal" href="/dashboard">
+                  {t('Zum Dashboard')}
+                </Button>
+              </Box>
+              <Typography variant="caption" component="p" sx={{ color: 'text.secondary', mt: 4, opacity: 0.7 }}>
+                {boot.requestId
+                  ? rich(
+                      'Fehler {status}, Fehler-ID {id}',
+                      {
+                        id: (
+                          <Box component="code" sx={{ fontFamily: fonts.mono, userSelect: 'all' }}>
+                            {boot.requestId}
+                          </Box>
+                        ),
+                      },
+                      { status }
+                    )
+                  : t('Fehler {status}', { status })}
+              </Typography>
+            </m.div>
+          </Box>
+        )}
       </Box>
       <SiteFooter site={site} sx={{ position: 'relative', zIndex: 1, px: 2, pb: 3 }} />
     </Box>

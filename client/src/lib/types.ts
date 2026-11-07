@@ -6,6 +6,7 @@ export type ExpiryChoice = 'never' | '10m' | '1h' | '6h' | '1d' | '3d' | '7d' | 
 export interface FileUrls {
   view: string;
   direct: string;
+  playback?: string | null;
   download: string;
   preview: string;
   delete: string;
@@ -143,6 +144,7 @@ export interface WebhookTarget {
   lastAt: number | null;
   lastStatus: number | null;
   lastError: string | null;
+  legacyHeaders?: boolean;
 }
 
 export interface ImportAccount {
@@ -305,9 +307,11 @@ export interface SystemInfo {
 }
 
 export interface SiteInfo {
+  announcements?: SiteAnnouncement[];
+  maintenance?: boolean;
   title: string;
   favicon: string;
-  version: string;
+  version: string | null;
   baseUrl: string;
   seedColor: string;
   copyright: string;
@@ -350,6 +354,7 @@ export interface UploadOptionsInfo {
   clips: boolean;
   customAddresses: boolean;
   linkPath: string | null;
+  requests?: boolean;
 }
 
 export interface TagCount {
@@ -414,7 +419,7 @@ export interface AlbumMember {
   addedAt: number;
 }
 
-export type NotifyKey = 'security' | 'reports' | 'users';
+export type NotifyKey = 'security' | 'reports' | 'users' | 'system' | 'requests';
 
 export interface Preferences {
   language: 'de' | 'en' | null;
@@ -551,6 +556,60 @@ export interface UserDomain {
   target: string;
   username?: string | null;
   userId?: number;
+  active: boolean;
+  legal: DomainLegal;
+}
+
+export type LegalMode = 'template' | 'text' | 'url';
+
+export interface LegalImprintData {
+  name?: string;
+  representative?: string;
+  street?: string;
+  postcode?: string;
+  city?: string;
+  country?: string;
+  email?: string;
+  phone?: string;
+  register?: string;
+  vatId?: string;
+  responsible?: string;
+  extra?: string;
+}
+
+export interface LegalPrivacyData {
+  controller?: string;
+  email?: string;
+  dpo?: string;
+  authority?: string;
+  extra?: string;
+}
+
+export interface LegalPart<T> {
+  mode: LegalMode;
+  data?: T;
+  text?: string;
+  url?: string;
+}
+
+export interface LegalConfig {
+  imprint: LegalPart<LegalImprintData>;
+  privacy: LegalPart<LegalPrivacyData>;
+}
+
+export interface DomainLegal {
+  complete: boolean;
+  required: boolean;
+  graceUntil: number | null;
+  missing: { imprint: string[]; privacy: string[] };
+  updatedAt: number | null;
+  config: LegalConfig | null;
+}
+
+export interface LegalPreview {
+  imprint: string | null;
+  privacy: string | null;
+  status: { complete: boolean; imprint: string[]; privacy: string[] };
 }
 
 export interface DomainCheck extends UserDomain {
@@ -775,7 +834,8 @@ type PageName =
   | 'legal'
   | 'album'
   | 'profile'
-  | 'report';
+  | 'report'
+  | 'request';
 
 interface BootBase {
   page: PageName;
@@ -845,6 +905,14 @@ export interface DashboardBoot extends BootBase {
   urlFetch: boolean;
   options: UploadOptionsInfo;
   tags: TagCount[];
+  domainNotices?: DomainNotice[];
+}
+
+export interface DomainNotice {
+  id: number;
+  domain: string;
+  graceUntil: number | null;
+  active: boolean;
 }
 
 export interface SudoMethods {
@@ -878,6 +946,191 @@ export interface AdminBoot extends BootBase {
   webhooks: { targets: WebhookTarget[]; kinds: WebhookKind[]; events: string[] };
   imports: { sources: Array<{ id: string; label: string }>; argon2: boolean; redirects: number };
   access: { pending: number; enabled: boolean; passwordLogin: boolean };
+  update: UpdateInfo;
+  announcements: Announcement[];
+  videos: { running: string | null; ffmpeg: boolean };
+}
+
+export interface UpdateInfo {
+  enabled: boolean;
+  current: string;
+  latest: string | null;
+  available: string | null;
+  checkedAt: number | null;
+  changelog: string;
+}
+
+export type AnnouncementLevel = 'info' | 'success' | 'warning' | 'error';
+export type AnnouncementAudience = 'everyone' | 'users' | 'admins';
+
+export interface Announcement {
+  id: number;
+  title: string;
+  text: string;
+  level: AnnouncementLevel;
+  audience: AnnouncementAudience;
+  startsAt: number | null;
+  endsAt: number | null;
+  dismissible: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface SiteAnnouncement {
+  id: number;
+  title: string;
+  text: string;
+  level: AnnouncementLevel;
+  dismissible: boolean;
+  updatedAt: number;
+}
+
+export interface CaddySite {
+  server: string;
+  listen: string[];
+  hosts: string[];
+  upstreams: string[];
+}
+
+export interface CaddyIssuer {
+  module: string;
+  ca: string | null;
+  email: string | null;
+}
+
+export interface CaddySummary {
+  sites: CaddySite[];
+  policies: Array<{ subjects: string[]; onDemand: boolean; issuers: CaddyIssuer[] }>;
+  onDemand: boolean;
+  ask: string | null;
+  email: string | null;
+  admin: string | null;
+}
+
+export interface CaddyNote {
+  level: 'error' | 'warning' | 'info';
+  text: string;
+}
+
+export interface CaddyOverview {
+  connected: boolean;
+  url: string | null;
+  detected: boolean;
+  error?: string | null;
+  summary?: CaddySummary;
+  upstreams?: Array<{ address: string; requests: number; fails: number }>;
+  reload?: { successful: boolean | null; at: number | null };
+  notes?: CaddyNote[];
+  config?: unknown;
+}
+
+export type CertificateStatus = 'ok' | 'warning' | 'expired' | 'error' | 'untrusted' | 'unchecked';
+
+export interface CertificateInfo {
+  domain: string;
+  source: 'site' | 'custom' | 'caddy';
+  status: CertificateStatus;
+  issuer?: string | null;
+  names: string[];
+  validFrom?: number | null;
+  validTo?: number | null;
+  daysLeft?: number | null;
+  fingerprint?: string | null;
+  error?: string | null;
+  checkedAt: number | null;
+}
+
+export interface TlsRequest {
+  id: number;
+  domain: string;
+  allowed: boolean;
+  reason: string;
+  at: number;
+}
+
+export interface CaddyState {
+  overview: CaddyOverview;
+  certificates: CertificateInfo[];
+  requests: TlsRequest[];
+  checking: boolean;
+}
+
+export interface CaddyAdapt {
+  ok: boolean;
+  error: string | null;
+  warnings: string[];
+  summary?: CaddySummary;
+}
+
+export type RequestTypes = 'any' | 'images' | 'videos' | 'media' | 'documents';
+export type RequestState = 'open' | 'closed' | 'expired' | 'full';
+
+export interface UploadRequest {
+  id: number;
+  code: string;
+  url: string;
+  title: string;
+  message: string;
+  password: boolean;
+  albumId: number | null;
+  maxFiles: number | null;
+  maxBytes: number | null;
+  fileBytes: number | null;
+  types: RequestTypes;
+  askName: boolean;
+  notify: boolean;
+  files: number;
+  bytes: number;
+  expiresAt: number | null;
+  closedAt: number | null;
+  lastUploadAt: number | null;
+  createdAt: number;
+  state: RequestState;
+}
+
+export interface UploadRequestInput {
+  title?: string;
+  message?: string;
+  password?: string | null;
+  expires?: ExpiryChoice;
+  maxFiles?: number | null;
+  maxBytes?: number | null;
+  fileBytes?: number | null;
+  types?: RequestTypes;
+  albumId?: number | null;
+  askName?: boolean;
+  notify?: boolean;
+  closed?: boolean;
+}
+
+export interface PublicRequest {
+  code: string;
+  title: string;
+  message: string;
+  owner: { name: string; avatar: string | null };
+  state: RequestState;
+  password: boolean;
+  unlocked: boolean;
+  askName: boolean;
+  types: RequestTypes;
+  expiresAt: number | null;
+  maxFileBytes: number | null;
+  filesLeft: number | null;
+  bytesLeft: number | null;
+}
+
+export interface RequestBoot extends BootBase {
+  page: 'request';
+  request: PublicRequest;
+}
+
+export interface Subtitle {
+  id: number;
+  language: string;
+  label: string;
+  default: boolean;
+  url: string;
+  createdAt?: number;
 }
 
 export type LoginLinkStatus = 'pending' | 'ready' | 'used' | 'revoked' | 'denied' | 'expired';
@@ -1013,6 +1266,7 @@ export interface ViewUrls {
   display: string;
   poster: string | null;
   hls: string | null;
+  playback: string | null;
 }
 
 export interface OwnerStyle {
@@ -1028,6 +1282,8 @@ export interface ViewBoot extends BootBase, OwnerStyle {
   urls: ViewUrls;
   accent: string | null;
   hlsConverting: boolean;
+  webConverting?: boolean;
+  subtitles?: Subtitle[];
   profile?: { name: string; url: string } | null;
   preview?: boolean;
   sample?: boolean;
@@ -1051,6 +1307,7 @@ export interface AlbumItem {
   view: string;
   preview: string | null;
   direct: string | null;
+  playback?: string | null;
   download: string | null;
   warning?: string | null;
   username?: string;
@@ -1130,6 +1387,8 @@ export interface NotFoundBoot extends BootBase {
   message: string;
   status?: number;
   requestId?: string;
+  maintenance?: boolean;
+  signedIn?: boolean;
 }
 
 export type HomeStatKey = 'files' | 'storage' | 'views' | 'users' | 'images' | 'videos' | 'audio' | 'today';
@@ -1189,7 +1448,7 @@ export interface SetupBoot extends BootBase {
 
 export interface LegalBoot extends BootBase {
   page: 'legal';
-  legal: { title: string; text: string };
+  legal: { title: string; text: string; heading?: string };
 }
 
 export type AnyBoot =
@@ -1205,4 +1464,5 @@ export type AnyBoot =
   | LegalBoot
   | AlbumBoot
   | ProfileBoot
-  | ReportBoot;
+  | ReportBoot
+  | RequestBoot;

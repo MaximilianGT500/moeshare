@@ -2,6 +2,7 @@
 
 const config = require('../config');
 const settings = require('../services/settingsService');
+const announcements = require('../services/announcementService');
 const { tagsFor } = require('./uiAssets');
 const { escapeHtml } = require('./format');
 const i18n = require('./i18n');
@@ -19,23 +20,28 @@ const LEGAL_PAGES = [
   { key: 'privacy', label: 'Datenschutz', path: '/datenschutz' },
 ];
 
-const legalLinks = (language) =>
+const legalLinks = (language, domain = null) =>
   LEGAL_PAGES.map(({ key, label, path }) => {
-    const url = settings.get(`legal.${key}Url`);
     const text = i18n.translate(language, label);
-    if (url) return { label: text, url };
-    return settings.get(`legal.${key}Text`) ? { label: text, url: path } : null;
+    if (domain && domain.legal) {
+      const part = domain.legal[key];
+      return { label: text, url: part.mode === 'url' && part.url ? part.url : path };
+    }
+    const url = settings.get(`legal.${key}Url`);
+    if (url) return { label: text, url: domain && !/^https?:\/\//.test(url) ? `${settings.get('site.baseUrl')}${url}` : url };
+    if (!settings.get(`legal.${key}Text`)) return null;
+    return { label: text, url: domain ? `${settings.get('site.baseUrl')}${path}` : path };
   }).filter(Boolean);
 
-const siteInfo = (language = settings.get('site.language'), custom = false) => ({
+const siteInfo = (language = settings.get('site.language'), custom = false, admin = false, domain = null) => ({
   title: settings.get('site.title'),
   favicon: settings.get('site.favicon'),
-  version: config.version,
+  version: admin || settings.get('site.showVersion') ? config.version : null,
   baseUrl: settings.get('site.baseUrl'),
   seedColor: settings.get('site.uiColor'),
-  copyright: settings.get('site.copyright'),
-  links: settings.get('site.links'),
-  legal: legalLinks(language),
+  copyright: domain && domain.legal ? '' : settings.get('site.copyright'),
+  links: domain && domain.legal ? [] : settings.get('site.links'),
+  legal: legalLinks(language, domain),
   pwa: settings.get('site.pwa') && !custom,
   language: settings.get('site.language'),
   report: settings.get('reports.enabled'),
@@ -119,12 +125,20 @@ ${messages ? `  <script nonce="${escapeHtml(nonce)}" src="${escapeHtml(messages)
 
 const languageOf = (res) => (res.req && res.req.language) || settings.get('site.language');
 
+const NOTICE_PAGES = new Set(['home', 'login', 'dashboard', 'account', 'admin', 'design', 'request']);
+
 const SCHEMES = ['dark', 'light'];
 
 function renderPage(res, { page, title, titleRaw = null, data = {}, head = '', noscript = NOSCRIPT, status = 200, scheme = null }) {
   const language = languageOf(res);
   const custom = Boolean(res.req && res.req.customDomain);
-  const site = siteInfo(language, custom);
+  const viewer = res.req && res.req.user;
+  const admin = Boolean(viewer && viewer.isAdmin && !custom);
+  const site = siteInfo(language, custom, admin, custom ? res.req.customDomain : null);
+  if (!custom && NOTICE_PAGES.has(page)) {
+    site.announcements = announcements.current(admin ? 'admin' : viewer ? 'user' : 'visitor');
+    if (admin && settings.get('maintenance.enabled')) site.maintenance = true;
+  }
   const assets = tagsFor(page, res.locals.cspNonce);
   if (!assets) return res.status(503).type('html').send(missingUiPage(site.title));
   const label = titleRaw || (title ? i18n.translate(language, title) : '');

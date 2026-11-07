@@ -21,10 +21,11 @@ import CropRotateRounded from '@mui/icons-material/CropRotateRounded';
 import MoreVertRounded from '@mui/icons-material/MoreVertRounded';
 import HistoryRounded from '@mui/icons-material/HistoryRounded';
 import ContentCutRounded from '@mui/icons-material/ContentCutRounded';
+import SubtitlesOutlined from '@mui/icons-material/SubtitlesOutlined';
 import WarningAmberRounded from '@mui/icons-material/WarningAmberRounded';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import MenuItem from '@mui/material/MenuItem';
-import type { FileItem } from '../../lib/types';
+import type { FileItem, Subtitle } from '../../lib/types';
 import { extensionOf, formatBytes, formatDateTime, formatNumber, parseServerDate, relativeFromServer } from '../../lib/format';
 import { shareFormats } from '../../lib/share';
 import { meaningfulColor, mix } from '../../lib/color';
@@ -33,7 +34,7 @@ import { SHARE_ICONS, ShareMenuItems } from '../../components/ShareList';
 import { fileIcon, typeDescription } from '../../components/FileIcons';
 import { VideoPlayer } from '../../components/VideoPlayer';
 import { StatsPanel } from '../../components/StatsView';
-import { fetchFileStats } from '../../lib/api';
+import { fetchFileStats, fetchSubtitles } from '../../lib/api';
 import { stopAudio } from './audioPlayer';
 import { c, ease, elevation, fonts, radius } from '../../theme/tokens';
 import { t, tn } from '../../lib/i18n';
@@ -59,9 +60,11 @@ interface ViewerProps {
   onImageEdit?: (file: FileItem) => void;
   onVersions?: (file: FileItem) => void;
   onClip?: (file: FileItem) => void;
+  onSubtitles?: (file: FileItem) => void;
   onWarning?: (file: FileItem) => void;
   trash?: boolean;
   paused?: boolean;
+  tracksVersion?: number;
 }
 
 interface Rect {
@@ -288,9 +291,11 @@ export function Viewer({
   onImageEdit,
   onVersions,
   onClip,
+  onSubtitles,
   onWarning,
   trash = false,
   paused = false,
+  tracksVersion = 0,
 }: ViewerProps) {
   const open = state !== null;
   const index = state ? state.index : null;
@@ -305,6 +310,21 @@ export function Viewer({
   const [fullLoaded, setFullLoaded] = useState<Record<string, boolean>>({});
   const [shareAnchor, setShareAnchor] = useState<HTMLElement | null>(null);
   const [moreAnchor, setMoreAnchor] = useState<HTMLElement | null>(null);
+  const [tracks, setTracks] = useState<Record<number, Subtitle[]>>({});
+  const videoId = file && file.type === 'video' ? file.id : null;
+
+  useEffect(() => {
+    if (videoId === null) return undefined;
+    let cancelled = false;
+    fetchSubtitles(videoId)
+      .then((result) => {
+        if (!cancelled) setTracks((prev) => ({ ...prev, [videoId]: result.subtitles }));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [videoId, tracksVersion]);
   const [closeTarget, setCloseTarget] = useState<TargetAndTransition | null>(null);
 
   const openKey = state ? `${state.openedWith}:${state.origin?.top ?? 0}:${state.origin?.left ?? 0}` : '';
@@ -565,7 +585,7 @@ export function Viewer({
               <DeleteOutlineRounded />
             </IconButton>
           </Tooltip>
-          {(onVersions || onWarning || (onClip && file.type === 'video')) && (
+          {(onVersions || onWarning || ((onClip || onSubtitles) && file.type === 'video')) && (
             <Tooltip title={t('Mehr')}>
               <IconButton
                 aria-label={t('Weitere Aktionen')}
@@ -616,6 +636,19 @@ export function Viewer({
                 <ContentCutRounded />
               </ListItemIcon>
               {t('Kürzen oder GIF machen')}
+            </MenuItem>
+          )}
+          {onSubtitles && file.type === 'video' && (
+            <MenuItem
+              onClick={() => {
+                setMoreAnchor(null);
+                onSubtitles(file);
+              }}
+            >
+              <ListItemIcon>
+                <SubtitlesOutlined />
+              </ListItemIcon>
+              {t('Untertitel')}
             </MenuItem>
           )}
           {onVersions && (
@@ -718,11 +751,15 @@ export function Viewer({
                 </>
               ) : (
                 <VideoPlayer
-                  src={file.urls.direct}
+                  src={file.urls.playback || file.urls.direct}
                   poster={file.urls.preview}
                   autoPlay={phase !== 'closing'}
+                  tracks={tracks[file.id]}
                   onLoadedMetadata={(video) => {
-                    if (!file.width && video.videoWidth) {
+                    if (!video.videoWidth || !video.videoHeight) return;
+                    const stored = file.width && file.height ? file.width / file.height : 0;
+                    const actual = video.videoWidth / video.videoHeight;
+                    if (!stored || Math.abs(actual - stored) / stored > 0.01) {
                       setNatural((prev) => ({ ...prev, [file.filename]: { w: video.videoWidth, h: video.videoHeight } }));
                     }
                   }}

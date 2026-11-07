@@ -6,8 +6,7 @@ const MB = 1024 * 1024;
 const PLACEHOLDERS = ['https://example.com', 'http://example.com', 'EXAMPLE', 'EXAMPLE.COM'];
 
 const clean = (value) => String(value).trim();
-const favicon = (value) =>
-  clean(value).replace(/^https?:\/\/(www\.)?moeshare\.de\/assets\/img\/logo\.png$/i, 'https://moeshare.eu/assets/img/logo.png');
+const favicon = (value) => (/^https?:\/\/(www\.)?moeshare\.(de|eu)\/assets\/img\/logo\.png$/i.test(clean(value)) ? '' : clean(value));
 const unlessPlaceholder = (value) => (PLACEHOLDERS.includes(clean(value).replace(/\/+$/, '')) ? undefined : clean(value));
 const bool = (value) => clean(value).toLowerCase() === 'true';
 const list = (value) =>

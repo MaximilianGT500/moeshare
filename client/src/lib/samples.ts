@@ -36,6 +36,15 @@ export function sampleView(username: string): { file: ViewFile; urls: ViewUrls }
       username,
       owner: false,
     },
-    urls: { view: '#', direct: SAMPLE_IMAGE, raw: SAMPLE_IMAGE, download: '#', display: SAMPLE_IMAGE, poster: null, hls: null },
+    urls: {
+      view: '#',
+      direct: SAMPLE_IMAGE,
+      raw: SAMPLE_IMAGE,
+      download: '#',
+      display: SAMPLE_IMAGE,
+      poster: null,
+      hls: null,
+      playback: null,
+    },
   };
 }

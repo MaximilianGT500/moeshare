@@ -18,15 +18,17 @@ import DeleteOutlineRounded from '@mui/icons-material/DeleteOutlineRounded';
 import StarOutlineRounded from '@mui/icons-material/StarOutlineRounded';
 import StarRounded from '@mui/icons-material/StarRounded';
 import ContentCopyRounded from '@mui/icons-material/ContentCopyRounded';
+import GavelRounded from '@mui/icons-material/GavelRounded';
 import type { DomainCheck, DomainState, Preferences, UserDomain } from '../../lib/types';
 import { ApiError, addDomain, errorMessage, fetchDomains, removeDomain, savePreferences, verifyDomain } from '../../lib/api';
-import { relativeMs } from '../../lib/format';
+import { formatDate, relativeMs } from '../../lib/format';
 import { t } from '../../lib/i18n';
 import { CopyIconButton } from '../../components/CopyButton';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { useToast } from '../../components/Toaster';
 import { c, ease, fonts, radius } from '../../theme/tokens';
-import { siteName } from '../../lib/boot';
+import { readBoot, siteName } from '../../lib/boot';
+import { DomainLegalDialog } from './DomainLegalDialog';
 
 function RecordLine({ label, value }: { label: string; value: string }) {
   return (
@@ -77,6 +79,68 @@ function CheckLine({ ok, label, hint }: { ok: boolean | null; label: string; hin
   );
 }
 
+function LegalStatus({ item, onLegal }: { item: UserDomain; onLegal: () => void }) {
+  const legal = item.legal;
+  const main = readBoot().site.baseUrl.replace(/^https?:\/\//, '');
+  if (legal.complete) {
+    return (
+      <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+        <CheckLine
+          ok
+          label={t('Impressum und Datenschutzerklärung hinterlegt')}
+          hint={legal.updatedAt ? t('Zuletzt geändert {when}', { when: relativeMs(legal.updatedAt) }) : undefined}
+        />
+        <Button size="small" startIcon={<GavelRounded />} onClick={onLegal} sx={{ ml: { sm: 'auto' } }}>
+          {t('Bearbeiten')}
+        </Button>
+      </Box>
+    );
+  }
+  if (!legal.required) {
+    return (
+      <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+        <Typography variant="body2" sx={{ color: 'text.secondary', flex: 1, minWidth: 220 }}>
+          {t('Ohne eigenes Impressum verweist die Domain auf die Seiten von {name}.', { name: siteName() })}
+        </Typography>
+        <Button size="small" startIcon={<GavelRounded />} onClick={onLegal}>
+          {t('Impressum und Datenschutz eintragen')}
+        </Button>
+      </Box>
+    );
+  }
+  const message =
+    item.status !== 'verified'
+      ? t('Bevor die Domain online geht, braucht sie ein Impressum und eine Datenschutzerklärung. Du kannst beides schon jetzt eintragen.')
+      : legal.graceUntil
+        ? t(
+            'Trage bis {date} ein Impressum und eine Datenschutzerklärung ein. Danach leitet die Domain auf {main} um, bis beides da ist.',
+            {
+              date: formatDate(new Date(legal.graceUntil)),
+              main,
+            }
+          )
+        : t(
+            'Die Domain ist pausiert und leitet auf {main} um. Trage ein Impressum und eine Datenschutzerklärung ein, dann ist sie sofort wieder erreichbar.',
+            {
+              main,
+            }
+          );
+  return (
+    <Alert
+      severity={item.status !== 'verified' ? 'info' : legal.graceUntil ? 'warning' : 'error'}
+      icon={<GavelRounded />}
+      sx={{ mt: 2, alignItems: 'center' }}
+      action={
+        <Button color="inherit" size="small" onClick={onLegal} sx={{ whiteSpace: 'nowrap' }}>
+          {t('Jetzt eintragen')}
+        </Button>
+      }
+    >
+      {message}
+    </Alert>
+  );
+}
+
 function DomainCard({
   item,
   check,
@@ -86,6 +150,7 @@ function DomainCard({
   onVerify,
   onRemove,
   onDefault,
+  onLegal,
 }: {
   item: UserDomain;
   check: DomainCheck | null;
@@ -95,6 +160,7 @@ function DomainCard({
   onVerify: () => void;
   onRemove: () => void;
   onDefault: () => void;
+  onLegal: () => void;
 }) {
   const verified = item.status === 'verified';
   return (
@@ -204,6 +270,8 @@ function DomainCard({
         </Typography>
       )}
 
+      <LegalStatus item={item} onLegal={onLegal} />
+
       <Box sx={{ display: 'flex', gap: 1, mt: 2, flexWrap: 'wrap' }}>
         <Button
           variant={verified ? 'text' : 'contained'}
@@ -248,6 +316,8 @@ export function DomainsPanel({
   const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState<number | null>(null);
   const [checks, setChecks] = useState<Record<number, DomainCheck>>({});
+  const [legalFor, setLegalFor] = useState<UserDomain | null>(null);
+  const [legalKey, setLegalKey] = useState(0);
   const full = state.items.length >= state.max;
   const current = useRef(state);
   current.current = state;
@@ -271,6 +341,22 @@ export function DomainsPanel({
     }, 30000);
     return () => window.clearInterval(timer);
   }, [waiting, toast]);
+
+  const openLegal = (item: UserDomain) => {
+    setLegalFor(item);
+    setLegalKey((key) => key + 1);
+  };
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const wanted = Number(params.get('rechtliches'));
+    if (!wanted) return;
+    const item = current.current.items.find((entry) => entry.id === wanted);
+    if (item) openLegal(item);
+    params.delete('rechtliches');
+    const rest = params.toString();
+    window.history.replaceState(null, '', `${window.location.pathname}${rest ? `?${rest}` : ''}${window.location.hash}`);
+  }, []);
 
   const add = async (event: FormEvent) => {
     event.preventDefault();
@@ -402,8 +488,24 @@ export function DomainsPanel({
           onVerify={() => verify(item)}
           onRemove={() => remove(item)}
           onDefault={() => makeDefault(item)}
+          onLegal={() => openLegal(item)}
         />
       ))}
+
+      {legalFor && (
+        <DomainLegalDialog
+          key={legalKey}
+          domain={legalFor}
+          others={state.items}
+          open
+          onClose={() => setLegalFor(null)}
+          onSaved={(next) => {
+            setState(next);
+            const updated = next.items.find((entry) => entry.id === legalFor.id);
+            if (updated) setLegalFor(updated);
+          }}
+        />
+      )}
 
       {!state.items.length && state.enabled && (
         <Typography variant="body2" sx={{ color: 'text.secondary' }}>

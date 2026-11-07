@@ -134,7 +134,17 @@ function resolveDomain(value, username = null) {
 
 const hostFor = (record, domain) => (domain && originsFor(record.username).includes(domain) ? domain : settings.get('site.baseUrl'));
 
-const ROOT_TAKEN = new Set(['report', 'impressum', 'datenschutz', 'healthz', 'favicon.svg', 'robots.txt', 'sw.js', 'manifest.webmanifest']);
+const ROOT_TAKEN = new Set([
+  'report',
+  'impressum',
+  'datenschutz',
+  'healthz',
+  'favicon.svg',
+  'favicon.ico',
+  'robots.txt',
+  'sw.js',
+  'manifest.webmanifest',
+]);
 
 const rootable = (slug) => !ROOT_TAKEN.has(String(slug).toLowerCase()) && !paths.isReserved(slug) && !String(slug).startsWith('.');
 
@@ -161,9 +171,11 @@ function urlsFor(record, { domain = null } = {}) {
   const { type } = typeOf(record.filename, record.syntax);
   const preview = type === 'video' ? `${baseNameOf(record.filename)}.jpg` : record.filename;
   const slug = record.slug || record.filename;
+  const web = type === 'video' && storage.hasVariant(record, 'web');
   return {
     view: `${host}${viewPathOf(record, host)}`,
     direct: `${host}/uploads/${record.username}/${record.filename}`,
+    playback: web ? `${host}/uploads/${record.username}/web/${baseNameOf(record.filename)}.mp4` : null,
     download: `${host}/download/${displayPath(slug)}`,
     preview: `${host}/uploads/${record.username}/preview/${preview}`,
     delete: `${base}/delete/${displayPath(slug)}`,

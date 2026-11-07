@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, m } from 'motion/react';
+import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
 import Collapse from '@mui/material/Collapse';
 import Fab from '@mui/material/Fab';
 import GlobalStyles from '@mui/material/GlobalStyles';
@@ -10,6 +12,8 @@ import Tab from '@mui/material/Tab';
 import useScrollTrigger from '@mui/material/useScrollTrigger';
 import CloudUploadRounded from '@mui/icons-material/CloudUploadRounded';
 import { readBoot, siteName } from '../../lib/boot';
+import { RequestsView } from './requests';
+import { SubtitlesDialog } from './subtitles';
 import type { Album, DashboardBoot, FileItem, TagCount, UserStats } from '../../lib/types';
 import {
   ApiError,
@@ -26,7 +30,7 @@ import {
   type UploadResponse,
 } from '../../lib/api';
 import type { DropContents } from '../../lib/folders';
-import { extensionOf, formatBytes, formatNumber, relativeFromServer } from '../../lib/format';
+import { extensionOf, formatBytes, formatDate, formatNumber, relativeFromServer } from '../../lib/format';
 import { t, tn } from '../../lib/i18n';
 import { sharedUrl, takeSharedItems } from '../../lib/shareTarget';
 import { ScrollTabs } from '../../components/ScrollTabs';
@@ -89,9 +93,16 @@ function summaryText(stats: UserStats, quotaBytes: number | null) {
   return `${parts.join(', ')}.${latest}`;
 }
 
-type Section = 'files' | 'albums' | 'links' | 'stats' | 'trash';
+type Section = 'files' | 'albums' | 'links' | 'requests' | 'stats' | 'trash';
 
-const SECTION_HASH: Record<Section, string> = { files: '', albums: '#alben', links: '#links', stats: '#statistik', trash: '#papierkorb' };
+const SECTION_HASH: Record<Section, string> = {
+  files: '',
+  albums: '#alben',
+  links: '#links',
+  requests: '#anfragen',
+  stats: '#statistik',
+  trash: '#papierkorb',
+};
 
 function sectionFromHash(boot: DashboardBoot): { section: Section; album: number | null } {
   const hash = window.location.hash;
@@ -99,6 +110,7 @@ function sectionFromHash(boot: DashboardBoot): { section: Section; album: number
   if (album && boot.options.albums) return { section: 'albums', album: Number(album[1]) };
   if (hash === '#alben' && boot.options.albums) return { section: 'albums', album: null };
   if (hash === '#links' && boot.options.links) return { section: 'links', album: null };
+  if (hash === '#anfragen' && boot.options.requests) return { section: 'requests', album: null };
   if (hash === '#statistik' && boot.options.stats) return { section: 'stats', album: null };
   if (hash === '#papierkorb' && boot.options.trash) return { section: 'trash', album: null };
   return { section: 'files', album: null };
@@ -245,6 +257,8 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [selectMode, setSelectMode] = useState(false);
   const [viewer, setViewer] = useState<ViewerState | null>(null);
+  const [subtitlesFile, setSubtitlesFile] = useState<FileItem | null>(null);
+  const [tracksVersion, setTracksVersion] = useState(0);
   const viewerIndex = viewer ? viewer.index : null;
   const [hidden, setHidden] = useState<string | null>(null);
   const [fresh, setFresh] = useState<Set<string>>(() => new Set());
@@ -770,12 +784,41 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
         )}
       </Box>
 
-      {(boot.options.albums || boot.options.links || boot.options.stats || trashOn) && (
+      {(boot.domainNotices || []).length > 0 && (
+        <Box sx={{ display: 'grid', gap: 1.25, mb: 3, maxWidth: 880 }}>
+          {(boot.domainNotices || []).map((notice) => (
+            <Alert
+              key={notice.id}
+              severity={notice.active ? 'warning' : 'error'}
+              action={
+                <Button color="inherit" size="small" href={`/account?rechtliches=${notice.id}#domains`} sx={{ whiteSpace: 'nowrap' }}>
+                  {t('Jetzt eintragen')}
+                </Button>
+              }
+            >
+              {notice.active && notice.graceUntil
+                ? t('Für {domain} fehlen noch Impressum und Datenschutzerklärung. Ab {date} ist die Domain sonst pausiert.', {
+                    domain: notice.domain,
+                    date: formatDate(new Date(notice.graceUntil)),
+                  })
+                : t(
+                    '{domain} ist pausiert, weil Impressum und Datenschutzerklärung fehlen. Links darüber leiten solange auf die Hauptadresse um.',
+                    {
+                      domain: notice.domain,
+                    }
+                  )}
+            </Alert>
+          ))}
+        </Box>
+      )}
+
+      {(boot.options.albums || boot.options.links || boot.options.requests || boot.options.stats || trashOn) && (
         <Box sx={{ mb: 2.5, mt: -1 }}>
           <ScrollTabs value={section} onChange={(next) => goSection(next)} label={t('Bereiche')}>
             <Tab value="files" label={t('Dateien')} />
             {boot.options.albums && <Tab value="albums" label={t('Alben')} />}
             {boot.options.links && <Tab value="links" label={t('Links')} />}
+            {boot.options.requests && <Tab value="requests" label={t('Anfragen')} />}
             {boot.options.stats && <Tab value="stats" label={t('Statistik')} />}
             {trashOn && (
               <Tab
@@ -813,6 +856,7 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
         <AlbumsView openId={albumOpen} onOpen={(id) => goSection('albums', id)} info={boot.options} refreshKey={uploadRound} />
       )}
       {section === 'links' && <LinksView info={boot.options} version={linksVersion} />}
+      {section === 'requests' && <RequestsView />}
       {section === 'stats' && <InsightsView onOpen={openStats} />}
       {section === 'trash' && (
         <TrashView
@@ -903,6 +947,7 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
         onStats={boot.options.stats ? openStats : undefined}
         onImageEdit={menu && canEditImage(menu.file) ? (file) => setImageEdit(file) : undefined}
         onClip={menu && boot.options.clips && menu.file.type === 'video' ? (file) => setClipFile(file) : undefined}
+        onSubtitles={(file) => setSubtitlesFile(file)}
         onVersions={(file) => setVersionsFile(file)}
         onWarning={toggleWarning}
         trash={trashOn}
@@ -923,9 +968,19 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
         onImageEdit={(file) => setImageEdit(file)}
         onVersions={(file) => setVersionsFile(file)}
         onClip={boot.options.clips ? (file) => setClipFile(file) : undefined}
+        onSubtitles={(file) => setSubtitlesFile(file)}
         onWarning={toggleWarning}
         trash={trashOn}
-        paused={!!imageEdit || !!versionsFile || !!clipFile}
+        paused={!!imageEdit || !!versionsFile || !!clipFile || !!subtitlesFile}
+        tracksVersion={tracksVersion}
+      />
+
+      <SubtitlesDialog
+        file={subtitlesFile}
+        onClose={() => {
+          setSubtitlesFile(null);
+          setTracksVersion((value) => value + 1);
+        }}
       />
 
       <VersionsDialog

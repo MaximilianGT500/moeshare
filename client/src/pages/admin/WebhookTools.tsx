@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
+import Link from '@mui/material/Link';
 import Button from '@mui/material/Button';
 import ButtonBase from '@mui/material/ButtonBase';
 import Chip from '@mui/material/Chip';
@@ -37,7 +38,7 @@ import { useConfirm } from '../../components/ConfirmDialog';
 import { useToast } from '../../components/Toaster';
 import { isCancelled, useSudo } from '../../components/Sudo';
 import { c, fonts, radius } from '../../theme/tokens';
-import { siteName } from '../../lib/boot';
+import { siteName, siteSlug } from '../../lib/boot';
 
 interface FieldSpec {
   key: string;
@@ -87,7 +88,7 @@ const KIND_SPECS: Record<WebhookKind, KindSpec> = {
       ),
     fields: [
       { key: 'homeserver', label: () => t('Matrix-Server'), mono: true, placeholder: 'https://matrix.org' },
-      { key: 'room', label: () => t('Raum'), mono: true, placeholder: '#moeshare:matrix.org' },
+      { key: 'room', label: () => t('Raum'), mono: true, placeholder: `#${siteSlug()}:matrix.org` },
       { key: 'token', label: () => t('Zugangstoken'), secret: true, mono: true },
     ],
   },
@@ -114,7 +115,7 @@ const KIND_SPECS: Record<WebhookKind, KindSpec> = {
     intro: () => t('Push-Nachrichten aufs Handy über ntfy.sh oder einen eigenen ntfy-Server.'),
     fields: [
       { key: 'server', label: () => t('Server'), optional: true, mono: true, placeholder: 'https://ntfy.sh' },
-      { key: 'topic', label: () => t('Thema'), mono: true, placeholder: 'moeshare-alerts' },
+      { key: 'topic', label: () => t('Thema'), mono: true, placeholder: `${siteSlug()}-meldungen` },
       { key: 'token', label: () => t('Zugangstoken'), secret: true, optional: true, mono: true },
       { key: 'priority', label: () => t('Priorität (1 bis 5)'), optional: true, placeholder: '3' },
     ],
@@ -123,11 +124,11 @@ const KIND_SPECS: Record<WebhookKind, KindSpec> = {
     label: t('Eigener Webhook'),
     icon: <DataObjectRounded />,
     intro: () =>
-      t('{name} schickt jedes Ereignis als JSON per POST. Mit Schlüssel steht die HMAC-SHA256-Signatur im Header X-MoeShare-Signature.', {
+      t('{name} schickt jedes Ereignis als JSON per POST. Mit Schlüssel steht die HMAC-SHA256-Signatur im Header X-Webhook-Signature.', {
         name: siteName(),
       }),
     fields: [
-      { key: 'url', label: () => t('Adresse'), secret: true, mono: true, placeholder: 'https://example.com/hooks/moeshare' },
+      { key: 'url', label: () => t('Adresse'), secret: true, mono: true, placeholder: `https://example.com/hooks/${siteSlug()}` },
       { key: 'secret', label: () => t('Signatur-Schlüssel'), secret: true, optional: true, mono: true },
     ],
   },
@@ -428,6 +429,19 @@ export function WebhookTargets({ initial, kinds, events }: { initial: WebhookTar
     }
   };
 
+  const dropLegacy = async (target: WebhookTarget) => {
+    setBusy(target.id);
+    try {
+      const result = await sudo(() => updateWebhook(target.id, { legacyHeaders: false }));
+      setTargets(result.targets);
+      toast(t('„{name}“ schickt nur noch die neuen Header', { name: target.name }), { variant: 'success' });
+    } catch (failure) {
+      if (!isCancelled(failure)) toast(errorMessage(failure), { variant: 'error' });
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const test = async (target: WebhookTarget) => {
     setBusy(target.id);
     try {
@@ -518,6 +532,20 @@ export function WebhookTargets({ initial, kinds, events }: { initial: WebhookTar
                   >
                     {state.text}
                   </Typography>
+                  {target.legacyHeaders && (
+                    <Typography variant="caption" component="p" sx={{ color: 'text.secondary', mt: 0.5, whiteSpace: 'normal' }}>
+                      {t('Schickt zusätzlich die alten Header X-MoeShare-Event und X-MoeShare-Signature.')}{' '}
+                      <Link
+                        component="button"
+                        type="button"
+                        onClick={() => dropLegacy(target)}
+                        disabled={busy === target.id}
+                        sx={{ fontSize: 'inherit', verticalAlign: 'baseline' }}
+                      >
+                        {t('Abschalten')}
+                      </Link>
+                    </Typography>
+                  )}
                 </Box>
               </Box>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0, ml: { xs: 6, sm: 0 } }}>

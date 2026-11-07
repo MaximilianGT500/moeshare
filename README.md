@@ -1,5 +1,5 @@
 <div align="center">
-  <a href="https://moeshare.eu"><img height="220" alt="MoeShare" src="https://moeshare.eu/assets/img/logo.png"></a>
+  <a href="https://moeshare.eu"><img height="128" alt="MoeShare" src="public/icons/icon-512.png"></a>
   <h1>MoeShare</h1>
   <p>Dein eigener Uploader für ShareX: Dateien hochladen, schön teilen und alles im Browser verwalten.</p>
 
@@ -29,7 +29,9 @@ Offizielle Instance: [v3.moeshare.eu](https://v3.moeshare.eu).
 - [Installation](#installation)
 - [Erster Start und Einrichtung](#erster-start-und-einrichtung)
 - [ShareX verbinden](#sharex-verbinden)
+- [Andere Programme](#andere-programme)
 - [Texte, Kurzlinks und Alben](#texte-kurzlinks-und-alben)
+- [Datei-Anfragen](#datei-anfragen)
 - [Eigene Adressen und eigener Pfad](#eigene-adressen-und-eigener-pfad)
 - [Papierkorb, Statistiken und ZIP](#papierkorb-statistiken-und-zip)
 - [Große Dateien, Ordner und Versionen](#große-dateien-ordner-und-versionen)
@@ -38,11 +40,14 @@ Offizielle Instance: [v3.moeshare.eu](https://v3.moeshare.eu).
 - [Bilder bearbeiten](#bilder-bearbeiten)
 - [Bilder optimieren und Wasserzeichen](#bilder-optimieren-und-wasserzeichen)
 - [Videos kürzen und GIFs](#videos-kürzen-und-gifs)
+- [Videos für alle Browser](#videos-für-alle-browser)
+- [Untertitel](#untertitel)
 - [Inhaltswarnungen](#inhaltswarnungen)
 - [Vorschauseiten gestalten](#vorschauseiten-gestalten)
 - [Profilseiten](#profilseiten)
 - [Profilbilder](#profilbilder)
 - [Eigene Domains](#eigene-domains)
+- [Impressum und Datenschutz für eigene Domains](#impressum-und-datenschutz-für-eigene-domains)
 - [Melden und Moderation](#melden-und-moderation)
 - [E-Mail](#e-mail)
 - [Benachrichtigungen](#benachrichtigungen)
@@ -57,9 +62,13 @@ Offizielle Instance: [v3.moeshare.eu](https://v3.moeshare.eu).
 - [Anmeldung ohne Passwort](#anmeldung-ohne-passwort)
 - [Einmal-Links](#einmal-links)
 - [Startseite, Impressum und Links](#startseite-impressum-und-links)
+- [Eigener Name und Versionshinweise](#eigener-name-und-versionshinweise)
+- [Ankündigungen und Wartungsmodus](#ankündigungen-und-wartungsmodus)
 - [App fürs Handy](#app-fürs-handy)
 - [Protokoll und Fehlerberichte](#protokoll-und-fehlerberichte)
 - [Hinter einem Reverse-Proxy](#hinter-einem-reverse-proxy)
+- [Caddy verwalten](#caddy-verwalten)
+- [Metriken für Prometheus](#metriken-für-prometheus)
 - [Update von einer älteren Version](#update-von-einer-älteren-version)
 - [Datensicherung](#datensicherung)
 - [Kommandozeile](#kommandozeile)
@@ -89,16 +98,23 @@ Offizielle Instance: [v3.moeshare.eu](https://v3.moeshare.eu).
 - **Profilbilder** mit Zuschnitt im Browser, aus einer Datei oder den eigenen Uploads, bewegte GIFs bleiben bewegt
 - **Eigene Adressen** für Dateien, Kurzlinks und Alben wie `/view/urlaub`, dazu ein **eigener Pfad** statt `/view/`, etwa `/max/JrinQR99`. Alte Adressen leiten weiter
 - **Eigene Domains pro Konto**, bestätigt über einen TXT-Eintrag im DNS, mit kurzen Links wie `bilder.deinname.de/JrinQR99`, die Zertifikate holt Caddy von selbst
+- **Impressum und Datenschutz pro Domain**: aus einer Vorlage, als eigener Text oder als Link, damit jede eigene Domain rechtlich sauber ist
+- **Caddy-Verwaltung** im Admin-Bereich: Zertifikate mit Ablaufdatum, Warnung per E-Mail und Webhook, Seiten, Weiterleitungen und eine fertige Caddyfile
 - **Bilder bearbeiten** im Browser: zuschneiden, drehen, spiegeln, Pfeile, Rahmen, Text und Verpixeln
 - **Bilder optimieren** als WebP oder AVIF, auf Wunsch verkleinert und mit dem Original als älterer Fassung
 - **Wasserzeichen** aus Text oder Logo, automatisch auf jedem neuen Bild
 - **Videos kürzen und GIFs erstellen** direkt im Dashboard
+- **Videos für alle Browser**: HEVC, 10 Bit, MKV oder AVI bekommen im Hintergrund eine H.264-Fassung, hochkant gefilmte und anamorphe Videos erscheinen im richtigen Format
+- **Untertitel** als SRT oder WebVTT für jedes Video, mehrere Sprachen pro Video
+- **Datei-Anfragen**: ein Link, über den andere dir Dateien schicken, ohne Konto, mit Passwort, Ablaufzeit und Grenzen
 - **Melden und Moderation**: Besucher melden Inhalte, Admins sperren oder löschen sie
 - **Virenscan** mit ClamAV für jeden Upload
 - **E-Mail über SMTP** für „Passwort vergessen“, Anmeldelinks, Einladungen und Hinweise zum Konto
 - **Startseite** mit Statistiken und Upload-Verlauf, im Browser anpassbar oder abschaltbar
-- **Dein Name**: Überall steht der Name deiner Instanz, „Läuft mit MoeShare“ lässt sich abschalten
-- **Anmeldung** mit Passwort, Zwei-Faktor per Authenticator-App und Passkeys, dazu über Discord, GitHub, Google, Microsoft, GitLab oder jeden OpenID-Connect-Anbieter wie Authentik, Keycloak oder Authelia
+- **Dein Name**: Überall steht der Name deiner Instanz, auch in DNS-Einträgen, Dateinamen und Webhooks. „Läuft mit MoeShare“ und die Versionsnummer lassen sich abschalten
+- **Ankündigungen und Wartungsmodus**: Hinweise für alle oder nur Angemeldete, mit Zeitraum, und eine Wartungsseite, während du am Server arbeitest
+- **Update-Hinweis**: Admins sehen, wenn eine neue Version erschienen ist, auf Wunsch abschaltbar
+- **Anmeldung** mit Passwort, Zwei-Faktor per Authenticator-App und Passkeys, dazu über Discord, GitHub, Google, Microsoft, GitLab oder jeden OpenID-Connect-Anbieter wie Authentik, Keycloak oder Authelia, dort auch mit Rollen aus Gruppen
 - **Ohne Passwort**: Die Anmeldung mit Passwort lässt sich ganz abschalten, dann geht es nur noch mit Passkey, über einen verknüpften Dienst oder mit einem Einmal-Link
 - **Einmal-Links**, die genau einmal anmelden und von selbst ablaufen: von Admins erstellt, per E-Mail angefordert oder von anderen Systemen über die API, auf Wunsch erst nach Freigabe durch einen Admin
 - **Benutzerverwaltung** mit Rollen, Speicherlimits, Einladungslinks, Sperren und Aktivitätsprotokoll
@@ -114,13 +130,45 @@ Offizielle Instance: [v3.moeshare.eu](https://v3.moeshare.eu).
 - **Datenschutz**: Standortdaten werden aus Fotos entfernt, bevor sie öffentlich erreichbar sind
 - **Sicherheit**: strenge Content Security Policy, hochgeladene HTML- und SVG-Dateien laufen in einer Sandbox
 - **Benachrichtigungen** an Discord, Slack, Matrix, Telegram, ntfy oder einen eigenen Webhook, für jedes Ziel mit eigener Auswahl an Ereignissen
+- **Metriken für Prometheus** unter `/metrics`, geschützt mit einem Token
+- **Installationsskript**, das Docker oder Node.js, Caddy und die Datenbank in einem Rutsch einrichtet
 - **Weboberfläche** mit Material You: Farben aus einer Grundfarbe, helles und dunkles Design, auf dem Handy genauso gut wie am PC
 
-Für macOS und Linux funktionieren auch [Flameshot](https://flameshot.org/) (siehe [`config_flameshot.sh`](config_flameshot.sh)) und [MagicCap](https://magiccap.me/).
+Für Linux, macOS und das iPhone gibt es fertige Einstellungen unter Konto › API, siehe [Andere Programme](#andere-programme). [MagicCap](https://magiccap.me/) funktioniert ebenfalls.
 
 ## Installation
 
-MoeShare braucht **Node.js 24 oder neuer** oder Docker. Das Docker-Image bringt Node.js 26 und FFmpeg schon mit. Ohne Docker installierst du FFmpeg für Video-Vorschauen, Streaming, gekürzte Videos und GIFs selbst, etwa mit `apt install ffmpeg`, `brew install ffmpeg` oder `winget install ffmpeg`. MoeShare findet es über den `PATH`, alternativ gibst du den Pfad mit `FFMPEG_PATH` an. Die Weboberfläche liegt fertig gebaut im Repository, ein eigener Build-Schritt ist nicht nötig.
+Am schnellsten geht es mit dem [Installationsskript](#mit-dem-installationsskript). Von Hand braucht MoeShare **Node.js 24 oder neuer** oder Docker. Das Docker-Image bringt Node.js 26 und FFmpeg schon mit. Ohne Docker installierst du FFmpeg für Video-Vorschauen, Streaming, gekürzte Videos und GIFs selbst, etwa mit `apt install ffmpeg`, `brew install ffmpeg` oder `winget install ffmpeg`. MoeShare findet es über den `PATH`, alternativ gibst du den Pfad mit `FFMPEG_PATH` an. Die Weboberfläche liegt fertig gebaut im Repository, ein eigener Build-Schritt ist nicht nötig.
+
+### Mit dem Installationsskript
+
+Auf einem Linux-Server mit Debian, Ubuntu, Fedora, Rocky, Alma, openSUSE, Arch oder Alpine richtet ein Skript alles ein: Docker oder Node.js, die Dateien von MoeShare, eine `.env` mit zufälligen Passwörtern für die Datenbank, Caddy für HTTPS und, ohne Docker, einen systemd-Dienst mit eigenem Benutzer.
+
+```bash
+curl -fsSL https://moeshare.eu/install.sh | sudo bash
+```
+
+Das Skript fragt nach Installationsart, Domain und Datenbank und zeigt am Ende den Link zum Einrichtungsassistenten. Ohne Rückfragen geht es mit Optionen:
+
+```bash
+curl -fsSL https://moeshare.eu/install.sh | sudo bash -s -- --docker --domain share.example.com --email du@example.com --db postgres -y
+```
+
+| Option | Bedeutung |
+| --- | --- |
+| `--docker` / `--node` | mit Docker (empfohlen) oder mit Node.js und systemd |
+| `--dir PFAD` | Installationsordner, Standard `/opt/moeshare` |
+| `--domain NAME` | Domain für HTTPS über Caddy |
+| `--email ADRESSE` | E-Mail-Adresse für Let’s Encrypt |
+| `--db ART` | `sqlite`, `postgres` oder `mariadb` (nur Docker) |
+| `--clamav` | zusätzlich den Virenscanner starten (nur Docker) |
+| `--port ZAHL` | Port von MoeShare, Standard `3000` |
+| `--ref NAME` | Git-Branch oder Tag, Standard `main` |
+| `--update` | bestehende Installation aktualisieren |
+| `--no-start` | alles vorbereiten, aber nicht starten |
+| `-y` | keine Fragen, Standardwerte nehmen |
+
+Mit Domain bindet das Skript MoeShare nur an `127.0.0.1`, erreichbar ist es dann ausschließlich über Caddy. Ein Update holst du mit `curl -fsSL https://moeshare.eu/install.sh | sudo bash -s -- --update`. Das Skript liegt auch im Repository als [`install.sh`](install.sh), wer es vorher lesen möchte, lädt es erst herunter und startet es dann mit `sudo bash install.sh`.
 
 ### Mit Docker
 
@@ -237,6 +285,20 @@ Wer Uploads aus ShareX gleich schützen oder einsortieren will, ergänzt in der 
 | `X-Slug` | `urlaub` | [Eigene Adresse](#eigene-adressen-und-eigener-pfad) für Datei oder Text, etwa `/view/urlaub`. Umlaute URL-kodiert |
 | `X-Code` | `discord` | Eigenes Kürzel für einen Kurzlink, etwa `/s/discord` |
 
+## Andere Programme
+
+Unter **Konto › API › Andere Programme** gibt es fertige Einstellungen für weitere Programme. Ein Klick auf „Einrichten“ legt ein eigenes Token an und zeigt das passende Skript mit deinem Server und deinem Token:
+
+| Programm | System | Was es tut |
+| --- | --- | --- |
+| Flameshot | Linux | Bereich auswählen, hochladen, Link in die Zwischenablage, unter X11 und Wayland |
+| KDE Spectacle | Linux | dasselbe mit dem Bildschirmfoto-Programm von KDE Plasma |
+| Bildschirmfoto auf dem Mac | macOS | nutzt das eingebaute `screencapture`, mit Kurzbefehle auf eine Taste legbar |
+| Kurzbefehle | iPhone, iPad, Mac | Schritt-für-Schritt-Anleitung für einen Kurzbefehl, der Fotos hochlädt und den Link kopiert |
+| curl | überall | ein Befehl für eigene Skripte und Automationen |
+
+Die Skripte brauchen nur `curl`, für die Zwischenablage unter Linux `wl-clipboard` oder `xclip`. Du speicherst sie etwa als `~/.local/bin/…`, machst sie mit `chmod +x` ausführbar und legst in den Systemeinstellungen ein Tastenkürzel dafür an.
+
 ## Texte, Kurzlinks und Alben
 
 **Texte** lädst du aus ShareX, über die API oder im Dashboard mit „Neuer Text“ hoch. MoeShare zeigt sie mit Syntaxhervorhebung, erkennt die Sprache auf Wunsch selbst und bietet die Rohfassung und einen Download an. Wie groß ein Text sein darf, legst du unter **Admin › Einstellungen › Uploads** fest.
@@ -248,6 +310,20 @@ Wer Uploads aus ShareX gleich schützen oder einsortieren will, ergänzt in der 
 Ein Passwort, eine Ablaufzeit oder ein einmaliger Abruf lässt sich bei jedem Upload setzen und später im Dashboard ändern. Abgelaufene Dateien löscht MoeShare selbst.
 
 Kurzlinks und Alben lassen sich unter **Admin › Einstellungen › Funktionen** abschalten.
+
+## Datei-Anfragen
+
+Mit einer Datei-Anfrage schicken dir andere Dateien, ohne ein Konto zu brauchen. Unter **Dashboard › Anfragen** legst du eine an und verschickst den Link, etwa `share.example.com/r/Xk3…`. Die Seite dahinter zeigt Titel und Nachricht, nimmt Dateien per Drag & Drop an und zeigt den Fortschritt jeder Datei.
+
+Pro Anfrage stellst du ein:
+
+- wie lange sie offen ist (oder ohne Ende) und ob ein Passwort nötig ist
+- welche Dateien sie annimmt: alle, nur Bilder, nur Videos, Medien oder Dokumente
+- wie viele Dateien höchstens, wie groß jede sein darf und wie viel zusammen
+- ob nach dem Namen gefragt wird und in welches Album die Dateien kommen
+- ob du per E-Mail Bescheid bekommst. Weitere Uploads innerhalb von 15 Minuten fasst MoeShare zusammen
+
+Die Dateien landen in deinem Konto und zählen zu deinem Speicher, im Dashboard siehst du, wer was geschickt hat. Eine Anfrage lässt sich jederzeit schließen und wieder öffnen. Admins schalten die Funktion unter **Admin › Einstellungen › Funktionen** ab und legen fest, wie viele offene Anfragen ein Konto haben darf (Standard 20).
 
 ## Eigene Adressen und eigener Pfad
 
@@ -305,6 +381,16 @@ Gespeichert wird als Kopie oder anstelle des Originals. Beim Ersetzen bleibt der
 
 Ein Video öffnest du im Dashboard über das Menü der Datei oder in der großen Ansicht mit „Kürzen oder GIF machen“. Start und Ende legst du auf einer Zeitleiste fest, der Ausschnitt lässt sich vorher abspielen. Als **MP4** speicherst du ihn mit oder ohne Ton als neue Datei oder als neue Fassung des Videos, dann bleibt der Link gleich. Als **GIF** wählst du 10 bis 25 Bilder pro Sekunde und eine Breite von 320 bis 800 Pixeln, ein GIF darf höchstens 30 Sekunden lang sein. FFmpeg rechnet auf dem Server im Hintergrund, den Fortschritt zeigt der Dialog. Das Ergebnis übernimmt die Inhaltswarnung des Videos und zählt zum Speicher wie jeder andere Upload.
 
+## Videos für alle Browser
+
+Viele Browser zeigen Videos in HEVC, mit 10 Bit Farbtiefe oder in Containern wie MKV und AVI nur als schwarzes Bild. MoeShare erkennt solche Videos beim Hochladen und legt im Hintergrund eine Fassung in H.264 an, die überall läuft. Die Ansichtsseite spielt diese Fassung ab, heruntergeladen wird weiter das Original. Abschalten lässt sich das unter **Admin › Einstellungen › Uploads › Videos für alle Browser**.
+
+Beim Hochladen misst MoeShare Seitenverhältnis und Drehung, damit hochkant gefilmte und anamorphe Videos ohne schwarze Ränder erscheinen, und nimmt als Vorschaubild eine Stelle, die nicht schwarz ist. Für Videos aus älteren Versionen gibt es unter **Admin › System › Videos** den Knopf „Alle Videos prüfen“, der Größen korrigiert, dunkle Vorschaubilder ersetzt und fehlende Fassungen anlegt. Auf der Kommandozeile geht das mit `node cli.js videos`.
+
+## Untertitel
+
+Zu jedem Video lassen sich bis zu zehn Untertitel hochladen, im Dashboard über das Menü eines Videos › Untertitel. MoeShare nimmt SRT und WebVTT an und liefert sie als WebVTT aus. Pro Spur legst du Sprache und Namen fest und welche Spur eingeschaltet startet. Besucher schalten die Untertitel im Player der Ansichtsseite ein und aus.
+
 ## Inhaltswarnungen
 
 Eine Inhaltswarnung legt sich über Dateien, die nicht alle sofort sehen sollen, etwa Spoiler oder drastische Bilder. Du setzt sie beim Hochladen in den Upload-Optionen, später im Menü einer Datei mit „Inhaltswarnung setzen“ oder in ShareX mit `X-Warning`, auf Wunsch mit einem kurzen Hinweis wie „Spoiler“ (bis 100 Zeichen).
@@ -351,14 +437,27 @@ Ein Admin schaltet das unter **Admin › Einstellungen › Eigene Domains** ein.
 So verbindet jemand eine Domain:
 
 1. Unter **Konto › Domains** die Domain eintragen.
-2. Beim DNS-Anbieter den angezeigten TXT-Eintrag anlegen, etwa `_moeshare.bilder.deinname.de` mit dem Wert `moeshare-verify=…`. Er zeigt, dass einem die Domain gehört.
+2. Beim DNS-Anbieter den angezeigten TXT-Eintrag anlegen, etwa `_bilder-kiste.bilder.deinname.de` mit dem Wert `bilder-kiste-verify=…`. Der Name richtet sich nach dem Namen des Servers, siehe [Eigener Name](#eigener-name-und-versionshinweise). Der Eintrag zeigt, dass einem die Domain gehört.
 3. Die Domain per CNAME auf den Server zeigen lassen. Für eine Domain ohne Subdomain nimmst du A- und AAAA-Einträge mit den Adressen des Servers.
+4. [Impressum und Datenschutzerklärung](#impressum-und-datenschutz-für-eigene-domains) eintragen.
 
 Unter der eigenen Domain sind Links kürzer: Statt `bilder.deinname.de/view/JrinQR99` reicht `bilder.deinname.de/JrinQR99`, neue Links mit der Domain sehen von selbst so aus. Eigene Adressen klappen dort genauso, etwa `bilder.deinname.de/urlaub`. Dateien anderer Konten sind unter der Domain nicht erreichbar.
 
 MoeShare prüft neue Domains in den ersten sieben Tagen alle paar Minuten von selbst und verbindet sie, sobald der TXT-Eintrag stimmt. Mit „Jetzt prüfen“ geht es sofort, dabei zeigt MoeShare auch, ob die Domain schon auf den Server zeigt und über HTTPS erreichbar ist. Mit „Als Standard für neue Links“ nutzen neue Uploads die Domain, ShareX wählt sie auch über `X-Domain`. Anmeldung, Dashboard und Verwaltung bleiben auf der Hauptadresse, wer unter der eigenen Domain dorthin will, wird weitergeleitet.
 
 Für HTTPS braucht der Reverse-Proxy Zertifikate auf Abruf. Die Caddyfile aus dem Repository bringt das mit, siehe [Hinter einem Reverse-Proxy](#hinter-einem-reverse-proxy). Caddy fragt vor jedem Zertifikat unter `/api/domains/tls` nach, ob die Domain zu einem Konto gehört, für fremde Domains gibt es keins. Prüft MoeShare das DNS über einen bestimmten Server, etwa im eigenen Netz, setzt du ihn mit `DNS_SERVERS`.
+
+## Impressum und Datenschutz für eigene Domains
+
+Wer unter einer eigenen Domain Inhalte zeigt, braucht dort ein eigenes Impressum und eine eigene Datenschutzerklärung. Ab Version 3.4.0 verlangt MoeShare beides für jede eigene Domain. Unter **Konto › Domains › Impressum und Datenschutz eintragen** gibt es drei Wege:
+
+- **Vorlage ausfüllen**: Name oder Firma, Anschrift, E-Mail und bei Bedarf Vertretung, Registereintrag, Umsatzsteuer-ID und die verantwortliche Person für redaktionelle Inhalte. Daraus entsteht ein Impressum nach § 5 DDG und eine Datenschutzerklärung, die beschreibt, was der Server technisch verarbeitet. Für den Datenschutz trägst du nur ein, was sich vom Impressum unterscheidet, etwa eine Datenschutzbeauftragte Person oder die zuständige Aufsichtsbehörde.
+- **Eigener Text**: etwa aus einem Generator oder von deiner Kanzlei. Zeilen, die mit `## ` beginnen, werden Überschriften.
+- **Link**: Die Seiten unter der Domain leiten auf dein eigenes Impressum weiter.
+
+Die Vorschau zeigt beide Seiten auf Deutsch und Englisch, Besucher sehen die Sprache, die ihr Browser bevorzugt. Die Seiten stehen unter `/impressum` und `/datenschutz` der Domain, die Fußzeile verlinkt sie. Die Vorlage ersetzt keine Rechtsberatung.
+
+Solange etwas fehlt, ist die Domain pausiert: Links über sie leiten auf die Hauptadresse um, und das Dashboard zeigt einen Hinweis. Domains, die vor dem Update schon verbunden waren, haben 14 Tage Zeit. Admins können die Pflicht unter **Admin › Einstellungen › Eigene Domains** abschalten, dann verweisen Domains ohne eigene Angaben auf das Impressum des Servers.
 
 ## Melden und Moderation
 
@@ -405,10 +504,10 @@ Der eigene Webhook bekommt jedes Ereignis so:
 }
 ```
 
-Der Header `X-MoeShare-Event` nennt das Ereignis. Mit Schlüssel steht in `X-MoeShare-Signature` der Wert `sha256=…`, die HMAC-SHA256 des unveränderten Bodys mit dem Schlüssel. So prüfst du sie in Node.js, `rawBody` ist dabei der Body, so wie er ankam:
+Der Header `X-Webhook-Event` nennt das Ereignis. Mit Schlüssel steht in `X-Webhook-Signature` der Wert `sha256=…`, die HMAC-SHA256 des unveränderten Bodys mit dem Schlüssel. Ziele aus Versionen vor 3.4.0 bekommen zusätzlich die alten Header `X-MoeShare-Event` und `X-MoeShare-Signature`, bis du das in der Liste abschaltest. So prüfst du die Signatur in Node.js, `rawBody` ist dabei der Body, so wie er ankam:
 
 ```js
-const signature = req.get('X-MoeShare-Signature') || '';
+const signature = req.get('X-Webhook-Signature') || '';
 const expected = `sha256=${crypto.createHmac('sha256', SECRET).update(rawBody).digest('hex')}`;
 const valid = signature.length === expected.length && crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
 ```
@@ -559,6 +658,8 @@ Unter **Admin › Einstellungen › Anmeldedienste** schaltest du Discord, GitHu
 
 MoeShare liest den OpenID-Connect-Anbieter über `/.well-known/openid-configuration` ein und nutzt PKCE, Nonce und State, sofern der Anbieter sie unterstützt.
 
+Beim eigenen OpenID-Connect-Anbieter bestimmen Gruppen, wer hinein darf und wer Admin ist. Unter **Anmeldedienste › OpenID Connect › Gruppen** trägst du ein, in welchem Claim die Gruppen stehen (meist `groups`, manchmal `roles`, verschachtelt mit Punkt wie `realm_access.roles`), welche Gruppen sich anmelden dürfen und welche Admin werden. Ist eine Gruppe erlaubt, gilt das auch für bestehende Konten, Mitglieder brauchen auf Wunsch keine Einladung. Mit „Admin-Rechte bei jeder Anmeldung abgleichen“ verliert, wer nicht mehr in einer Admin-Gruppe ist, die Rechte bei der nächsten Anmeldung, das letzte Admin-Konto bleibt Admin. MoeShare liest die Gruppen aus dem ID-Token und von `userinfo`, als Liste, als Text mit Leerzeichen oder Kommas oder als Objekt, dann zählen dessen Schlüssel. Verlangt dein Anbieter dafür einen eigenen Scope wie `groups`, trägst du ihn bei den Scopes ein.
+
 Wer schon ein Konto hat, verknüpft Dienste unter **Konto › Sicherheit › Verbundene Konten** und meldet sich danach mit einem Klick an. Ein Konto kann mehrere Dienste haben, jedes Dienstkonto gehört aber nur zu einem MoeShare-Konto. Neue Konten über einen Dienst erlaubst du pro Dienst mit „Neue Konten mit …“, dabei gelten die Regeln unter **Anmeldung › Registrierung**, also offen, nur mit Einladung oder geschlossen. Ist Zwei-Faktor aktiv, fragt MoeShare auch nach der Anmeldung über einen Dienst nach dem Code.
 
 ## Anmeldung ohne Passwort
@@ -593,6 +694,18 @@ Unter der Adresse ohne Pfad zeigt MoeShare auf Wunsch eine Startseite mit Dateie
 Der Name aus **Admin › Einstellungen › Allgemein** steht überall, wo deine Seite gemeint ist: im Browser-Tab, bei der Anmeldung, in E-Mails, Benachrichtigungen und Link-Vorschauen. „MoeShare“ bleibt nur dort, wo die Software gemeint ist, etwa bei der Version. Den Hinweis „Läuft mit MoeShare“ unten auf der Startseite schaltest du dort ebenfalls ab.
 
 Impressum und Datenschutzerklärung trägst du unter **Admin › Einstellungen › Rechtliches und Links** ein, entweder als Link auf eine bestehende Seite oder als Text. Text zeigt MoeShare unter `/impressum` und `/datenschutz` an, Adressen und E-Mails werden dabei zu Links. Dort legst du auch bis zu acht eigene Links an, etwa zu deinem Discord-Server oder einer Status-Seite. Alle stehen im Fuß jeder Seite, auf der Startseite genauso wie bei der Anmeldung, im Dashboard und auf den Ansichtsseiten.
+
+## Eigener Name und Versionshinweise
+
+Der Name aus **Admin › Einstellungen › Allgemein** steht überall, wo sonst MoeShare stünde: in Seitentiteln, E-Mails, Benachrichtigungen, Dateinamen von Sicherungen und Exporten, ShareX-Konfigurationen und in den DNS-Einträgen für eigene Domains. Aus „Bilder Kiste“ wird dort `bilder-kiste`, der TXT-Eintrag heißt dann `_bilder-kiste.domain` mit dem Wert `bilder-kiste-verify=…`. Einträge mit `_moeshare` aus älteren Versionen erkennt MoeShare weiter. Webhooks schicken ihre Header als `X-Webhook-Event` und `X-Webhook-Signature`, bestehende Ziele zusätzlich noch die alten `X-MoeShare-…`, bis du das in der Liste abschaltest.
+
+Ohne eigenes Logo zeigt MoeShare sein Symbol als Favicon, im Menü und als App-Symbol. Unter **Admin › Einstellungen › Allgemein › Versionshinweise** schaltest du „Läuft mit MoeShare“ und die öffentliche Versionsnummer ab, dann sehen sie nur Admins unter **Admin › System**. Einmal am Tag fragt der Server bei GitHub nach der neuesten Version und zeigt Admins einen Hinweis mit Link zum Changelog. Das schaltest du unter **Einstellungen › System › Auf neue Versionen hinweisen** ab.
+
+## Ankündigungen und Wartungsmodus
+
+Unter **Admin › Hinweise** schreibst du Ankündigungen: mit Überschrift, Text, Art (Info, Gut, Achtung, Störung) und Zeitraum. Sie erscheinen oben im Dashboard und im Konto, auf Wunsch auch auf der Startseite und bei der Anmeldung oder nur für Admins. Besucher können sie wegklicken, wenn du das erlaubst.
+
+Der Wartungsmodus zeigt allen außer Admins eine Wartungsseite mit deiner Nachricht. Uploads über ShareX und die API bekommen den Status 503 mit derselben Nachricht. Geteilte Links zu Dateien, Alben und Profilen funktionieren auf Wunsch weiter, Admins melden sich normal an und arbeiten wie gewohnt.
 
 ## App fürs Handy
 
@@ -689,6 +802,46 @@ server {
 
 Danach unter **Admin › Einstellungen** die Adresse auf `https://share.example.com` setzen und unter **System** „Hinter einem Reverse-Proxy“ einschalten. nginx kann keine Zertifikate auf Abruf holen. Wer dort eigene Domains anbieten will, trägt jede selbst mit Zertifikat ein oder setzt Caddy davor.
 
+## Caddy verwalten
+
+Unter **Admin › Caddy** spricht MoeShare mit der Admin-API von Caddy. Im Docker-Paket ist sie unter `http://caddy:2019` erreichbar und wird von selbst gefunden, bei einer eigenen Installation trägst du die Adresse unten in der Seite ein, meist `http://127.0.0.1:2019`. Dort siehst du:
+
+- jedes Zertifikat der Hauptadressen und eigenen Domains mit Aussteller, Ablaufdatum und Restlaufzeit. Abgelaufene, bald ablaufende oder nicht vertrauenswürdige Zertifikate stehen oben
+- welche Seiten Caddy kennt, wohin sie weiterleiten und ob die Ziele erreichbar sind
+- jede Anfrage von Caddy nach einem Zertifikat für eine Domain, mit erlaubt oder abgelehnt
+- Hinweise, wenn etwas nicht passt, etwa Zertifikate auf Abruf ohne Rückfrage
+
+Einmal am Tag prüft MoeShare alle Zertifikate. Läuft eins in weniger als 14 Tagen ab (einstellbar) oder stimmt etwas nicht, bekommen Admins eine E-Mail und die Benachrichtigungen für Systemmeldungen feuern. Unten auf der Seite steht eine passende Caddyfile für Docker oder eine direkte Installation, mit allen Adressen und eigenen Domains. Du kannst sie anpassen, von Caddy prüfen lassen und mit einem Klick laden. Das ändert die laufende Konfiguration, nicht die Datei auf dem Server.
+
+Wer eine eigene Caddyfile nutzt, gibt die Admin-API für den MoeShare-Container frei:
+
+```caddyfile
+{
+	admin :2019 {
+		origins caddy:2019 localhost:2019
+	}
+}
+```
+
+Der Port 2019 bleibt dabei im Docker-Netz und wird nicht nach außen veröffentlicht.
+
+## Metriken für Prometheus
+
+Unter **Admin › Einstellungen › System › Metriken für Prometheus** erstellst du ein Token. Damit liefert `/metrics` Zahlen zu Konten, Dateien, Speicher, Aufrufen, Sitzungen, offenen Meldungen und Datei-Anfragen sowie die Restlaufzeit jedes Zertifikats. Der Eintrag für die `prometheus.yml` steht nach dem Erstellen direkt daneben:
+
+```yaml
+scrape_configs:
+  - job_name: moeshare
+    scheme: https
+    metrics_path: /metrics
+    authorization:
+      credentials: msm_…
+    static_configs:
+      - targets: ['share.example.com']
+```
+
+Ohne Token antwortet `/metrics` mit 401, abgeschaltet gar nicht.
+
 ## Update von einer älteren Version
 
 Was neu ist und worauf du beim Update achten musst, steht im [Changelog](https://moeshare.eu/changelog.html).
@@ -699,6 +852,8 @@ Was neu ist und worauf du beim Update achten musst, steht im [Changelog](https:/
 4. MoeShare starten.
 
 Beim ersten Start sichert MoeShare die Datenbank automatisch nach `db/backups/` und bringt sie auf den neuen Stand. Bestehende Discord-Verknüpfungen bleiben dabei erhalten. Werte aus einer alten `.env` (zum Beispiel `SITE_TITLE` oder `MAX_FILE_SIZE_MB`) werden einmalig übernommen, danach meldet das Log, welche Variablen du entfernen kannst. Bisherige ShareX-Tokens funktionieren weiter. Für Konten aus älteren Versionen ist zunächst auch die Anmeldung mit dem Token möglich, damit sich alle ein Passwort setzen können. Unter **Admin › Einstellungen › Anmeldung** schaltest du das ab.
+
+Beim Update auf 3.4 legt MoeShare die Tabellen für Datei-Anfragen, Ankündigungen, Untertitel und Zertifikate an. Eigene Domains brauchen ab jetzt ein [Impressum und eine Datenschutzerklärung](#impressum-und-datenschutz-für-eigene-domains), Domains, die schon verbunden sind, haben dafür 14 Tage Zeit und laufen so lange weiter. TXT-Einträge mit `_moeshare` gelten weiter, auch wenn deine Instanz anders heißt. Eigene Webhooks bekommen die Header `X-Webhook-Event` und `X-Webhook-Signature` und bis zum Abschalten zusätzlich die alten `X-MoeShare-…`. Zeigte das Logo auf das Logo von moeshare.eu, nutzt MoeShare jetzt sein eingebautes Symbol. Für Videos aus älteren Versionen startest du unter **Admin › System › Videos** „Alle Videos prüfen“ oder `node cli.js videos`. Wer eine eigene Caddyfile nutzt, gibt für **Admin › Caddy** die Admin-API frei, siehe [Caddy verwalten](#caddy-verwalten).
 
 Beim Update auf 3.3 legt MoeShare die Tabellen für Profilbilder, eigene Pfade, Einmal-Links und Integrationen an. Die Anmeldung mit Passwort bleibt eingeschaltet. Einmal-Links und der Anmeldelink per E-Mail sind danach erlaubt, unter **Admin › Einstellungen › Anmeldung** schaltest du beides ab. Benachrichtigungen, die bisher als „MoeShare“ geschrieben haben, nutzen jetzt den Namen deiner Instanz.
 
@@ -742,6 +897,7 @@ Wer lieber selbst sichert, nimmt diese Ordner mit:
 | `node cli.js backup [--uploads]` | Erstellt eine Sicherung, mit `--uploads` samt Dateien |
 | `node cli.js restore <datei> [--force] [--ohne-dateien]` | Spielt eine Sicherung ein |
 | `node cli.js storage <s3\|lokal>` | Verschiebt vorhandene Dateien nach S3 oder zurück auf den Server |
+| `node cli.js videos` | Prüft vorhandene Videos: Abmessungen, Vorschaubilder und [Fassungen für alle Browser](#videos-für-alle-browser) |
 | `node cli.js import <zipline\|xbackbone\|chibisafe> --db <adresse> --files <ordner>` | Übernimmt einen anderen Uploader, siehe [Import](#import-aus-anderen-uploadern). Mit `--probe` nur ein Probelauf, `--ohne-admins` macht niemanden zum Admin, `--waisen-ueberspringen` lässt Dateien ohne Besitzer weg, `--als <admin>` bestimmt, wem sie gehören. |
 
 Mit Docker heißen die Befehle `docker compose exec moeshare moeshare register`, `… moeshare login-link max`, `… moeshare backup` und so weiter. Sie laufen dort mit dem Benutzer, dem die Datenbank gehört. Für `copy-db` und `restore` muss MoeShare gestoppt sein, nimm dafür `docker compose run --rm moeshare moeshare …`. Legst du das erste Konto mit `register` an, ist der Installationsassistent nicht mehr nötig und die Einstellungen machst du danach im Browser.
@@ -761,7 +917,7 @@ Skripte und Uploader melden sich mit einem API-Token im Header `Authorization` a
 | `GET` | `/files` | Dateinamen des eigenen Kontos, neueste zuerst |
 | `DELETE` | `/file/:dateiname` | Eigene Datei in den Papierkorb legen, ohne Papierkorb sofort löschen. Antwort: `{ ok, trashed }` |
 
-Öffentlich erreichbar sind `/view/:dateiname` (Ansichtsseite), `/download/:dateiname`, `/uploads/:benutzer/:dateiname` (die Datei selbst), `/s/:code` (Kurzlinks), `/a/:code` (Alben), `/a/:code/zip` (Album als ZIP), `/u/:benutzer` (Profilseiten), `/report` (Inhalt melden), `/oembed/:dateiname`, `/api/home` (Statistiken der Startseite), `/api/domains/tls` (Abfrage für Caddy), `/impressum`, `/datenschutz` und `/healthz` für Health-Checks. Geschützte Dateien liefert MoeShare erst nach Eingabe des Passworts auf der Ansichtsseite aus.
+Öffentlich erreichbar sind `/view/:dateiname` (Ansichtsseite), `/download/:dateiname`, `/uploads/:benutzer/:dateiname` (die Datei selbst), `/s/:code` (Kurzlinks), `/a/:code` (Alben), `/a/:code/zip` (Album als ZIP), `/u/:benutzer` (Profilseiten), `/r/:code` ([Datei-Anfragen](#datei-anfragen)), `/report` (Inhalt melden), `/oembed/:dateiname`, `/api/home` (Statistiken der Startseite), `/api/domains/tls` (Abfrage für Caddy), `/impressum`, `/datenschutz` und `/healthz` für Health-Checks. `/metrics` antwortet nur mit dem Token aus [Metriken für Prometheus](#metriken-für-prometheus). Geschützte Dateien liefert MoeShare erst nach Eingabe des Passworts auf der Ansichtsseite aus.
 
 ```bash
 curl -H "Authorization: ms_…" -F "file=@bild.png" https://share.example.com/upload

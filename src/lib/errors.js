@@ -28,4 +28,5 @@ module.exports = {
   tooLarge: factory(413),
   tooManyRequests: factory(429),
   badGateway: factory(502),
+  serviceUnavailable: factory(503),
 };

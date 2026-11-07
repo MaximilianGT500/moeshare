@@ -30,6 +30,8 @@ const jobs = require('../services/jobService');
 const search = require('../services/searchService');
 const addresses = require('../services/addressService');
 const paths = require('../services/pathService');
+const domains = require('../services/domainService');
+const subtitles = require('../services/subtitleService');
 const media = require('../lib/media');
 
 const router = express.Router();
@@ -70,19 +72,28 @@ function uploadOptions(prefs, user, watermark) {
     editable: uploads.EDITABLE,
     customAddresses: settings.get('links.customAddresses'),
     linkPath: paths.currentFor(user.username),
+    requests: settings.get('requests.enabled'),
   };
+}
+
+async function domainNotices(user) {
+  if (!domains.enabled()) return [];
+  return (await domains.listForUser(user.id))
+    .filter((item) => item.status === 'verified' && item.legal.required && !item.legal.complete)
+    .map((item) => ({ id: item.id, domain: item.domain, graceUntil: item.legal.graceUntil, active: item.active }));
 }
 
 const displayDomain = (prefs, username) => (prefs.domain && prefs.domain !== 'random' ? files.pickDomain(prefs.domain, username) : null);
 
 router.get('/dashboard', requirePage(), async (req, res) => {
   const prefs = await preferences.get(req.user.id);
-  const [userStats, list, limits, tags, watermark] = await Promise.all([
+  const [userStats, list, limits, tags, watermark, notices] = await Promise.all([
     files.userStats(req.user.username),
     files.listForUser(req.user.username, { page: 1, limit: GALLERY_PAGE_SIZE, domain: displayDomain(prefs, req.user.username) }),
     quota.limitsFor(req.user),
     files.tagsFor(req.user.username),
     watermarks.forUser(req.user.id),
+    domainNotices(req.user),
   ]);
   renderPage(res, {
     page: 'dashboard',
@@ -97,6 +108,7 @@ router.get('/dashboard', requirePage(), async (req, res) => {
       urlFetch: settings.get('uploads.urlFetch'),
       options: uploadOptions(prefs, req.user, watermark),
       tags,
+      domainNotices: notices,
     },
   });
 });
@@ -200,6 +212,35 @@ async function ownedFile(req) {
 router.get('/api/files/:id', signedIn, async (req, res) => {
   const [file] = await files.withTags([await ownedFile(req)]);
   res.json({ file });
+});
+
+async function ownedVideo(req) {
+  const record = await ownedFile(req);
+  if (files.typeOf(record.filename, record.syntax).type !== 'video') throw badRequest('Untertitel gibt es nur für Videos.');
+  return record;
+}
+
+router.get('/api/files/:id/subtitles', signedIn, async (req, res) => {
+  const record = await ownedVideo(req);
+  res.json({ subtitles: await subtitles.list(record.id) });
+});
+
+router.post('/api/files/:id/subtitles', signedIn, async (req, res) => {
+  const record = await ownedVideo(req);
+  const created = await subtitles.add(record.id, req.body);
+  res.status(201).json({ subtitle: created, subtitles: await subtitles.list(record.id) });
+});
+
+router.patch('/api/files/:id/subtitles/:subtitleId', signedIn, async (req, res) => {
+  const record = await ownedVideo(req);
+  const updated = await subtitles.update(record.id, req.params.subtitleId, req.body);
+  res.json({ subtitle: updated, subtitles: await subtitles.list(record.id) });
+});
+
+router.delete('/api/files/:id/subtitles/:subtitleId', signedIn, async (req, res) => {
+  const record = await ownedVideo(req);
+  await subtitles.remove(record.id, req.params.subtitleId);
+  res.json({ ok: true, subtitles: await subtitles.list(record.id) });
 });
 
 router.get('/api/files/:id/stats', signedIn, async (req, res) => {

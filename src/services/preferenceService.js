@@ -8,9 +8,9 @@ const settings = require('./settingsService');
 const domains = require('./domainService');
 
 const LANGUAGES = ['de', 'en'];
-const NOTIFY_KEYS = ['security', 'reports', 'users'];
+const NOTIFY_KEYS = ['security', 'reports', 'users', 'system', 'requests'];
 const DEFAULTS = { language: null, urlStyle: null, domain: null, expiry: null, optimize: null };
-const NOTIFY_DEFAULTS = { security: true, reports: true, users: false };
+const NOTIFY_DEFAULTS = { security: true, reports: true, users: false, system: true, requests: true };
 
 function parse(raw) {
   try {

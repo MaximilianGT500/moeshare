@@ -2,7 +2,7 @@
 
 const crypto = require('crypto');
 const axios = require('axios');
-const config = require('../config');
+const brand = require('../lib/brand');
 const db = require('../lib/db');
 const ephemeral = require('../lib/ephemeral');
 const logger = require('../lib/logger');
@@ -93,6 +93,7 @@ function load(row) {
     lastAt: row.last_at ? Number(row.last_at) : null,
     lastStatus: row.last_status === null || row.last_status === undefined ? null : Number(row.last_status),
     lastError: row.last_error || null,
+    legacyHeaders: kind === 'json' && stored.legacyHeaders === true,
   };
 }
 
@@ -142,7 +143,7 @@ const request = (options) =>
     timeout: TIMEOUT_MS,
     maxRedirects: 3,
     ...options,
-    headers: { 'User-Agent': `MoeShare/${config.version}`, ...(options.headers || {}) },
+    headers: { 'User-Agent': brand.userAgent(), ...(options.headers || {}) },
   });
 
 const matrixRooms = new Map();
@@ -238,9 +239,13 @@ const SENDERS = {
       site: { title: settings.get('site.title'), url: settings.get('site.baseUrl') },
       at: new Date().toISOString(),
     });
-    const headers = { 'Content-Type': 'application/json', 'X-MoeShare-Event': note.event };
+    const headers = { 'Content-Type': 'application/json', 'X-Webhook-Event': note.event };
     if (target.config.secret) {
-      headers['X-MoeShare-Signature'] = `sha256=${crypto.createHmac('sha256', target.config.secret).update(body).digest('hex')}`;
+      headers['X-Webhook-Signature'] = `sha256=${crypto.createHmac('sha256', target.config.secret).update(body).digest('hex')}`;
+    }
+    if (target.legacyHeaders) {
+      headers['X-MoeShare-Event'] = headers['X-Webhook-Event'];
+      if (headers['X-Webhook-Signature']) headers['X-MoeShare-Signature'] = headers['X-Webhook-Signature'];
     }
     await request({ method: 'post', url: target.config.url, data: body, headers });
   },
@@ -333,7 +338,7 @@ function validate(input, current = null) {
   if (kind === 'matrix') {
     need('homeserver', 'Trage die Adresse des Matrix-Servers ein.');
     hostOf(values.homeserver, 'config.homeserver', 'Matrix-Server');
-    need('room', 'Trage den Raum ein, zum Beispiel !abc123:matrix.org oder #moeshare:matrix.org.');
+    need('room', 'Trage den Raum ein, zum Beispiel !abc123:matrix.org oder #meldungen:matrix.org.');
     if (!/^[!#][^:\s]+:\S+$/.test(values.room))
       throw badRequest('Der Raum sieht aus wie !abc123:matrix.org oder #name:matrix.org.', { field: 'config.room' });
     need('token', 'Trage das Zugangstoken des Matrix-Kontos ein.');
@@ -356,7 +361,7 @@ function validate(input, current = null) {
       throw badRequest('Die Priorität ist eine Zahl von 1 bis 5.', { field: 'config.priority' });
   }
   if (kind === 'json') {
-    need('url', 'Trage die Adresse ein, an die MoeShare die Nachrichten schickt.');
+    need('url', 'Trage die Adresse ein, an die der Server die Nachrichten schickt.');
     hostOf(values.url, 'config.url', 'Adresse');
   }
   let events = current ? current.events : settings.WEBHOOK_EVENTS.filter((event) => event !== 'processing');
@@ -370,8 +375,9 @@ function validate(input, current = null) {
   return { kind, name: name || kind, config: values, events, enabled };
 }
 
-function sealConfig(kind, values) {
+function sealConfig(kind, values, legacyHeaders = false) {
   const stored = {};
+  if (kind === 'json' && legacyHeaders) stored.legacyHeaders = true;
   for (const key of FIELDS[kind].plain) if (values[key]) stored[key] = values[key];
   for (const key of FIELDS[kind].secret) if (values[key]) stored[key] = secrets.encrypt(values[key]);
   return JSON.stringify(stored);
@@ -409,7 +415,7 @@ async function update(id, input = {}) {
   const next = validate(input, current);
   await db.run('UPDATE webhooks SET name = ?, config = ?, events = ?, enabled = ?, updated_at = ? WHERE id = ?', [
     next.name,
-    sealConfig(next.kind, next.config),
+    sealConfig(next.kind, next.config, input.legacyHeaders === false ? false : current.legacyHeaders),
     JSON.stringify(next.events),
     next.enabled ? 1 : 0,
     Date.now(),

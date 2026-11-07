@@ -27,3 +27,18 @@ export function readBoot<T extends AnyBoot>(): T {
 }
 
 export const siteName = () => readBoot().site.title || 'MoeShare';
+
+const UMLAUTS: Record<string, string> = { ä: 'ae', ö: 'oe', ü: 'ue', ß: 'ss' };
+
+export const slugOf = (text: string) =>
+  text
+    .toLowerCase()
+    .replace(/[äöüß]/g, (char) => UMLAUTS[char])
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+/, '')
+    .slice(0, 40)
+    .replace(/-+$/, '');
+
+export const siteSlug = () => slugOf(siteName()) || 'moeshare';

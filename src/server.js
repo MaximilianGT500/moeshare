@@ -1,7 +1,6 @@
 'use strict';
 
 const fs = require('fs');
-const axios = require('axios');
 const config = require('./config');
 const logger = require('./lib/logger');
 const db = require('./lib/db');
@@ -29,6 +28,9 @@ const dedupe = require('./services/dedupeService');
 const search = require('./services/searchService');
 const redirects = require('./services/redirectService');
 const webhook = require('./services/webhookService');
+const updates = require('./services/updateService');
+const caddy = require('./services/caddyService');
+const announcements = require('./services/announcementService');
 const scans = require('./services/scanService');
 const { createApp } = require('./app');
 
@@ -55,12 +57,17 @@ async function prepareUserFolders() {
   const users = await db.all('SELECT username FROM users');
   for (const { username } of users) {
     try {
-      const { hlsDir } = ensureUserDirs(username);
+      const { hlsDir, webDir } = ensureUserDirs(username);
       const markers = fs.readdirSync(hlsDir).filter((entry) => entry.startsWith('conversionStarted-'));
       for (const marker of markers) {
         const base = marker.slice('conversionStarted-'.length);
         await media.removeHlsArtifacts(username, base);
         log.warn('Abgebrochene Videoumwandlung aufgeräumt', { user: username, file: base });
+      }
+      for (const marker of fs.readdirSync(webDir).filter((entry) => entry.startsWith('conversionStarted-'))) {
+        const base = marker.slice('conversionStarted-'.length);
+        await media.removeWebArtifacts(username, `${base}.mp4`);
+        log.warn('Abgebrochene Browser-Fassung aufgeräumt', { user: username, file: base });
       }
     } catch (error) {
       log.error('Der Benutzerordner konnte nicht vorbereitet werden', { user: username, error });
@@ -117,27 +124,6 @@ function scheduleMaintenance() {
     .cleanupLocalCopies()
     .then((removed) => removed && log.info('Lokale Kopien von S3-Dateien aufgeräumt', { files: removed }))
     .catch((error) => log.warn('Lokale Kopien von S3-Dateien ließen sich nicht prüfen', { error }));
-}
-
-const newer = (a, b) => {
-  const left = String(a).split('.').map(Number);
-  const right = String(b).split('.').map(Number);
-  for (let i = 0; i < 3; i++) if ((left[i] || 0) !== (right[i] || 0)) return (left[i] || 0) > (right[i] || 0);
-  return false;
-};
-
-async function checkForUpdate() {
-  if (!config.repository) return;
-  try {
-    const { data } = await axios.get(`https://raw.githubusercontent.com/${config.repository}/main/package.json`, { timeout: 5000 });
-    if (data.version && newer(data.version, config.version)) {
-      log.info(`MoeShare ${data.version} ist verfügbar`, { installed: config.version, url: `https://github.com/${config.repository}` });
-    } else {
-      log.debug('MoeShare ist auf dem neuesten Stand', { version: config.version });
-    }
-  } catch (error) {
-    log.debug('Die Versionsprüfung war nicht möglich', { error });
-  }
 }
 
 function logSummary(notifications) {
@@ -226,6 +212,8 @@ async function start() {
     await prepareUserFolders();
     await domains.refresh();
     domains.start();
+    caddy.start();
+    announcements.start();
     await paths.refresh();
     paths.start();
     await webhook.adoptLegacy().catch((error) => log.warn('Der bisherige Discord-Webhook ließ sich nicht übernehmen', { error }));
@@ -241,7 +229,7 @@ async function start() {
   const server = app.listen(config.port, (error) => {
     if (error) return;
     logSummary(notifications);
-    checkForUpdate();
+    updates.start();
     setup.prepare().catch((error) => log.error('Der Einrichtungslink konnte nicht erstellt werden', { error }));
   });
   server.on('error', (error) =>

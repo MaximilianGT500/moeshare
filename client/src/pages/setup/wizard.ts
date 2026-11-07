@@ -16,7 +16,7 @@ export const STEPS: StepInfo[] = [
   {
     key: 'welcome',
     label: t('Start'),
-    title: t('Willkommen bei MoeShare'),
+    title: t('Willkommen bei {name}'),
     intro: t(
       'In ein paar Schritten legst du dein Admin-Konto an und stellst ein, wie deine Seite aussieht und was sie kann. Alles lässt sich später unter Admin › Einstellungen ändern.'
     ),
@@ -26,7 +26,7 @@ export const STEPS: StepInfo[] = [
     label: t('Datenbank'),
     title: t('Wo sollen die Daten liegen?'),
     intro: t(
-      'MoeShare speichert Konten, Einstellungen und Dateiinfos in einer Datenbank. SQLite braucht keine Einrichtung und reicht für die meisten Server. Umziehen kannst du später jederzeit.'
+      '{name} speichert Konten, Einstellungen und Dateiinfos in einer Datenbank. SQLite braucht keine Einrichtung und reicht für die meisten Server. Umziehen kannst du später jederzeit.'
     ),
   },
   {
@@ -64,14 +64,14 @@ export const STEPS: StepInfo[] = [
     label: t('Benachrichtigungen'),
     title: t('Benachrichtigungen'),
     intro: t(
-      'Auf Wunsch meldet MoeShare Uploads, neue Benutzer und Sicherheitsereignisse in einem Discord-Kanal. Du kannst das auch später einrichten.'
+      'Auf Wunsch meldet {name} Uploads, neue Benutzer und Sicherheitsereignisse in einem Discord-Kanal. Du kannst das auch später einrichten.'
     ),
   },
   {
     key: 'review',
     label: t('Übersicht'),
     title: t('Alles bereit?'),
-    intro: t('Prüfe deine Angaben. Mit dem Klick auf „MoeShare einrichten“ wird dein Konto angelegt und du bist direkt angemeldet.'),
+    intro: t('Prüfe deine Angaben. Mit dem Klick auf „{name} einrichten“ wird dein Konto angelegt und du bist direkt angemeldet.'),
   },
 ];
 

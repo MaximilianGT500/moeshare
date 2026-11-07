@@ -43,6 +43,11 @@ const redirects = require('../services/redirectService');
 const avatars = require('../services/avatarService');
 const paths = require('../services/pathService');
 const links = require('../services/loginLinkService');
+const videoService = require('../services/videoService');
+const updates = require('../services/updateService');
+const caddy = require('../services/caddyService');
+const metrics = require('../services/metricsService');
+const announcementService = require('../services/announcementService');
 
 const router = express.Router();
 const admin = requireApi({ admin: true });
@@ -79,6 +84,7 @@ const AUDIT_CATEGORIES = {
     'domain_added',
     'domain_verified',
     'domain_removed',
+    'domain_legal_updated',
     'virus_found',
   ],
   admin: [
@@ -104,6 +110,9 @@ const AUDIT_CATEGORIES = {
     'integration_changed',
     'avatar_revoked',
     'link_path_revoked',
+    'videos_repaired',
+    'caddy_config_loaded',
+    'announcement_changed',
   ],
 };
 
@@ -210,6 +219,9 @@ router.get('/admin', requirePage({ admin: true }), async (req, res) => {
       webhooks: { targets: webhookTargets, kinds: webhook.KINDS, events: settings.WEBHOOK_EVENTS },
       imports: importInfo(),
       access: { pending: pendingLinks, enabled: links.enabled(), passwordLogin: settings.get('auth.passwordLogin') },
+      update: updates.info(),
+      announcements: await announcementService.list(),
+      videos: { running: videoService.running(), ffmpeg: media.ffmpegAvailable },
     },
   });
 });
@@ -311,6 +323,120 @@ router.get('/api/admin/stats', admin, async (req, res) => {
 
 router.get('/api/admin/system', admin, (req, res) => {
   res.json(systemInfo());
+});
+
+async function caddyState(req) {
+  const [overview, certificates, requests] = await Promise.all([caddy.overview(), caddy.certificates(), caddy.requests({ limit: 100 })]);
+  return {
+    overview: { ...overview, error: overview.error ? tr(req, overview.error) : null },
+    certificates,
+    requests,
+    checking: caddy.isRunning(),
+  };
+}
+
+router.get('/api/admin/caddy', admin, async (req, res) => {
+  const state = await caddyState(req);
+  res.json({
+    ...state,
+    overview: {
+      ...state.overview,
+      notes: (state.overview.notes || []).map((note) => ({ ...note, text: tr(req, note.text, note.params) })),
+    },
+    certificates: state.certificates.map((item) => ({ ...item, error: item.error ? tr(req, item.error) : null })),
+  });
+});
+
+router.post('/api/admin/caddy/check', admin, async (req, res) => {
+  const domain = text(req.body && req.body.domain, 253);
+  if (domain) {
+    const [result] = await caddy.checkAll({ domain });
+    return res.json({ certificate: { ...result, error: result.error ? tr(req, result.error) : null } });
+  }
+  caddy.checkAll().catch(() => {});
+  return res.status(202).json({ checking: true });
+});
+
+router.post('/api/admin/caddy/adapt', admin, async (req, res) => {
+  const result = await caddy.adapt(req.body && req.body.caddyfile);
+  res.json({ ...result, error: result.error || null });
+});
+
+router.post('/api/admin/caddy/load', adminSudo, async (req, res) => {
+  const result = await caddy.load(req.body && req.body.caddyfile);
+  audit.log('caddy_config_loaded', { userId: null, actorId: req.user.id, req, details: {} });
+  res.json(result);
+});
+
+router.get('/api/admin/caddy/caddyfile', admin, (req, res) => {
+  const mode = req.query.mode === 'native' ? 'native' : 'docker';
+  const body = caddy.caddyfile({ mode, email: text(req.query.email, 191) || '' });
+  if (req.query.download === '1') res.attachment('Caddyfile');
+  res.type('text/plain').send(body);
+});
+
+router.get('/api/admin/announcements', admin, async (req, res) => {
+  res.json({ announcements: await announcementService.list() });
+});
+
+router.post('/api/admin/announcements', admin, async (req, res) => {
+  const created = await announcementService.create(req.user.id, req.body);
+  audit.log('announcement_changed', {
+    userId: null,
+    actorId: req.user.id,
+    req,
+    details: { id: created.id, title: created.title, change: 'created' },
+  });
+  res.status(201).json({ announcement: created, announcements: await announcementService.list() });
+});
+
+router.patch('/api/admin/announcements/:id', admin, async (req, res) => {
+  const updated = await announcementService.update(req.params.id, req.body);
+  audit.log('announcement_changed', {
+    userId: null,
+    actorId: req.user.id,
+    req,
+    details: { id: updated.id, title: updated.title, change: 'updated' },
+  });
+  res.json({ announcement: updated, announcements: await announcementService.list() });
+});
+
+router.delete('/api/admin/announcements/:id', admin, async (req, res) => {
+  const removed = await announcementService.remove(req.params.id);
+  audit.log('announcement_changed', {
+    userId: null,
+    actorId: req.user.id,
+    req,
+    details: { id: removed.id, title: removed.title, change: 'deleted' },
+  });
+  res.json({ ok: true, announcements: await announcementService.list() });
+});
+
+router.post('/api/admin/metrics/token', adminSudo, async (req, res) => {
+  const { token, hash } = metrics.newToken();
+  await settings.update({ 'metrics.tokenHash': hash, 'metrics.enabled': true });
+  audit.log('settings_updated', { userId: null, actorId: req.user.id, req, details: { keys: ['metrics.tokenHash', 'metrics.enabled'] } });
+  res.json({ token, url: `${settings.get('site.baseUrl')}/metrics`, ...settings.forAdmin() });
+});
+
+router.get('/api/admin/update', admin, (req, res) => {
+  res.json(updates.info());
+});
+
+router.post('/api/admin/update/check', admin, async (req, res) => {
+  await updates.check();
+  res.json(updates.info());
+});
+
+router.get('/api/admin/videos', admin, async (req, res) => {
+  const records = await videoService.videoRecords();
+  res.json({ videos: records.length, running: videoService.running(), ffmpeg: media.ffmpegAvailable });
+});
+
+router.post('/api/admin/videos/repair', admin, (req, res) => {
+  const job = videoService.start(req.user);
+  audit.log('videos_repaired', { userId: null, actorId: req.user.id, req, details: {} });
+  res.status(202).json({ job });
 });
 
 router.get('/api/admin/files', admin, async (req, res) => {

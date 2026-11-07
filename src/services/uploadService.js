@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const fsp = fs.promises;
 const { pipeline } = require('stream/promises');
-const config = require('../config');
+const brand = require('../lib/brand');
 const logger = require('../lib/logger');
 const media = require('../lib/media');
 const { client: safeHttp } = require('../lib/safeFetch');
@@ -219,13 +219,20 @@ function analyzeLater(record, type = files.typeOf(record.filename, record.syntax
   const options = {
     preview: settings.get('uploads.preview'),
     dominantColor: settings.get('uploads.dominantColor'),
-    hls: settings.get('uploads.hls'),
   };
   const started = Date.now();
   media
     .analyze(username, filename, type, options)
-    .then(async ({ result, errors }) => {
+    .then(async ({ result, errors, info }) => {
       await files.update(username, filename, result);
+      if (type === 'video') {
+        const heavy = await media.transcode(username, filename, {
+          hls: settings.get('uploads.hls'),
+          web: settings.get('uploads.webVideo'),
+          info,
+        });
+        errors.push(...heavy.errors);
+      }
       if (storage.activeDriver() === 's3') {
         const fresh = await files.findById(record.id);
         if (fresh && fresh.filename === filename) {
@@ -531,7 +538,7 @@ async function fetchRemote(user, value, { limit, message }, raw = {}) {
       timeout: 15000,
       maxContentLength: maxBytes,
       maxRedirects: 5,
-      headers: { 'User-Agent': `MoeShare/${config.version}` },
+      headers: { 'User-Agent': brand.userAgent() },
       validateStatus: (status) => status >= 200 && status < 300,
     });
     const declared = Number.parseInt(response.headers['content-length'], 10);

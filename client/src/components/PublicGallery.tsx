@@ -23,7 +23,7 @@ import { mix } from '../lib/color';
 import { useDesign } from '../lib/design';
 import { t } from '../lib/i18n';
 import { fileIcon } from './FileIcons';
-import { VideoPlayer } from './VideoPlayer';
+import { VideoFrame } from './VideoPlayer';
 import { c, ease, elevation, fileTypeColor, radius } from '../theme/tokens';
 
 export const viewable = (item: AlbumItem) => !item.locked && !!item.direct && (item.type === 'image' || item.type === 'video');
@@ -464,18 +464,15 @@ function Lightbox({
                   }}
                 />
               ) : (
-                <Box sx={{ borderRadius: `${radius.md}px`, overflow: 'hidden', bgcolor: '#000', lineHeight: 0 }}>
-                  <VideoPlayer
-                    src={item.direct!}
-                    hls={null}
-                    poster={item.preview}
-                    style={{
-                      display: 'block',
-                      width: `min(92vw, ${item.width ? Math.max(320, item.width) : 1280}px, calc((100dvh - 110px) * ${item.width && item.height ? item.width / item.height : 16 / 9}))`,
-                      aspectRatio: item.width && item.height ? `${item.width} / ${item.height}` : '16 / 9',
-                    }}
-                  />
-                </Box>
+                <VideoFrame
+                  src={item.playback || item.direct!}
+                  poster={item.preview}
+                  width={item.width}
+                  height={item.height}
+                  limit="92vw"
+                  maxHeight="(100dvh - 110px)"
+                  sx={{ borderRadius: `${radius.md}px` }}
+                />
               )}
             </m.div>
           </AnimatePresence>

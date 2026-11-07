@@ -1,20 +1,26 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { m } from 'motion/react';
+import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
+import LinearProgress from '@mui/material/LinearProgress';
+import Link from '@mui/material/Link';
 import Typography from '@mui/material/Typography';
+import MovieFilterRounded from '@mui/icons-material/MovieFilterRounded';
 import MemoryRounded from '@mui/icons-material/MemoryRounded';
 import DeveloperBoardRounded from '@mui/icons-material/DeveloperBoardRounded';
 import ScheduleRounded from '@mui/icons-material/ScheduleRounded';
 import DnsRounded from '@mui/icons-material/DnsRounded';
 import WarningAmberRounded from '@mui/icons-material/WarningAmberRounded';
 import StorageRounded from '@mui/icons-material/StorageRounded';
-import type { DatabaseInfo, SystemInfo } from '../../lib/types';
-import { fetchSystem } from '../../lib/api';
-import { formatBytes, formatDuration, formatNumber } from '../../lib/format';
+import type { DatabaseInfo, Job, SystemInfo, UpdateInfo } from '../../lib/types';
+import { ApiError, checkForUpdate, errorMessage, fetchSystem, fetchVideoInfo, repairVideos, waitForJob } from '../../lib/api';
+import { useToast } from '../../components/Toaster';
+import { formatBytes, formatDuration, formatNumber, relativeMs } from '../../lib/format';
 import { t, tn } from '../../lib/i18n';
 import { c, ease, fonts, radius } from '../../theme/tokens';
 
-function Card({ icon, title, children, wide = false }: { icon: ReactNode; title: string; children: ReactNode; wide?: boolean }) {
+export function Card({ icon, title, children, wide = false }: { icon: ReactNode; title: string; children: ReactNode; wide?: boolean }) {
   return (
     <Box
       component="section"
@@ -82,7 +88,7 @@ function Meter({ value, label }: { value: number; label: string }) {
   );
 }
 
-function Row({ label, value, mono = false }: { label: string; value: ReactNode; mono?: boolean }) {
+export function Row({ label, value, mono = false }: { label: string; value: ReactNode; mono?: boolean }) {
   return (
     <Box
       sx={{
@@ -130,7 +136,170 @@ const TABLES: Array<[string, string]> = [
   ['audit_log', t('Aktivität')],
 ];
 
-export function SystemPanel({ initial, database, ffmpeg }: { initial: SystemInfo; database: DatabaseInfo; ffmpeg: string | null }) {
+interface VideoReport {
+  total: number;
+  sizes: number;
+  posters: number;
+  web: number;
+  skipped: number;
+  failed: number;
+}
+
+function VideoCard({ initial }: { initial: { running: string | null; ffmpeg: boolean } }) {
+  const toast = useToast();
+  const [count, setCount] = useState<number | null>(null);
+  const [job, setJob] = useState<Job<VideoReport> | null>(null);
+  const [report, setReport] = useState<VideoReport | null>(null);
+  const [error, setError] = useState('');
+
+  const follow = async (id: string) => {
+    try {
+      const finished = await waitForJob<VideoReport>(id, setJob, { admin: true, interval: 1200 });
+      if (finished.state === 'done' && finished.result) {
+        setReport(finished.result);
+        toast(t('Videos aufbereitet'), { variant: 'success' });
+      } else if (finished.error) {
+        setError(finished.error.message);
+      }
+    } catch (failure) {
+      setError(errorMessage(failure));
+    } finally {
+      setJob(null);
+    }
+  };
+
+  useEffect(() => {
+    fetchVideoInfo()
+      .then((info) => setCount(info.videos))
+      .catch(() => {});
+    if (initial.running) follow(initial.running);
+  }, []);
+
+  const start = async () => {
+    setError('');
+    setReport(null);
+    try {
+      const { job: started } = await repairVideos();
+      setJob(started as Job<VideoReport>);
+      follow(started.id);
+    } catch (failure) {
+      if (failure instanceof ApiError && failure.code === 'running') toast(t('Die Videos werden gerade schon aufbereitet.'));
+      else setError(errorMessage(failure));
+    }
+  };
+
+  const detail = (job?.detail || null) as VideoReport | null;
+
+  return (
+    <Card icon={<MovieFilterRounded />} title={t('Videos')}>
+      <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
+        {t(
+          'Misst Größe und Drehung neu, ersetzt dunkle Vorschaubilder und erstellt eine abspielbare Fassung für Videos, die Browser nicht können, etwa HEVC oder 10 Bit.'
+        )}
+      </Typography>
+      {!initial.ffmpeg ? (
+        <Alert severity="warning">{t('Dafür braucht der Server FFmpeg.')}</Alert>
+      ) : job ? (
+        <Box>
+          <LinearProgress
+            variant="determinate"
+            value={Math.round(job.progress * 100)}
+            sx={{ height: 8, borderRadius: `${radius.full}px` }}
+          />
+          <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1 }}>
+            {detail
+              ? t('{done} von {total} Videos geprüft', {
+                  done: formatNumber(Math.round(job.progress * detail.total)),
+                  total: formatNumber(detail.total),
+                })
+              : t('Startet …')}
+          </Typography>
+        </Box>
+      ) : (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+          <Button variant="outlined" onClick={start} disabled={count === 0}>
+            {t('Alle Videos prüfen')}
+          </Button>
+          {count !== null && (
+            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+              {tn(count, '1 Video gespeichert', '{count} Videos gespeichert')}
+            </Typography>
+          )}
+        </Box>
+      )}
+      {report && (
+        <Typography variant="body2" sx={{ mt: 2 }}>
+          {t('{sizes} Größen korrigiert, {posters} Vorschaubilder erneuert, {web} abspielbare Fassungen erstellt, {failed} Fehler.', {
+            sizes: formatNumber(report.sizes),
+            posters: formatNumber(report.posters),
+            web: formatNumber(report.web),
+            failed: formatNumber(report.failed),
+          })}
+        </Typography>
+      )}
+      {error && (
+        <Alert severity="error" sx={{ mt: 2 }}>
+          {error}
+        </Alert>
+      )}
+    </Card>
+  );
+}
+
+function VersionValue({ current, initial }: { current: string; initial: UpdateInfo }) {
+  const toast = useToast();
+  const [info, setInfo] = useState(initial);
+  const [busy, setBusy] = useState(false);
+  const recheck = async () => {
+    setBusy(true);
+    try {
+      const next = await checkForUpdate();
+      setInfo(next);
+      toast(next.available ? t('Version {version} ist verfügbar', { version: next.available }) : t('Du nutzt die neueste Version.'));
+    } catch (failure) {
+      toast(errorMessage(failure), { variant: 'error' });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Box component="span" sx={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-end', gap: 0.25 }}>
+      <Box component="span" sx={{ fontFamily: fonts.mono, fontSize: '0.8125rem' }}>
+        v{current}
+      </Box>
+      {info.enabled && (
+        <Box component="span" sx={{ fontSize: '0.75rem', fontWeight: 400, color: info.available ? c.primary : 'text.secondary' }}>
+          {info.available ? (
+            <Link href={info.changelog} target="_blank" rel="noopener noreferrer">
+              {t('v{version} ist erschienen', { version: info.available })}
+            </Link>
+          ) : info.checkedAt ? (
+            t('aktuell, geprüft {when}', { when: relativeMs(info.checkedAt) })
+          ) : (
+            t('noch nicht geprüft')
+          )}{' '}
+          <Link component="button" type="button" onClick={recheck} disabled={busy} sx={{ fontSize: 'inherit', verticalAlign: 'baseline' }}>
+            {t('prüfen')}
+          </Link>
+        </Box>
+      )}
+    </Box>
+  );
+}
+
+export function SystemPanel({
+  initial,
+  database,
+  ffmpeg,
+  update,
+  videos,
+}: {
+  initial: SystemInfo;
+  database: DatabaseInfo;
+  ffmpeg: string | null;
+  update: UpdateInfo;
+  videos: { running: string | null; ffmpeg: boolean };
+}) {
   const [info, setInfo] = useState(initial);
   const [updatedAt, setUpdatedAt] = useState(() => Date.now());
   const [now, setNow] = useState(() => Date.now());
@@ -246,16 +415,18 @@ export function SystemPanel({ initial, database, ffmpeg }: { initial: SystemInfo
             {t('seit dem letzten Neustart des Servers')}
           </Typography>
           <Typography variant="body2" sx={{ color: 'text.secondary', mt: 2 }}>
-            {t('MoeShare-Prozess belegt {processMemoryBytes}', { processMemoryBytes: formatBytes(info.processMemoryBytes) })}
+            {t('Der Server-Prozess belegt {processMemoryBytes}', { processMemoryBytes: formatBytes(info.processMemoryBytes) })}
           </Typography>
         </Card>
+
+        <VideoCard initial={videos} />
 
         <Card icon={<DnsRounded />} title={t('Server')} wide>
           <Box>
             <Row label={t('Hostname')} value={info.hostname} mono />
             <Row label={t('Betriebssystem')} value={`${info.platform} ${info.release} (${info.arch})`} />
             <Row label="Node.js" value={info.nodeVersion} mono />
-            <Row label="MoeShare" value={`v${info.appVersion}`} mono />
+            <Row label={t('Version')} value={<VersionValue current={info.appVersion} initial={update} />} />
             <Row label={t('FFmpeg')} value={ffmpeg || t('nicht gefunden, Videos bekommen keine Vorschau')} mono={!!ffmpeg} />
           </Box>
         </Card>

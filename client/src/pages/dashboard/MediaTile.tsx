@@ -68,7 +68,7 @@ function MediaImage({ file, blurred }: { file: FileItem; blurred: boolean }) {
     return (
       <video
         className="tile-media"
-        src={`${file.urls.direct}#t=0.5`}
+        src={`${file.urls.playback || file.urls.direct}#t=0.5`}
         muted
         playsInline
         preload="metadata"

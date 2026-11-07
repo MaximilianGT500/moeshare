@@ -9,6 +9,8 @@ import MarkEmailUnreadOutlined from '@mui/icons-material/MarkEmailUnreadOutlined
 import ShieldOutlined from '@mui/icons-material/ShieldOutlined';
 import FlagOutlined from '@mui/icons-material/FlagOutlined';
 import PersonAddAltOutlined from '@mui/icons-material/PersonAddAltOutlined';
+import DnsOutlined from '@mui/icons-material/DnsOutlined';
+import MoveToInboxOutlined from '@mui/icons-material/MoveToInboxOutlined';
 import type { EmailState, NotifyKey, Preferences } from '../../lib/types';
 import { ApiError, errorMessage, removeEmail, startEmailVerification } from '../../lib/api';
 import { relativeMs } from '../../lib/format';
@@ -200,6 +202,30 @@ export function EmailSection({
           checked={notify.users}
           disabled={saving}
           onChange={(on) => toggle('users', on)}
+        />
+      )}
+      {state.email && state.verifiedAt && isAdmin && (
+        <SwitchRow
+          id="notify-system"
+          icon={<DnsOutlined />}
+          label={t('Systemmeldungen')}
+          description={t('Eine E-Mail, wenn ein Zertifikat bald abläuft oder Caddy ein Problem meldet.')}
+          checked={notify.system}
+          disabled={saving}
+          onChange={(on) => toggle('system', on)}
+        />
+      )}
+      {state.email && state.verifiedAt && (
+        <SwitchRow
+          id="notify-requests"
+          icon={<MoveToInboxOutlined />}
+          label={t('Uploads über Datei-Anfragen')}
+          description={t(
+            'Eine E-Mail, wenn jemand über eine deiner Datei-Anfragen etwas hochlädt. Pro Anfrage schaltest du das extra ein.'
+          )}
+          checked={notify.requests}
+          disabled={saving}
+          onChange={(on) => toggle('requests', on)}
         />
       )}
     </SettingsSection>

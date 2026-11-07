@@ -64,6 +64,12 @@ const EVENTS = {
   login_link_revoked: 'Einmal-Link zurückgezogen',
   login_link_sent: 'Einmal-Link per E-Mail verschickt',
   integration_changed: 'Integration geändert',
+  videos_repaired: 'Videos aufbereitet',
+  caddy_config_loaded: 'Caddy-Konfiguration übernommen',
+  domain_legal_updated: 'Impressum und Datenschutz einer Domain gespeichert',
+  upload_request_created: 'Datei-Anfrage erstellt',
+  upload_request_deleted: 'Datei-Anfrage gelöscht',
+  announcement_changed: 'Ankündigung geändert',
 };
 
 const WARNINGS = new Set(['login_failed', 'account_locked', 'reauth_failed', 'recovery_code_used']);

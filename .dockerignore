@@ -13,6 +13,5 @@ public/app
 Dockerfile
 docker-compose*.yml
 docker/Caddyfile
-config_flameshot.sh
 .deepsource.toml
 .prettierrc.json

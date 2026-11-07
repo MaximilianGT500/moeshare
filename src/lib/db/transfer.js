@@ -78,6 +78,8 @@ function guard() {
     user_avatars: [['user_id', 'users']],
     user_paths: [['user_id', 'users']],
     login_links: [['user_id', 'users']],
+    upload_requests: [['user_id', 'users']],
+    file_subtitles: [['file_id', 'file_data']],
   };
   const optional = {
     invites: [['created_by', 'users']],
@@ -88,6 +90,8 @@ function guard() {
       ['created_by', 'users'],
       ['decided_by', 'users'],
     ],
+    upload_requests: [['album_id', 'albums']],
+    announcements: [['created_by', 'users']],
   };
   return {
     accept(tableName, row) {

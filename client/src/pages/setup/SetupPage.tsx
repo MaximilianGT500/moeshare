@@ -44,7 +44,7 @@ function LockedSetup({ rejected }: { rejected: boolean }) {
           </Typography>
           <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1 }}>
             {t(
-              'Beim Start zeigt MoeShare in der Konsole einen Link mit Einrichtungscode. Nur wer ihn kennt, kann das erste Admin-Konto anlegen.'
+              'Beim Start zeigt der Server in der Konsole einen Link mit Einrichtungscode. Nur wer ihn kennt, kann das erste Admin-Konto anlegen.'
             )}
           </Typography>
         </div>

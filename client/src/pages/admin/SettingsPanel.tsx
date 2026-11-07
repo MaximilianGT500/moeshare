@@ -44,6 +44,7 @@ import { ApiError, errorMessage, saveSettings, testClamav, testMail } from '../.
 import { WebhookTargets } from './WebhookTools';
 import { ImportTools } from './ImportTools';
 import { CaddyHint, DomainList } from './DomainTools';
+import { MetricsTools } from './MetricsTools';
 import { SaveBar, SettingRow, SettingsSection, SwitchRow } from '../../components/SettingsKit';
 import { BytesField, ColorField } from '../../components/Fields';
 import { formatNumber } from '../../lib/format';
@@ -55,7 +56,7 @@ import { buildScheme } from '../../theme/scheme';
 import { useThemeSeed } from '../../app/mount';
 import { c, ease, fonts, radius } from '../../theme/tokens';
 import { rich, t } from '../../lib/i18n';
-import { siteName } from '../../lib/boot';
+import { siteName, siteSlug } from '../../lib/boot';
 
 type Values = Record<string, SettingValue>;
 type SectionKey =
@@ -83,7 +84,7 @@ const SECTIONS: Array<{ key: SectionKey; label: string; icon: ReactNode; prefixe
     key: 'funktionen',
     label: t('Funktionen'),
     icon: <AppsRounded />,
-    prefixes: ['links.', 'albums.', 'trash.', 'stats.', 'zip.', 'reports.', 'profiles.', 'search.', 'export.'],
+    prefixes: ['links.', 'albums.', 'trash.', 'stats.', 'zip.', 'reports.', 'profiles.', 'search.', 'export.', 'requests.'],
   },
   { key: 'virenscan', label: t('Virenscan'), icon: <CoronavirusOutlined />, prefixes: ['clamav.'] },
   { key: 'domains', label: t('Eigene Domains'), icon: <LanguageRounded />, prefixes: ['domains.'] },
@@ -115,7 +116,7 @@ const SECTIONS: Array<{ key: SectionKey; label: string; icon: ReactNode; prefixe
   { key: 'rechtliches', label: t('Rechtliches und Links'), icon: <GavelRounded />, prefixes: ['legal.', 'site.links'] },
   { key: 'benachrichtigungen', label: t('Benachrichtigungen'), icon: <NotificationsRounded />, prefixes: ['webhook.'] },
   { key: 'import', label: t('Import'), icon: <MoveDownRounded />, prefixes: [] },
-  { key: 'system', label: t('System'), icon: <DnsRounded />, prefixes: ['system.'] },
+  { key: 'system', label: t('System'), icon: <DnsRounded />, prefixes: ['system.', 'metrics.'] },
 ];
 
 const sectionOf = (key: string) =>
@@ -547,7 +548,7 @@ export function SettingsPanel({
           {key === 'oidc' &&
             text('auth.oidc.issuer', t('Issuer'), t('Die Adresse des Anbieters, unter der /.well-known/openid-configuration liegt.'), {
               mono: true,
-              placeholder: 'https://auth.example.com/application/o/moeshare',
+              placeholder: `https://auth.example.com/application/o/${siteSlug()}`,
             })}
           {key === 'github' &&
             text('auth.github.baseUrl', t('GitHub-Adresse'), t('Nur für GitHub Enterprise Server ändern.'), {
@@ -586,6 +587,45 @@ export function SettingsPanel({
             t('Wer noch kein Konto hat, kann eins anlegen. Es gelten die Regeln unter Anmeldung › Registrierung.')
           )}
         </SettingsSection>
+        {key === 'oidc' && (
+          <SettingsSection
+            title={t('Gruppen')}
+            description={t('Bestimme mit den Gruppen aus deinem Anbieter, wer sich anmelden darf und wer Admin ist.')}
+          >
+            {text('auth.oidc.groupsClaim', t('Claim mit den Gruppen'), t('Meist groups. Manche Anbieter nennen ihn roles.'), {
+              mono: true,
+              placeholder: 'groups',
+            })}
+            {list(
+              'auth.oidc.allowedGroups',
+              t('Erlaubte Gruppen'),
+              t(
+                'Leer: alle, die sich beim Anbieter anmelden können. Sonst muss man in mindestens einer dieser Gruppen sein, auch für bestehende Konten.'
+              ),
+              t('Gruppe')
+            )}
+            {(v<string[]>('auth.oidc.allowedGroups') || []).length > 0 &&
+              toggle(
+                'auth.oidc.groupsSkipInvite',
+                t('Gruppenmitglieder brauchen keine Einladung'),
+                t('Mitglieder der erlaubten Gruppen dürfen sich registrieren, auch wenn sonst eine Einladung nötig ist.')
+              )}
+            {list(
+              'auth.oidc.adminGroups',
+              t('Admin-Gruppen'),
+              t('Wer in einer dieser Gruppen ist, wird bei der Anmeldung Admin.'),
+              t('Gruppe')
+            )}
+            {(v<string[]>('auth.oidc.adminGroups') || []).length > 0 &&
+              toggle(
+                'auth.oidc.syncAdmins',
+                t('Admin-Rechte bei jeder Anmeldung abgleichen'),
+                t(
+                  'Wer nicht mehr in einer Admin-Gruppe ist, verliert die Admin-Rechte bei der nächsten Anmeldung. Das letzte Admin-Konto bleibt Admin.'
+                )
+              )}
+          </SettingsSection>
+        )}
         {key === 'discord' && (
           <SettingsSection title={t('Discord-Server')} description={t('Neue Konten nur für Mitglieder deines Discord-Servers.')}>
             {text(
@@ -688,7 +728,7 @@ export function SettingsPanel({
           <SettingRow
             label={t('Symbol')}
             description={t(
-              'Adresse eines Bildes (PNG oder SVG). Eigene Dateien legst du in den Ordner public und gibst den Pfad an, z. B. /logo.png.'
+              'Adresse eines Bildes (PNG oder SVG). Leer lassen für das eingebaute Symbol. Eigene Dateien legst du in den Ordner public und gibst den Pfad an, z. B. /logo.png.'
             )}
             stacked
           >
@@ -758,10 +798,24 @@ export function SettingsPanel({
               name: siteName(),
             })
           )}
+        </SettingsSection>
+        <SettingsSection
+          title={t('Versionshinweise')}
+          description={t(
+            'Steuert, wo die Software und ihre Version erwähnt werden. Admins sehen die Version immer unter System, den Hinweis auf Updates schaltest du dort unter Einstellungen › System ab.'
+          )}
+        >
           {toggle(
             'site.poweredBy',
             t('„Läuft mit MoeShare“ zeigen'),
             t('Ein kleiner Hinweis unten auf der Startseite, mit welcher Software der Server läuft.')
+          )}
+          {toggle(
+            'site.showVersion',
+            t('Versionsnummer öffentlich zeigen'),
+            t(
+              'Auf der Anmeldeseite, der Startseite, im Menü und unter /healthz. Abgeschaltet sieht niemand außer den Admins, welche Version läuft.'
+            )
           )}
         </SettingsSection>
       </Stack>
@@ -840,6 +894,18 @@ export function SettingsPanel({
             'uploads.dominantColor',
             t('Hauptfarbe erkennen'),
             t('Bestimmt die prägende Farbe eines Bildes für Ansichtsseite und Discord-Rand.')
+          )}
+          {choice(
+            'uploads.webVideo',
+            t('Videos für alle Browser'),
+            t(
+              'Videos im HEVC- oder 10-Bit-Format, MKV, AVI und ähnliche zeigen viele Browser nur schwarz. {name} legt dafür im Hintergrund eine H.264-Fassung an, das Original bleibt zum Herunterladen.',
+              { name: siteName() }
+            ),
+            [
+              { value: 'auto', label: t('Bei Bedarf umwandeln') },
+              { value: 'off', label: t('Nur das Original') },
+            ]
           )}
           {toggle(
             'uploads.hls',
@@ -1043,6 +1109,21 @@ export function SettingsPanel({
             t('Jeder kann einen Pfad wählen, etwa /max/JrinQR99. Abgeschaltet leiten solche Links auf /view/ weiter.')
           )}
         </SettingsSection>
+        <SettingsSection
+          title={t('Datei-Anfragen')}
+          description={t('Andere schicken dir Dateien über einen Link, ohne ein Konto zu brauchen.')}
+        >
+          {toggle(
+            'requests.enabled',
+            t('Datei-Anfragen'),
+            t('Angemeldete erstellen im Dashboard Links, über die andere Dateien hochladen. Die Uploads zählen zum Speicher des Kontos.')
+          )}
+          {number('requests.maxPerUser', t('Offene Anfragen pro Konto'), t('Geschlossene und abgelaufene Anfragen zählen nicht.'), {
+            min: 1,
+            max: 100,
+            unit: t('Anfragen'),
+          })}
+        </SettingsSection>
         <SettingsSection title={t('Alben')}>
           {toggle('albums.enabled', t('Alben'), t('Dateien in Alben sammeln und gemeinsam über einen Link teilen.'))}
           {toggle('zip.enabled', t('ZIP-Download'), t('Alben und ausgewählte Dateien lassen sich als ZIP-Archiv herunterladen.'))}
@@ -1161,6 +1242,13 @@ export function SettingsPanel({
             t('HTTPS'),
             t('Links über eigene Domains beginnen mit https://. Nur abschalten, wenn dein Proxy für sie kein HTTPS kann.')
           )}
+          {toggle(
+            'domains.legalRequired',
+            t('Impressum und Datenschutz verlangen'),
+            t(
+              'Jede Domain braucht ein eigenes Impressum und eine Datenschutzerklärung, per Vorlage, eigenem Text oder Link. Fehlt etwas, leitet die Domain auf die Hauptadresse um. Bestehende Domains bekommen 14 Tage Zeit.'
+            )
+          )}
         </SettingsSection>
         <SettingsSection title={t('Reverse-Proxy')}>
           <CaddyHint upstream={`localhost:${initial.environment.port}`} />
@@ -1275,7 +1363,7 @@ export function SettingsPanel({
             t('Optional. So kann sich {name} einen Bucket mit anderem teilen.', { name: siteName() }),
             {
               mono: true,
-              placeholder: 'moeshare',
+              placeholder: siteSlug(),
             }
           )}
           {toggle(
@@ -1556,6 +1644,11 @@ export function SettingsPanel({
       <Stack spacing={4}>
         <SettingsSection title={t('Betrieb')}>
           {toggle(
+            'system.updateCheck',
+            t('Auf neue Versionen hinweisen'),
+            t('Fragt einmal am Tag bei GitHub nach der neuesten Version und zeigt Admins einen Hinweis mit den Neuerungen.')
+          )}
+          {toggle(
             'system.trustProxy',
             t('Hinter einem Reverse-Proxy'),
             t(
@@ -1583,6 +1676,23 @@ export function SettingsPanel({
                   )
             )
           )}
+        </SettingsSection>
+        <SettingsSection
+          title={t('Metriken für Prometheus')}
+          description={t(
+            'Unter /metrics stehen Zahlen zu Konten, Dateien, Speicher, Aufrufen, Datei-Anfragen und zur Restlaufzeit der Zertifikate. Abrufen kann sie nur, wer das Token kennt.'
+          )}
+        >
+          {toggle('metrics.enabled', t('Metriken anbieten'), t('Abgeschaltet antwortet /metrics nicht.'))}
+          <MetricsTools
+            hasToken={Boolean(v<string>('metrics.tokenHash'))}
+            onValues={(values) => {
+              const picked = { 'metrics.enabled': values['metrics.enabled'], 'metrics.tokenHash': values['metrics.tokenHash'] };
+              setSaved((prev) => ({ ...prev, ...picked }));
+              setDraft((prev) => ({ ...prev, ...picked }));
+              onSaved({ ...initial, values: { ...saved, ...picked }, secrets: secretSet });
+            }}
+          />
         </SettingsSection>
         <SettingsSection
           title={t('Datenschutz')}

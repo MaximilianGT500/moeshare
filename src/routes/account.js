@@ -28,6 +28,7 @@ const exporter = require('../services/exportService');
 const avatars = require('../services/avatarService');
 const paths = require('../services/pathService');
 const storage = require('../services/storageService');
+const legalService = require('../services/legalService');
 const { filePaths } = require('../lib/storage');
 const { STYLES } = require('../lib/slugs');
 const { EXPIRY_CHOICES } = require('../lib/expiry');
@@ -66,6 +67,7 @@ const OWN_ACTIVITY = [
   'domain_verified',
   'domain_removed',
   'domain_revoked',
+  'domain_legal_updated',
   'design_updated',
   'album_shared',
   'album_left',
@@ -374,6 +376,25 @@ router.post('/api/account/domains/:id/verify', signedIn, domainsEnabled, async (
   const result = await domains.verify(req.user, req.params.id);
   if (result.newlyVerified) audit.log('domain_verified', { userId: req.user.id, req, details: { domain: result.domain } });
   res.json({ ok: true, result: translateDomain(req, result), domains: await domainInfo(req) });
+});
+
+router.put('/api/account/domains/:id/legal', signedIn, domainsEnabled, async (req, res) => {
+  const domain = await domains.updateLegal(req.user, req.params.id, req.body);
+  audit.log('domain_legal_updated', { userId: req.user.id, req, details: { domain: domain.domain, complete: domain.legal.complete } });
+  res.json({ ok: true, domain: translateDomain(req, domain), domains: await domainInfo(req) });
+});
+
+router.post('/api/account/domains/:id/legal/preview', signedIn, async (req, res) => {
+  const item = (await domains.listForUser(req.user.id)).find((entry) => String(entry.id) === String(req.params.id));
+  if (!item) throw notFound('Diese Domain gibt es nicht (mehr).');
+  const config = req.body && req.body.config ? legalService.normalize(req.body.config) : item.legal.config;
+  const language =
+    req.body && req.body.language === 'en' ? 'en' : req.body && req.body.language === 'de' ? 'de' : req.language === 'en' ? 'en' : 'de';
+  res.json({
+    imprint: legalService.pageText('imprint', config, language),
+    privacy: legalService.pageText('privacy', config, language),
+    status: legalService.status(config),
+  });
 });
 
 router.delete('/api/account/domains/:id', signedIn, async (req, res) => {

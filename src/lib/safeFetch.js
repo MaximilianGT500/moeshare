@@ -66,4 +66,4 @@ client.interceptors.request.use((request) => {
   return request;
 });
 
-module.exports = { client };
+module.exports = { client, isPrivateAddress };

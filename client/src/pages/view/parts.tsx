@@ -35,10 +35,10 @@ import { ThemeToggleButton } from '../../components/ThemeToggle';
 import { CopyIconButton, CopyTextButton, CopyTextLink } from '../../components/CopyButton';
 import { ShareMenuItems } from '../../components/ShareList';
 import { UserAvatar } from '../../components/UserAvatar';
-import { VideoPlayer } from '../../components/VideoPlayer';
+import { VideoFrame } from '../../components/VideoPlayer';
 import { Waveform } from '../../components/Waveform';
 import { fileIcon, typeDescription } from '../../components/FileIcons';
-import { SiteFooter } from '../../components/SiteFooter';
+import { FooterLinks, SiteFooter } from '../../components/SiteFooter';
 import { ReportButton } from '../../components/ReportDialog';
 import { TextStage } from './TextStage';
 import { c, ease, elevation, radius } from '../../theme/tokens';
@@ -318,33 +318,19 @@ export function MediaStage({
     );
   }
   if (file.type === 'video') {
-    const ratio = file.width && file.height ? file.width / file.height : 16 / 9;
     const limit = typeof height === 'string' ? height : 'max(360px, min(72vh, 100dvh - 300px))';
     return (
-      <Box
+      <VideoFrame
         className="ms-media"
-        sx={{
-          borderRadius: fit === 'stage' ? 0 : `${r(radius.lg)}px`,
-          overflow: 'hidden',
-          bgcolor: '#000',
-          boxShadow: frame ? elevation[4] : 'none',
-          mx: 'auto',
-          width: 'fit-content',
-          maxWidth: '100%',
-          lineHeight: 0,
-        }}
-      >
-        <VideoPlayer
-          src={urls.direct}
-          hls={urls.hls}
-          poster={urls.poster}
-          style={{
-            display: 'block',
-            width: `min(100%, ${file.width ? Math.max(320, Math.min(file.width, 1600)) : 1280}px, calc(${limit} * ${ratio}))`,
-            aspectRatio: file.width && file.height ? `${file.width} / ${file.height}` : '16 / 9',
-          }}
-        />
-      </Box>
+        src={urls.playback || urls.direct}
+        hls={urls.hls}
+        poster={urls.poster}
+        width={file.width}
+        height={file.height}
+        maxHeight={limit}
+        tracks={model.boot.subtitles}
+        sx={{ borderRadius: fit === 'stage' ? 0 : `${r(radius.lg)}px`, boxShadow: frame ? elevation[4] : 'none' }}
+      />
     );
   }
   if (file.type === 'audio') {
@@ -688,7 +674,8 @@ export function NoteBlock({ align = 'left' }: { align?: 'left' | 'center' }) {
 
 export function Notices({ model, sx }: { model: ViewModel; sx?: object }) {
   const { boot, file } = model;
-  if (!boot.hlsConverting && !(file.once && !file.owner) && !file.blocked) return null;
+  const preparing = Boolean(boot.webConverting) && !boot.urls.playback;
+  if (!boot.hlsConverting && !preparing && !(file.once && !file.owner) && !file.blocked) return null;
   return (
     <Box sx={{ display: 'grid', gap: 1.5, ...sx }}>
       {file.blocked && (
@@ -699,6 +686,11 @@ export function Notices({ model, sx }: { model: ViewModel; sx?: object }) {
       )}
       {boot.hlsConverting && (
         <Alert severity="info">{t('Das Video wird gerade fürs Streaming aufbereitet. Bis dahin läuft die Originaldatei.')}</Alert>
+      )}
+      {preparing && !boot.hlsConverting && (
+        <Alert severity="info">
+          {t('Das Video wird gerade für alle Browser aufbereitet. Bleibt es schwarz, lade die Seite in ein paar Minuten neu.')}
+        </Alert>
       )}
       {file.once && !file.owner && (
         <Alert severity="warning">
@@ -749,9 +741,16 @@ export function PageFooter({ model, sx }: { model: ViewModel; sx?: object }) {
   const { site, boot } = model;
   const report = site.report && boot.report ? <ReportButton target={boot.report} /> : null;
   if (!shows('footer')) {
-    return report ? (
-      <Box sx={{ display: 'flex', justifyContent: 'center', pb: 2, position: 'relative', zIndex: 1, ...sx }}>{report}</Box>
-    ) : null;
+    const legal = site.legal || [];
+    if (!report && !legal.length) return null;
+    return (
+      <Box
+        sx={{ display: 'grid', justifyItems: 'center', gap: 0.75, pb: 2, position: 'relative', zIndex: 1, color: 'text.secondary', ...sx }}
+      >
+        {report}
+        <FooterLinks links={legal} />
+      </Box>
+    );
   }
   return (
     <Box

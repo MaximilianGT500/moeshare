@@ -494,10 +494,28 @@ async function accountFlow(req, res, provider, { flow, profile }) {
   return res.redirect(safeNext(flow.next, '/account'));
 }
 
+async function syncGroupRole(req, provider, row, membership) {
+  const role = oauth.roleFromGroups(provider, membership, row.role);
+  if (role === row.role) return row;
+  try {
+    const { after } = await users.update(row.id, { role }, { actorId: null });
+    audit.log('user_updated', { userId: row.id, actorId: null, req, details: { role, via: 'oidc_groups' } });
+    log.info(role === 'admin' ? 'Admin-Rechte aus einer Gruppe übernommen' : 'Admin-Rechte nach Gruppenwechsel entfernt', {
+      user: row.username,
+    });
+    return after || { ...row, role };
+  } catch (error) {
+    log.warn('Die Rolle aus den Gruppen ließ sich nicht übernehmen', { user: row.username, error });
+    return row;
+  }
+}
+
 async function signInFlow(req, res, provider, { flow, profile, membership }) {
-  const row = await identities.findUser(provider, profile.subject);
+  let row = await identities.findUser(provider, profile.subject);
   if (row) {
     if (row.status !== 'active') return res.redirect('/login?error=suspended');
+    if (!oauth.allowedByGroups(provider, membership)) return res.redirect(loginFailure(provider, 'oauth_not_member'));
+    row = await syncGroupRole(req, provider, row, membership);
     identities.touch(provider, profile.subject, profile.name).catch(() => {});
     if (row.totp_enabled_at) {
       const ticket = await issueTicket(row.id, { method: provider, remember: flow.remember, next: flow.next });
@@ -520,7 +538,7 @@ async function signInFlow(req, res, provider, { flow, profile, membership }) {
   if (mode === 'invite' && !invite && !oauth.membershipCountsAsInvite(provider)) {
     return res.redirect(loginFailure(provider, 'oauth_invite_required'));
   }
-  const pendingId = await oauth.holdSignup({ provider, profile, invite, remember: flow.remember });
+  const pendingId = await oauth.holdSignup({ provider, profile, invite, remember: flow.remember, membership: membership || null });
   return res.redirect(`/register?oauth=${pendingId}`);
 }
 
@@ -570,7 +588,7 @@ async function registerWithProvider(req, res, pendingId) {
   const row = await users.create({
     username: text(req.body.username, 64),
     password: passwordLogin() ? text(req.body.password, 300) : '',
-    role: invite ? invite.role : 'mitglied',
+    role: oauth.roleFromGroups(entry.provider, entry.membership, invite ? invite.role : 'mitglied'),
     quotaBytes: invite ? invite.quotaBytes : null,
     maxFileBytes: invite ? invite.maxFileBytes : null,
     identity: { provider: entry.provider, subject: entry.profile.subject, name: entry.profile.name, label },

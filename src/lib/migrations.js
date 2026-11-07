@@ -368,6 +368,38 @@ const MIGRATIONS = [
       }
     },
   },
+  {
+    version: 10,
+    name: 'Zertifikate, Datei-Anfragen, Ankündigungen, Untertitel und Rechtliches für eigene Domains',
+    async up(db) {
+      await addColumns(db, 'user_domains', ['record_label', 'legal', 'legal_updated_at', 'legal_grace_until']);
+      await addColumns(db, 'file_data', ['request_id', 'uploader']);
+      for (const table of ['certificates', 'tls_requests', 'upload_requests', 'announcements', 'file_subtitles'])
+        await createTable(db, table);
+      await db.run("UPDATE user_domains SET record_label = 'moeshare'");
+      await db.run("UPDATE user_domains SET legal_grace_until = ? WHERE status = 'verified'", [Date.now() + 14 * 24 * 60 * 60 * 1000]);
+      for (const row of await db.all("SELECT id, config FROM webhooks WHERE kind = 'json'")) {
+        let config;
+        try {
+          config = JSON.parse(row.config);
+        } catch {
+          continue;
+        }
+        if (!config || typeof config !== 'object') continue;
+        config.legacyHeaders = true;
+        await db.run('UPDATE webhooks SET config = ? WHERE id = ?', [JSON.stringify(config), row.id]);
+      }
+      const oldLogos = ['https', 'http']
+        .flatMap((scheme) =>
+          ['moeshare.eu', 'www.moeshare.eu', 'moeshare.de', 'www.moeshare.de'].map((host) => `${scheme}://${host}/assets/img/logo.png`)
+        )
+        .map((url) => JSON.stringify(url));
+      await db.run(`UPDATE settings SET value = ? WHERE name = 'site.favicon' AND value IN (${oldLogos.map(() => '?').join(', ')})`, [
+        JSON.stringify(''),
+        ...oldLogos,
+      ]);
+    },
+  },
 ];
 
 const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

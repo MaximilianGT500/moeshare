@@ -60,12 +60,17 @@ function render(language, { subject, title, paragraphs = [], button = null, foot
   const note = footer
     ? `<tr><td style="padding-top:28px;font-size:12px;line-height:1.5;color:#8a8392">${escapeHtml(footer)}</td></tr>`
     : '';
+  const base = settings.get('site.baseUrl');
+  const logo = /^https?:\/\//.test(base || '')
+    ? `<td style="padding-right:10px;vertical-align:middle"><img src="${escapeHtml(`${base}/icons/icon-192.png`)}" width="28" height="28" alt="" style="display:block;border:0;border-radius:50%"></td>`
+    : '';
+  const brand = `<table role="presentation" cellpadding="0" cellspacing="0"><tr>${logo}<td style="font-size:14px;font-weight:700;color:${accent};vertical-align:middle">${escapeHtml(site)}</td></tr></table>`;
   const html = `<!DOCTYPE html>
 <html lang="${language === 'en' ? 'en' : 'de'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(subject)}</title></head>
 <body style="margin:0;padding:0;background:#f3f1f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1d1a23">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f1f6;padding:32px 12px"><tr><td align="center">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border-radius:18px;padding:32px 28px">
-<tr><td style="font-size:14px;font-weight:700;color:${accent}">${escapeHtml(site)}</td></tr>
+<tr><td>${brand}</td></tr>
 <tr><td style="padding-top:14px;font-size:22px;font-weight:700;line-height:1.3">${escapeHtml(title)}</td></tr>
 <tr><td style="padding-top:14px;font-size:15px;line-height:1.6;color:#3d3846">${body}</td></tr>
 ${action}

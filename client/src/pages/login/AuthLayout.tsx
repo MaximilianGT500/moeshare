@@ -7,6 +7,7 @@ import { AmbientBackdrop } from '../../components/Ambient';
 import { useElementHeight } from '../../lib/hooks';
 import { ThemeToggleButton } from '../../components/ThemeToggle';
 import { SiteFooter } from '../../components/SiteFooter';
+import { Announcements } from '../../components/Announcements';
 import { mix } from '../../lib/color';
 import { c, ease, radius } from '../../theme/tokens';
 import { t } from '../../lib/i18n';
@@ -26,6 +27,7 @@ export function AuthLayout({ site, children, wide = false }: { site: SiteInfo; c
         transition={{ duration: 0.6, ease: ease.emphasizedDecelerate }}
         style={{ position: 'relative', zIndex: 1, width: '100%', maxWidth: wide ? 460 : 420 }}
       >
+        <Announcements site={site} sx={{ mb: 2 }} />
         <Box
           sx={{
             borderRadius: `${radius.xl}px`,

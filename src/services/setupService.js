@@ -84,7 +84,7 @@ async function verify(token) {
 }
 
 async function assertAccess(token) {
-  if (!(await isOpen())) throw gone('MoeShare ist bereits eingerichtet.', { code: 'done' });
+  if (!(await isOpen())) throw gone('Der Server ist bereits eingerichtet.', { code: 'done' });
   if (!(await verify(token)))
     throw forbidden('Der Einrichtungslink stimmt nicht. Du findest ihn in der Konsole des Servers.', { code: 'token' });
 }

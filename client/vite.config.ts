@@ -31,6 +31,7 @@ export default defineConfig({
         report: entry('report'),
         notfound: entry('notfound'),
         legal: entry('legal'),
+        request: entry('request'),
       },
       output: {
         entryFileNames: 'assets/[name]-[hash].js',

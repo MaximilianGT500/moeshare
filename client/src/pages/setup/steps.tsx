@@ -288,7 +288,7 @@ export function DatabaseStep({
       )}
       <Typography variant="body2" sx={{ color: 'text.secondary' }}>
         {t(
-          'Gerade verbunden: {label}. Die Tabellen legt MoeShare selbst an, die Datenbank muss nur existieren und der Benutzer Tabellen erstellen dürfen.',
+          'Gerade verbunden: {label}. Die Tabellen entstehen von selbst, die Datenbank muss nur existieren und der Benutzer Tabellen erstellen dürfen.',
           { label: current.label }
         )}
       </Typography>
@@ -437,7 +437,9 @@ export function SiteStep({ values, set, errors }: SettingsStepProps) {
         />
       </Box>
       <Box>
-        <Label hint={t('Optional. Adresse eines Bildes (PNG oder SVG), z. B. dein Logo.')}>{t('Symbol')}</Label>
+        <Label hint={t('Optional. Adresse eines Bildes (PNG oder SVG), z. B. dein Logo. Leer lassen für das eingebaute Symbol.')}>
+          {t('Symbol')}
+        </Label>
         <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
           <BrandMark src={str(values, 'site.favicon')} title={str(values, 'site.title') || 'M'} size={48} />
           <TextField

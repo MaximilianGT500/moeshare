@@ -9,6 +9,7 @@ const config = require('./config');
 const settings = require('./services/settingsService');
 const { loadSession } = require('./middleware/auth');
 const { customDomain, ownDomainHeaders } = require('./middleware/customDomain');
+const { maintenance } = require('./middleware/maintenance');
 const { requestLog } = require('./middleware/requestLog');
 const { contentSecurityPolicy } = require('./middleware/security');
 const { notFound, errorHandler } = require('./middleware/errors');
@@ -60,6 +61,8 @@ function createApp() {
     res.set('Content-Language', req.language);
     next();
   });
+  app.use(require('./routes/metrics'));
+  app.use(maintenance);
 
   app.use(redirects.middleware);
   app.use(require('./routes/profiles'));
@@ -73,6 +76,7 @@ function createApp() {
   app.use(require('./routes/admin'));
   app.use(require('./routes/access'));
   app.use(require('./routes/moderation'));
+  app.use(require('./routes/requests'));
   const fileRoutes = require('./routes/files');
   app.use(fileRoutes);
   app.use(require('./routes/upload'));

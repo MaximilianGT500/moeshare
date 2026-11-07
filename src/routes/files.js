@@ -23,6 +23,7 @@ const { viewPage, blurredPreview } = require('../services/viewService');
 const redirects = require('../services/redirectService');
 const paths = require('../services/pathService');
 const profiles = require('../services/profileService');
+const subtitles = require('../services/subtitleService');
 const { displayPath } = require('../lib/slugs');
 
 const router = express.Router();
@@ -183,7 +184,7 @@ router.get('/delete/:slug', async (req, res) => {
   return res.redirect(target);
 });
 
-const FOLDERS = { original: '', preview: 'preview/', hls: 'm3u8/' };
+const FOLDERS = { original: '', preview: 'preview/', hls: 'm3u8/', web: 'web/' };
 
 function stemsOf(name) {
   const stem = name.replace(/\.[^.]+$/, '');
@@ -272,8 +273,24 @@ function serveUpload(kind) {
   };
 }
 
+router.get('/subtitles/:id.vtt', async (req, res) => {
+  const row = await subtitles.content(req.params.id);
+  if (!row) throw notFound('Datei nicht gefunden');
+  const record = await files.findById(row.file_id);
+  if (!record || !domains.servesOwner(req, record.username)) throw notFound('Datei nicht gefunden');
+  const access = protection.fileAccess(req, record);
+  if (access.state === 'expired') throw gone(EXPIRED);
+  if (access.state === 'blocked') throw new HttpError(451, BLOCKED);
+  if (access.state !== 'open') throw notFound('Datei nicht gefunden');
+  const guarded = protection.isProtected(record) || Boolean(record.expires_at);
+  res.set('Cache-Control', guarded ? 'private, no-store' : 'public, max-age=300');
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  return res.type('text/vtt; charset=utf-8').send(row.content);
+});
+
 router.get('/uploads/:user/preview/:name', serveUpload('preview'));
 router.get('/uploads/:user/m3u8/:name', serveUpload('hls'));
+router.get('/uploads/:user/web/:name', serveUpload('web'));
 router.get('/uploads/:user/:name', serveUpload('original'));
 
 const tail = express.Router();

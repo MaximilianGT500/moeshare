@@ -40,6 +40,7 @@ import FolderZipOutlined from '@mui/icons-material/FolderZipOutlined';
 import AccountBoxOutlined from '@mui/icons-material/AccountBoxOutlined';
 import HistoryRounded from '@mui/icons-material/HistoryRounded';
 import ContentCutRounded from '@mui/icons-material/ContentCutRounded';
+import SubtitlesOutlined from '@mui/icons-material/SubtitlesOutlined';
 import WarningAmberRounded from '@mui/icons-material/WarningAmberRounded';
 import type { ExpiryChoice, FileItem, TagCount } from '../../lib/types';
 import { ApiError, uploadFromUrl, type UploadOptions } from '../../lib/api';
@@ -64,6 +65,7 @@ export function FileMenu({
   onStats,
   onImageEdit,
   onClip,
+  onSubtitles,
   onVersions,
   onWarning,
   trash = false,
@@ -79,6 +81,7 @@ export function FileMenu({
   onStats?: (file: FileItem) => void;
   onImageEdit?: (file: FileItem) => void;
   onClip?: (file: FileItem) => void;
+  onSubtitles?: (file: FileItem) => void;
   onVersions?: (file: FileItem) => void;
   onWarning?: (file: FileItem) => void;
   trash?: boolean;
@@ -154,6 +157,22 @@ export function FileMenu({
                   <ContentCutRounded />
                 </ListItemIcon>
                 {t('Kürzen oder GIF machen')}
+              </MenuItem>,
+            ]
+          : []),
+        ...(onSubtitles && file.type === 'video'
+          ? [
+              <MenuItem
+                key="subtitles"
+                onClick={() => {
+                  onClose();
+                  onSubtitles(file);
+                }}
+              >
+                <ListItemIcon>
+                  <SubtitlesOutlined />
+                </ListItemIcon>
+                {t('Untertitel')}
               </MenuItem>,
             ]
           : []),

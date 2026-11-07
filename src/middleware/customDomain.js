@@ -11,7 +11,8 @@ const PUBLIC_GET = [
   /^\/view\/[^/]+\/blur\.jpg$/,
   /^\/download\/[^/]+$/,
   /^\/oembed\/[^/]+$/,
-  /^\/uploads\/[^/]+\/(?:preview\/|m3u8\/)?[^/]+$/,
+  /^\/uploads\/[^/]+\/(?:preview\/|m3u8\/|web\/)?[^/]+$/,
+  /^\/subtitles\/\d+\.vtt$/,
   /^\/s\/[^/]+$/,
   /^\/a\/[^/]+$/,
   /^\/a\/[^/]+\/zip$/,
@@ -22,8 +23,9 @@ const PUBLIC_GET = [
   /^\/impressum$/,
   /^\/datenschutz$/,
   /^\/favicon\.svg$/,
+  /^\/favicon\.ico$/,
   /^\/healthz$/,
-  /^\/\.well-known\/moeshare\/domain$/,
+  /^\/\.well-known\/[a-z0-9-]{1,40}\/domain$/,
 ];
 
 const PUBLIC_POST = [
@@ -54,12 +56,27 @@ function allowed(req) {
   return false;
 }
 
+function fallbackPath(req, entry) {
+  const query = req.originalUrl.slice(req.originalUrl.indexOf('?') === -1 ? req.originalUrl.length : req.originalUrl.indexOf('?'));
+  if (req.path === '/') return `/u/${encodeURIComponent(entry.username)}${query}`;
+  const segments = req.path.split('/').filter(Boolean);
+  if (segments.length === 1 && fileLink(req.path)) return `/view/${segments[0]}${query}`;
+  return req.originalUrl;
+}
+
 function customDomain(req, res, next) {
   const entry = domains.ownerOfHost(domains.hostOf(req));
   if (!entry) return next();
-  req.customDomain = entry;
   req.user = null;
   req.session = null;
+  if (!entry.active) {
+    if ((req.method === 'GET' || req.method === 'HEAD') && allowed(req)) {
+      res.set('Cache-Control', 'no-store');
+      return res.redirect(302, `${settings.get('site.baseUrl')}${fallbackPath(req, entry)}`);
+    }
+    return res.status(404).json({ error: tr(req, 'Nicht gefunden') });
+  }
+  req.customDomain = entry;
   if (allowed(req)) return next();
   if (req.method === 'GET' && !req.path.startsWith('/api/')) {
     return res.redirect(302, `${settings.get('site.baseUrl')}${req.originalUrl}`);

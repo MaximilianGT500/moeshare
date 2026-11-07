@@ -79,12 +79,13 @@ function localArtifacts(username, filename) {
       }
     }
   }
+  if (fs.existsSync(paths.web)) items.push({ kind: 'web', file: paths.web, relative: `${username}/web/${path.basename(paths.web)}` });
   return items;
 }
 
 async function removeLocal(username, filename) {
   const paths = filePaths(username, filename);
-  await Promise.all([paths.file, paths.preview, paths.poster].map((file) => fsp.rm(file, { force: true })));
+  await Promise.all([paths.file, paths.preview, paths.poster, paths.web, paths.webStarted].map((file) => fsp.rm(file, { force: true })));
   await removeHlsArtifacts(username, filename);
 }
 
@@ -153,6 +154,7 @@ function remoteKeys(record) {
   const keys = [`${record.username}/${record.filename}`];
   if (variants.includes('preview')) keys.push(`${record.username}/preview/${record.filename}`);
   if (variants.includes('poster')) keys.push(`${record.username}/preview/${base}.jpg`);
+  if (variants.includes('web')) keys.push(`${record.username}/web/${base}.mp4`);
   return keys;
 }
 
@@ -253,8 +255,8 @@ async function migrate(to, { onProgress = () => {} } = {}) {
 async function testConnection(overrides = {}) {
   const options = s3Options(overrides);
   const target = new S3Client({ ...options, timeoutMs: 15000 });
-  const key = prefixed(`.moeshare-test-${crypto.randomBytes(6).toString('hex')}.txt`, overrides.prefix);
-  const body = Buffer.from(`MoeShare ${new Date().toISOString()}`);
+  const key = prefixed(`.write-test-${crypto.randomBytes(6).toString('hex')}.txt`, overrides.prefix);
+  const body = Buffer.from(`${settings.get('site.title')} ${new Date().toISOString()}`);
   const started = Date.now();
   try {
     await target.put(key, body, { contentType: 'text/plain' });
@@ -282,6 +284,7 @@ function hasVariant(record, kind) {
   if (kind === 'preview') return fs.existsSync(paths.preview);
   if (kind === 'poster') return fs.existsSync(paths.poster);
   if (kind === 'hls') return fs.existsSync(paths.hlsComplete);
+  if (kind === 'web') return fs.existsSync(paths.web);
   return fs.existsSync(paths.file);
 }
 
