@@ -28,6 +28,8 @@ const watermarks = require('../services/watermarkService');
 const clips = require('../services/clipService');
 const jobs = require('../services/jobService');
 const search = require('../services/searchService');
+const addresses = require('../services/addressService');
+const paths = require('../services/pathService');
 const media = require('../lib/media');
 
 const router = express.Router();
@@ -66,6 +68,8 @@ function uploadOptions(prefs, user, watermark) {
     stats: settings.get('stats.enabled'),
     profiles: settings.get('profiles.enabled'),
     editable: uploads.EDITABLE,
+    customAddresses: settings.get('links.customAddresses'),
+    linkPath: paths.currentFor(user.username),
   };
 }
 
@@ -304,7 +308,11 @@ router.patch('/api/files/:id', signedIn, async (req, res) => {
     fields.listed = body.listed ? 1 : 0;
   }
   if (body.warning !== undefined) fields.warning = warningValue(body.warning);
-  let updated = await files.patch(record, fields);
+  const renamed =
+    typeof body.slug === 'string' && body.slug.trim() !== (record.slug || record.filename)
+      ? await addresses.rename('file', record, body.slug)
+      : null;
+  let updated = await files.patch(renamed ? (await files.findById(record.id)) || record : record, fields);
   if (body.tags !== undefined) {
     await files.setTags(updated, body.tags);
     updated = await files.findById(record.id);

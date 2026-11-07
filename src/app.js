@@ -8,7 +8,7 @@ const cookieParser = require('cookie-parser');
 const config = require('./config');
 const settings = require('./services/settingsService');
 const { loadSession } = require('./middleware/auth');
-const { customDomain } = require('./middleware/customDomain');
+const { customDomain, ownDomainHeaders } = require('./middleware/customDomain');
 const { requestLog } = require('./middleware/requestLog');
 const { contentSecurityPolicy } = require('./middleware/security');
 const { notFound, errorHandler } = require('./middleware/errors');
@@ -25,6 +25,7 @@ function createApp() {
 
   app.use(requestLog);
   app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
+  app.use(ownDomainHeaders);
   app.use(compression());
 
   app.use('/app/assets', express.static(path.join(config.paths.ui, 'assets'), { maxAge: '365d', immutable: true }), (req, res) =>
@@ -70,11 +71,14 @@ function createApp() {
   app.use(require('./routes/design'));
   app.use(require('./routes/embed'));
   app.use(require('./routes/admin'));
+  app.use(require('./routes/access'));
   app.use(require('./routes/moderation'));
-  app.use(require('./routes/files'));
+  const fileRoutes = require('./routes/files');
+  app.use(fileRoutes);
   app.use(require('./routes/upload'));
   app.use(require('./routes/links'));
   app.use(require('./routes/albums'));
+  app.use(fileRoutes.tail);
 
   app.use(notFound);
   app.use(errorHandler);

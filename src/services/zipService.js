@@ -4,6 +4,7 @@ const path = require('path');
 const logger = require('../lib/logger');
 const { ZipWriter, uniqueNames, cleanName } = require('../lib/zip');
 const storage = require('./storageService');
+const settings = require('./settingsService');
 
 const log = logger.scope('zip');
 
@@ -15,7 +16,7 @@ function entryName(record) {
 
 async function send(res, records, title) {
   res.status(200);
-  res.attachment(`${cleanName(title || 'MoeShare')}.zip`);
+  res.attachment(`${cleanName(title || settings.get('site.title') || 'MoeShare')}.zip`);
   res.set('Content-Type', 'application/zip');
   res.set('Cache-Control', 'private, no-store');
   res.set('X-Content-Type-Options', 'nosniff');

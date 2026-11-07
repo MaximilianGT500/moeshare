@@ -27,6 +27,7 @@ const dedupe = require('./dedupeService');
 const versions = require('./versionService');
 const search = require('./searchService');
 const watermarks = require('./watermarkService');
+const addresses = require('./addressService');
 
 const log = logger.scope('upload');
 
@@ -93,10 +94,21 @@ function warningOf(value) {
   return String(value).replace(/\s+/g, ' ').trim().slice(0, MAX_WARNING);
 }
 
+function decodedHeader(value) {
+  if (typeof value !== 'string' || !value.includes('%')) return value;
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
 function rawOptions(req) {
   const body = req.body || {};
   const header = (name) => req.get(name);
   return {
+    slug: first(body.slug, decodedHeader(header('x-slug'))),
+    code: first(body.code, decodedHeader(header('x-code'))),
     expires: first(body.expires, body.expiry, header('x-expires'), header('x-expiry')),
     password: first(body.password, header('x-password')),
     maxViews: first(body.maxViews, body.max_views, header('x-max-views')),
@@ -161,8 +173,13 @@ async function resolveOptions(user, raw = {}, { kind = 'file' } = {}) {
     if (!album) throw badRequest('Dieses Album gibt es nicht.', { field: 'album' });
   }
 
+  const wanted = kind === 'link' ? first(raw.code, raw.slug) : raw.slug;
+  const custom = wanted === undefined || wanted === null || wanted === '' ? null : await addresses.claim(kind, String(wanted));
+
   const optimize = switchOf(raw.optimize);
   return {
+    slug: kind === 'file' ? custom : null,
+    code: kind === 'link' ? custom : null,
     warning: warningOf(raw.warning),
     optimize: optimize === null ? (prefs.optimize === false ? false : null) : optimize,
     watermark: switchOf(raw.watermark),
@@ -233,6 +250,14 @@ function analyzeLater(record, type = files.typeOf(record.filename, record.syntax
 }
 
 async function insertWithSlug(details, options) {
+  if (options.slug) {
+    try {
+      return await files.insert({ ...details, slug: options.slug });
+    } catch (error) {
+      if (db.isUniqueViolation(error)) throw new HttpError(409, 'Diese Adresse ist schon vergeben.', { field: 'slug' });
+      throw error;
+    }
+  }
   const language = settings.get('site.language');
   for (let attempt = 0; attempt < 6; attempt++) {
     const slug = await slugs.unique(

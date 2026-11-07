@@ -103,7 +103,7 @@ function AlbumView({ album, items, owner, dashboard }: { album: AlbumData; items
         >
           {album.owner && shows('owner') && (
             <Box component="li" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <UserAvatar name={album.owner} size={24} />
+              <UserAvatar name={album.owner} src={album.avatars?.[album.owner]} size={24} />
               <Typography variant="body2">{album.owner}</Typography>
             </Box>
           )}
@@ -111,7 +111,7 @@ function AlbumView({ album, items, owner, dashboard }: { album: AlbumData; items
             <Box component="li" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <Box sx={{ display: 'flex', '& > *:not(:first-of-type)': { ml: -0.75 }, '& > *': { boxShadow: `0 0 0 2px ${c.surface}` } }}>
                 {album.contributors.slice(0, 3).map((name) => (
-                  <UserAvatar key={name} name={name} size={24} />
+                  <UserAvatar key={name} name={name} src={album.avatars?.[name]} size={24} />
                 ))}
               </Box>
               <Typography variant="body2">{contributorText(album.contributors)}</Typography>

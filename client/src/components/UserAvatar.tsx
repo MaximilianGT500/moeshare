@@ -1,11 +1,14 @@
 import Avatar from '@mui/material/Avatar';
 import { hueFromString } from '../lib/color';
 
-export function UserAvatar({ name, size = 36 }: { name: string; size?: number }) {
+export function UserAvatar({ name, src, size = 36 }: { name: string; src?: string | null; size?: number }) {
   const hue = hueFromString(name || '?');
   return (
     <Avatar
       aria-hidden
+      src={src || undefined}
+      alt=""
+      slotProps={{ img: { loading: 'lazy', decoding: 'async', draggable: false } }}
       sx={(theme) => ({
         width: size,
         height: size,

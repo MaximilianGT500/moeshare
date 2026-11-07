@@ -54,7 +54,7 @@ function cleanInput(input = {}) {
     throw badRequest('Diesen Ordner gibt es auf dem Server nicht.', { field: 'files' });
   }
   if (path.resolve(filesDir) === path.resolve(config.paths.uploads)) {
-    throw badRequest('Das ist der Upload-Ordner von MoeShare. Gib den Ordner des alten Uploaders an.', { field: 'files' });
+    throw badRequest('Das ist der eigene Upload-Ordner dieses Servers. Gib den Ordner des alten Uploaders an.', { field: 'files' });
   }
   return {
     kind,

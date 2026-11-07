@@ -21,11 +21,13 @@ import { t } from '../../lib/i18n';
 
 export function TokenStep({
   next,
+  passwordless = false,
   onBack,
   onMfa,
   onSuccess,
 }: {
   next: string;
+  passwordless?: boolean;
   onBack: () => void;
   onMfa: (challenge: MfaChallenge, remember: boolean) => void;
   onSuccess: (redirect: string) => void;
@@ -84,7 +86,9 @@ export function TokenStep({
             {t('Mit Token anmelden')}
           </Typography>
           <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
-            {t('Das Token steht in deiner ShareX-Konfiguration im Header „Authorization“. Lege danach unter Konto ein Passwort fest.')}
+            {passwordless
+              ? t('Das Token steht in deiner ShareX-Konfiguration im Header „Authorization“. Lege danach unter Konto einen Passkey an.')
+              : t('Das Token steht in deiner ShareX-Konfiguration im Header „Authorization“. Lege danach unter Konto ein Passwort fest.')}
           </Typography>
         </div>
       </Stack>

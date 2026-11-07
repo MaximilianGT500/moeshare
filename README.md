@@ -30,6 +30,7 @@ Offizielle Instance: [v3.moeshare.eu](https://v3.moeshare.eu).
 - [Erster Start und Einrichtung](#erster-start-und-einrichtung)
 - [ShareX verbinden](#sharex-verbinden)
 - [Texte, Kurzlinks und Alben](#texte-kurzlinks-und-alben)
+- [Eigene Adressen und eigener Pfad](#eigene-adressen-und-eigener-pfad)
 - [Papierkorb, Statistiken und ZIP](#papierkorb-statistiken-und-zip)
 - [Große Dateien, Ordner und Versionen](#große-dateien-ordner-und-versionen)
 - [Gemeinsame Alben](#gemeinsame-alben)
@@ -40,6 +41,7 @@ Offizielle Instance: [v3.moeshare.eu](https://v3.moeshare.eu).
 - [Inhaltswarnungen](#inhaltswarnungen)
 - [Vorschauseiten gestalten](#vorschauseiten-gestalten)
 - [Profilseiten](#profilseiten)
+- [Profilbilder](#profilbilder)
 - [Eigene Domains](#eigene-domains)
 - [Melden und Moderation](#melden-und-moderation)
 - [E-Mail](#e-mail)
@@ -52,6 +54,8 @@ Offizielle Instance: [v3.moeshare.eu](https://v3.moeshare.eu).
 - [Einstellungen und Umgebungsvariablen](#einstellungen-und-umgebungsvariablen)
 - [Sprache](#sprache)
 - [Anmelden über andere Dienste](#anmelden-über-andere-dienste)
+- [Anmeldung ohne Passwort](#anmeldung-ohne-passwort)
+- [Einmal-Links](#einmal-links)
 - [Startseite, Impressum und Links](#startseite-impressum-und-links)
 - [App fürs Handy](#app-fürs-handy)
 - [Protokoll und Fehlerberichte](#protokoll-und-fehlerberichte)
@@ -82,16 +86,21 @@ Offizielle Instance: [v3.moeshare.eu](https://v3.moeshare.eu).
 - **Ansichtsseiten** mit Bild-, Video- und Audioplayer in sechs Designs, mit Farben aus der Datei oder eigener Akzentfarbe, wählbarer Schrift, ein- und ausblendbaren Angaben und auf Wunsch eigenem CSS
 - **Embed Builder** mit Live-Vorschau: eine Standardvorlage für alle und auf Wunsch eigene Vorlagen pro Benutzer, mit Platzhaltern wie `{dateiname}` oder `{größe}`
 - **Profilseiten** mit Beschreibung, Links, ausgewählten Dateien und öffentlichen Alben
-- **Eigene Domains pro Konto**, bestätigt über einen TXT-Eintrag im DNS, die Zertifikate holt Caddy von selbst
+- **Profilbilder** mit Zuschnitt im Browser, aus einer Datei oder den eigenen Uploads, bewegte GIFs bleiben bewegt
+- **Eigene Adressen** für Dateien, Kurzlinks und Alben wie `/view/urlaub`, dazu ein **eigener Pfad** statt `/view/`, etwa `/max/JrinQR99`. Alte Adressen leiten weiter
+- **Eigene Domains pro Konto**, bestätigt über einen TXT-Eintrag im DNS, mit kurzen Links wie `bilder.deinname.de/JrinQR99`, die Zertifikate holt Caddy von selbst
 - **Bilder bearbeiten** im Browser: zuschneiden, drehen, spiegeln, Pfeile, Rahmen, Text und Verpixeln
 - **Bilder optimieren** als WebP oder AVIF, auf Wunsch verkleinert und mit dem Original als älterer Fassung
 - **Wasserzeichen** aus Text oder Logo, automatisch auf jedem neuen Bild
 - **Videos kürzen und GIFs erstellen** direkt im Dashboard
 - **Melden und Moderation**: Besucher melden Inhalte, Admins sperren oder löschen sie
 - **Virenscan** mit ClamAV für jeden Upload
-- **E-Mail über SMTP** für „Passwort vergessen“, Einladungen und Hinweise zum Konto
+- **E-Mail über SMTP** für „Passwort vergessen“, Anmeldelinks, Einladungen und Hinweise zum Konto
 - **Startseite** mit Statistiken und Upload-Verlauf, im Browser anpassbar oder abschaltbar
+- **Dein Name**: Überall steht der Name deiner Instanz, „Läuft mit MoeShare“ lässt sich abschalten
 - **Anmeldung** mit Passwort, Zwei-Faktor per Authenticator-App und Passkeys, dazu über Discord, GitHub, Google, Microsoft, GitLab oder jeden OpenID-Connect-Anbieter wie Authentik, Keycloak oder Authelia
+- **Ohne Passwort**: Die Anmeldung mit Passwort lässt sich ganz abschalten, dann geht es nur noch mit Passkey, über einen verknüpften Dienst oder mit einem Einmal-Link
+- **Einmal-Links**, die genau einmal anmelden und von selbst ablaufen: von Admins erstellt, per E-Mail angefordert oder von anderen Systemen über die API, auf Wunsch erst nach Freigabe durch einen Admin
 - **Benutzerverwaltung** mit Rollen, Speicherlimits, Einladungslinks, Sperren und Aktivitätsprotokoll
 - **API-Tokens** für ShareX und Skripte, mehrere pro Konto und einzeln widerrufbar, die `.sxcu`-Dateien für Dateien, Texte und Kurzlinks gibt es per Klick
 - **Datenbank nach Wahl**: SQLite, PostgreSQL oder MySQL/MariaDB, der Umzug geht mit einem Befehl
@@ -124,7 +133,7 @@ docker compose up -d
 docker compose logs -f moeshare
 ```
 
-In den Logs erscheint der Link zum Installationsassistenten. Datenbank und Uploads landen in den Ordnern `db/` und `uploads/` neben der `docker-compose.yml`.
+In den Logs erscheint der Link zum Installationsassistenten. Datenbank und Uploads landen in den Ordnern `db/` und `uploads/` neben der `docker-compose.yml`. Soll MoeShare gleich unter deiner Domain mit HTTPS laufen, lädst du vor dem Start noch die Caddyfile herunter, siehe [Hinter einem Reverse-Proxy](#hinter-einem-reverse-proxy).
 
 Was der Stack mitbringt:
 
@@ -225,6 +234,8 @@ Wer Uploads aus ShareX gleich schützen oder einsortieren will, ergänzt in der 
 | `X-Warning` | `Spoiler` | [Inhaltswarnung](#inhaltswarnungen) mit diesem Text, `true` für eine Warnung ohne Text |
 | `X-Optimize` | `false` | Bild [optimieren](#bilder-optimieren-und-wasserzeichen) (`true`) oder unverändert speichern (`false`), sofern der Server optimiert |
 | `X-Watermark` | `false` | Mit `false` bekommt dieses Bild kein [Wasserzeichen](#bilder-optimieren-und-wasserzeichen) |
+| `X-Slug` | `urlaub` | [Eigene Adresse](#eigene-adressen-und-eigener-pfad) für Datei oder Text, etwa `/view/urlaub`. Umlaute URL-kodiert |
+| `X-Code` | `discord` | Eigenes Kürzel für einen Kurzlink, etwa `/s/discord` |
 
 ## Texte, Kurzlinks und Alben
 
@@ -237,6 +248,16 @@ Wer Uploads aus ShareX gleich schützen oder einsortieren will, ergänzt in der 
 Ein Passwort, eine Ablaufzeit oder ein einmaliger Abruf lässt sich bei jedem Upload setzen und später im Dashboard ändern. Abgelaufene Dateien löscht MoeShare selbst.
 
 Kurzlinks und Alben lassen sich unter **Admin › Einstellungen › Funktionen** abschalten.
+
+## Eigene Adressen und eigener Pfad
+
+Statt einer zufälligen Adresse bekommt eine Datei auf Wunsch eine selbst gewählte, etwa `/view/urlaub`. Das geht genauso für Texte, Kurzlinks (`/s/discord`) und Alben (`/a/sommer-2026`). Im Dashboard trägst du die Adresse beim Anlegen eines Textes, Kurzlinks oder Albums ein oder änderst sie später beim Bearbeiten. ShareX und die API schicken sie als Header `X-Slug` bzw. `X-Code` oder als Feld `slug` bzw. `code`. Erlaubt sind Buchstaben samt Umlauten, Ziffern, Punkte, Binde- und Unterstriche, vorne und hinten steht ein Buchstabe oder eine Ziffer. Groß- und Kleinschreibung zählt beim Vergeben nicht: Gibt es `Urlaub` schon, ist auch `urlaub` vergeben.
+
+Änderst du eine Adresse, leitet die alte auf die neue weiter und bleibt für andere gesperrt. So funktionieren geteilte Links weiter. Eigene Adressen sind leichter zu erraten als zufällige, für Privates setzt du besser ein Passwort.
+
+Mit einem **eigenen Pfad** steht in deinen Links dein Name statt `/view/`, etwa `https://share.example.com/max/JrinQR99`. Den Pfad legst du unter **Konto › Einstellungen** fest: 2 bis 32 Kleinbuchstaben, Ziffern, Binde- und Unterstriche. Namen, die der Server selbst braucht, wie `admin` oder `api`, und die Benutzernamen anderer Konten gehen nicht. Links mit `/view/` funktionieren weiter, und `/max` allein öffnet deine [Profilseite](#profilseiten), sofern sie eingeschaltet ist. Änderst du den Pfad, leiten alte Links weiter und der alte Pfad bleibt für andere gesperrt. Admins geben den Pfad eines Kontos unter **Admin › Benutzer** wieder frei.
+
+Beides schaltest du unter **Admin › Einstellungen › Funktionen** ab. Ohne eigene Pfade leiten solche Links wieder auf `/view/` weiter.
 
 ## Papierkorb, Statistiken und ZIP
 
@@ -315,6 +336,12 @@ Unter **Gestalten › Profilseite** schaltet jede Person ihre öffentliche Seite
 
 Unter **Admin › Einstellungen › Funktionen** lassen sich Profilseiten für alle abschalten.
 
+## Profilbilder
+
+Ein Klick auf das Bild oben unter **Konto** öffnet den Editor: ein Bild auswählen, hineinziehen oder aus den eigenen Uploads nehmen, dann den runden Ausschnitt verschieben und zoomen. MoeShare speichert das Ergebnis als WebP mit 256 × 256 Pixeln in der Datenbank, so steckt es in jeder Sicherung. Bewegte GIFs und animierte WebP-Bilder bleiben bewegt. Das Bild erscheint auf der Profilseite samt ihrer Linkvorschau, auf den Vorschauseiten deiner Dateien, in Alben und überall in der Oberfläche. Erlaubt sind Bilder bis 15 MB und ab 32 Pixeln Kantenlänge.
+
+Unter **Admin › Einstellungen › Funktionen** schaltest du Profilbilder ab oder lässt nur unbewegte zu. Ein unpassendes Bild entfernen Admins unter **Admin › Benutzer**.
+
 ## Eigene Domains
 
 Mit einer eigenen Domain zeigt MoeShare Dateien, Alben, Kurzlinks und die Profilseite einer Person zusätzlich unter einer Adresse, die ihr gehört, etwa `bilder.deinname.de`. Anders als die [Domains des Servers](#mehrere-domains) gehört so eine Domain genau einem Konto, und unter ihr ist nur dessen Inhalt erreichbar.
@@ -326,6 +353,8 @@ So verbindet jemand eine Domain:
 1. Unter **Konto › Domains** die Domain eintragen.
 2. Beim DNS-Anbieter den angezeigten TXT-Eintrag anlegen, etwa `_moeshare.bilder.deinname.de` mit dem Wert `moeshare-verify=…`. Er zeigt, dass einem die Domain gehört.
 3. Die Domain per CNAME auf den Server zeigen lassen. Für eine Domain ohne Subdomain nimmst du A- und AAAA-Einträge mit den Adressen des Servers.
+
+Unter der eigenen Domain sind Links kürzer: Statt `bilder.deinname.de/view/JrinQR99` reicht `bilder.deinname.de/JrinQR99`, neue Links mit der Domain sehen von selbst so aus. Eigene Adressen klappen dort genauso, etwa `bilder.deinname.de/urlaub`. Dateien anderer Konten sind unter der Domain nicht erreichbar.
 
 MoeShare prüft neue Domains in den ersten sieben Tagen alle paar Minuten von selbst und verbindet sie, sobald der TXT-Eintrag stimmt. Mit „Jetzt prüfen“ geht es sofort, dabei zeigt MoeShare auch, ob die Domain schon auf den Server zeigt und über HTTPS erreichbar ist. Mit „Als Standard für neue Links“ nutzen neue Uploads die Domain, ShareX wählt sie auch über `X-Domain`. Anmeldung, Dashboard und Verwaltung bleiben auf der Hauptadresse, wer unter der eigenen Domain dorthin will, wird weitergeleitet.
 
@@ -341,10 +370,11 @@ Für jede Meldung gibt es diese Möglichkeiten: verwerfen, den Inhalt sperren, i
 
 Unter **Admin › Einstellungen › E-Mail** trägst du einen SMTP-Server ein, etwa den deines Mail-Anbieters, und schickst eine Testmail. Danach kann MoeShare:
 
-- **Passwort vergessen**: Ein Link zum Zurücksetzen geht an die bestätigte Adresse. Er gilt eine Stunde und nur einmal. Nach dem Zurücksetzen sind alle Sitzungen des Kontos abgemeldet.
+- **Passwort vergessen**: Ein Link zum Zurücksetzen geht an die bestätigte Adresse. Er gilt eine Stunde und nur einmal. Nach dem Zurücksetzen sind alle Sitzungen des Kontos abgemeldet. Ist die [Anmeldung mit Passwort](#anmeldung-ohne-passwort) abgeschaltet, entfällt das.
+- **Anmeldelinks** auf Anfrage an die bestätigte Adresse schicken, siehe [Einmal-Links](#einmal-links).
 - **Einladungen** direkt an eine E-Mail-Adresse schicken.
-- **Hinweise zum Konto** verschicken, etwa wenn sich das Passwort oder die Zwei-Faktor-Anmeldung ändert oder ein Passkey dazukommt.
-- **Admins benachrichtigen** bei neuen Meldungen und neuen Konten.
+- **Hinweise zum Konto** verschicken, etwa wenn sich das Passwort oder die Zwei-Faktor-Anmeldung ändert, ein Passkey dazukommt oder sich jemand mit einem Einmal-Link anmeldet.
+- **Admins benachrichtigen** bei neuen Meldungen, neuen Konten und Anfragen für Einmal-Links.
 
 Jede Person trägt ihre Adresse unter **Konto › Einstellungen** ein und bestätigt sie über einen Link. Dort wählt sie auch, welche Hinweise sie per Mail bekommt. E-Mails kommen in der Sprache der Empfänger.
 
@@ -531,9 +561,36 @@ MoeShare liest den OpenID-Connect-Anbieter über `/.well-known/openid-configurat
 
 Wer schon ein Konto hat, verknüpft Dienste unter **Konto › Sicherheit › Verbundene Konten** und meldet sich danach mit einem Klick an. Ein Konto kann mehrere Dienste haben, jedes Dienstkonto gehört aber nur zu einem MoeShare-Konto. Neue Konten über einen Dienst erlaubst du pro Dienst mit „Neue Konten mit …“, dabei gelten die Regeln unter **Anmeldung › Registrierung**, also offen, nur mit Einladung oder geschlossen. Ist Zwei-Faktor aktiv, fragt MoeShare auch nach der Anmeldung über einen Dienst nach dem Code.
 
+## Anmeldung ohne Passwort
+
+Unter **Admin › Einstellungen › Anmeldung** schaltest du die Anmeldung mit Benutzername und Passwort ganz ab. Danach kommen alle nur noch mit einem Passkey, über einen [verknüpften Dienst](#anmelden-über-andere-dienste) oder mit einem [Einmal-Link](#einmal-links) hinein. Mit abgeschaltet sind dann „Passwort vergessen“, das Ändern und Zurücksetzen von Passwörtern und die Bestätigung mit dem Passwort vor heiklen Änderungen. Gespeicherte Passwörter bleiben erhalten und gelten wieder, sobald du die Anmeldung mit Passwort einschaltest. Die Anmeldung mit ShareX-Token hat einen eigenen Schalter.
+
+Damit sich niemand aussperrt, lässt sich der Schalter nur umlegen, wenn dein eigenes Konto einen Passkey oder einen verknüpften Dienst hat. Aus demselben Grund lassen sich Passkeys und Anmeldedienste danach nicht abschalten, solange du sonst keinen Weg hinein hättest. Wer weder Passkey noch Dienst hat, sieht unter **Konto › Sicherheit** einen Hinweis mit „Passkey anlegen“.
+
+Neue Konten bekommen kein Passwort mehr. Bei der Registrierung reicht der Benutzername, gleich danach richtet die Person einen Passkey ein. Sind Passkeys abgeschaltet, gibt es neue Konten nur über einen Anmeldedienst. Legt ein Admin ein Konto an, bietet MoeShare direkt einen Einmal-Link für die erste Anmeldung an.
+
+Kommst du selbst nicht mehr hinein, hilft die [Kommandozeile](#kommandozeile): `node cli.js login-link <name>` gibt einen Einmal-Link aus, `node cli.js password-login an` schaltet die Anmeldung mit Passwort wieder ein.
+
+## Einmal-Links
+
+Ein Einmal-Link meldet ein Konto genau einmal an, ohne Passwort und ohne Code, und läuft danach von selbst ab. Wer ihn öffnet, ist sofort angemeldet. Vorschauen in Discord, Slack oder Mailprogrammen verbrauchen den Link nicht, denn erst die geöffnete Seite schickt die Anmeldung ab. Ist im Browser schon ein anderes Konto angemeldet, fragt MoeShare vorher nach.
+
+So entstehen Einmal-Links:
+
+- **Von Admins** unter **Admin › Benutzer** mit „Einmal-Link“ oder unter **Admin › Zugänge**. Gültigkeit, eine Seite für danach und eine Notiz sind frei wählbar. Hat das Konto eine bestätigte E-Mail-Adresse, schickt MoeShare den Link auf Wunsch gleich dorthin.
+- **Per E-Mail angefordert** auf der Anmeldeseite mit „Anmeldelink per E-Mail anfordern“. Der Link geht an die bestätigte Adresse und gilt höchstens eine Stunde. Ist Zwei-Faktor aktiv, fragt MoeShare danach noch nach dem Code.
+- **Über die API**: Andere Systeme wie ein Support-Portal oder ein Intranet fordern Links mit einem eigenen Schlüssel an, siehe [Einmal-Links über die API](#einmal-links-über-die-api).
+- **Auf der Kommandozeile** mit `node cli.js login-link <name>`. Das klappt auch, wenn Einmal-Links in den Einstellungen abgeschaltet sind.
+
+Unter **Admin › Einstellungen › Anmeldung** legst du fest, ob Einmal-Links erlaubt sind, wie lange ein neuer Link üblicherweise gilt (Standard 15 Minuten), wie lange höchstens (Standard 24 Stunden) und ob man sich einen Link per E-Mail schicken lassen kann. Unter **Admin › Zugänge** stehen alle Links der letzten 30 Tage mit ihrem Stand. Dort holst du einen gültigen Link noch einmal hervor, schickst ihn per E-Mail oder ziehst ihn zurück. Gesperrte Konten bekommen keine Links, beim Sperren verfallen ihre offenen Links.
+
+Jede Anmeldung mit einem Einmal-Link steht im Aktivitätsprotokoll. Stammt der Link von einem Admin, einer Integration oder der Kommandozeile, bekommt die Person eine E-Mail dazu und die [Benachrichtigungen](#benachrichtigungen) melden die Anmeldung als Sicherheitsereignis. Im Link steckt ein zufälliger Schlüssel mit 256 Bit. MoeShare speichert davon nur einen Hash und, solange der Link gilt, eine verschlüsselte Kopie, damit Admins und Integrationen ihn abholen können.
+
 ## Startseite, Impressum und Links
 
 Unter der Adresse ohne Pfad zeigt MoeShare auf Wunsch eine Startseite mit Dateien, Speicher, Aufrufen, Mitgliedern und den Uploads der letzten 14 Tage. Unter **Admin › Startseite** stellst du Überschrift, Text, die angezeigten Zahlen und den Upload-Verlauf ein. Eine Vorschau zeigt jede Änderung sofort. Schaltest du die Startseite ab, leitet die Adresse weiter: auf eine Seite deiner Wahl oder, ohne Ziel, zur Anmeldung bzw. ins Dashboard.
+
+Der Name aus **Admin › Einstellungen › Allgemein** steht überall, wo deine Seite gemeint ist: im Browser-Tab, bei der Anmeldung, in E-Mails, Benachrichtigungen und Link-Vorschauen. „MoeShare“ bleibt nur dort, wo die Software gemeint ist, etwa bei der Version. Den Hinweis „Läuft mit MoeShare“ unten auf der Startseite schaltest du dort ebenfalls ab.
 
 Impressum und Datenschutzerklärung trägst du unter **Admin › Einstellungen › Rechtliches und Links** ein, entweder als Link auf eine bestehende Seite oder als Text. Text zeigt MoeShare unter `/impressum` und `/datenschutz` an, Adressen und E-Mails werden dabei zu Links. Dort legst du auch bis zu acht eigene Links an, etwa zu deinem Discord-Server oder einer Status-Seite. Alle stehen im Fuß jeder Seite, auf der Startseite genauso wie bei der Anmeldung, im Dashboard und auf den Ansichtsseiten.
 
@@ -570,16 +627,19 @@ Unter **Admin › Einstellungen › System** kannst du erlauben, dass MoeShare F
 
 Für den Betrieb im Internet gehört MoeShare hinter einen Reverse-Proxy mit HTTPS. Passkeys und die Installation als App funktionieren nur über HTTPS oder `localhost`.
 
-Die `docker-compose.yml` bringt dafür Caddy mit, das Zertifikate selbst holt. Leg neben der `docker-compose.yml` eine `.env` mit deiner Domain an und lade die [`Caddyfile`](docker/Caddyfile) in den Ordner `docker/`:
+Die `docker-compose.yml` bringt dafür Caddy mit, das Zertifikate selbst holt. Caddy braucht dazu die [`Caddyfile`](docker/Caddyfile) im Ordner `docker/`, die nicht in der `docker-compose.yml` steckt. Lade sie neben der `docker-compose.yml` herunter und trag deine Domain in die `.env` ein:
 
 ```bash
 mkdir -p docker
 curl -o docker/Caddyfile https://raw.githubusercontent.com/MaximilianGT500/moeshare/main/docker/Caddyfile
 echo "DOMAIN=share.example.com" >> .env
-docker compose --profile caddy up -d
+echo "COMPOSE_PROFILES=caddy" >> .env
+docker compose up -d
 ```
 
-Die Domain muss auf deinen Server zeigen und die Ports 80 und 443 müssen frei sein. Die Caddyfile holt außerdem Zertifikate für [eigene Domains](#eigene-domains), sobald jemand sie aufruft. Vorher fragt Caddy bei MoeShare nach, ob die Domain zu einem Konto gehört.
+Durch `COMPOSE_PROFILES` in der `.env` startet `docker compose` Caddy bei jedem `up` mit, auch nach Updates. Die Domain muss auf deinen Server zeigen und die Ports 80 und 443 müssen frei sein. Ist MoeShare noch nicht eingerichtet, öffnest du den Link aus dem Log gleich unter deiner Domain, also `https://share.example.com/setup?token=…`. Die Caddyfile holt außerdem Zertifikate für [eigene Domains](#eigene-domains), sobald jemand sie aufruft. Vorher fragt Caddy bei MoeShare nach, ob die Domain zu einem Konto gehört.
+
+Lief Caddy schon einmal ohne die Caddyfile, hat Docker an ihrer Stelle einen leeren Ordner `docker/Caddyfile` angelegt, und Caddy startet nicht. Entferne ihn vor dem Download mit `sudo rmdir docker/Caddyfile`.
 
 Ohne Docker reicht in Caddy:
 
@@ -640,6 +700,8 @@ Was neu ist und worauf du beim Update achten musst, steht im [Changelog](https:/
 
 Beim ersten Start sichert MoeShare die Datenbank automatisch nach `db/backups/` und bringt sie auf den neuen Stand. Bestehende Discord-Verknüpfungen bleiben dabei erhalten. Werte aus einer alten `.env` (zum Beispiel `SITE_TITLE` oder `MAX_FILE_SIZE_MB`) werden einmalig übernommen, danach meldet das Log, welche Variablen du entfernen kannst. Bisherige ShareX-Tokens funktionieren weiter. Für Konten aus älteren Versionen ist zunächst auch die Anmeldung mit dem Token möglich, damit sich alle ein Passwort setzen können. Unter **Admin › Einstellungen › Anmeldung** schaltest du das ab.
 
+Beim Update auf 3.3 legt MoeShare die Tabellen für Profilbilder, eigene Pfade, Einmal-Links und Integrationen an. Die Anmeldung mit Passwort bleibt eingeschaltet. Einmal-Links und der Anmeldelink per E-Mail sind danach erlaubt, unter **Admin › Einstellungen › Anmeldung** schaltest du beides ab. Benachrichtigungen, die bisher als „MoeShare“ geschrieben haben, nutzen jetzt den Namen deiner Instanz.
+
 Beim Update auf 3.2 wird ein bisheriger Discord-Webhook zum ersten Ziel unter [Benachrichtigungen](#benachrichtigungen). Für vorhandene Dateien berechnet MoeShare danach im Hintergrund Prüfsummen für die [Duplikate](#duplikate-und-volltextsuche) und baut den Suchindex auf, das läuft nebenher und braucht nichts von dir.
 
 Stand in der alten `.env` eine `REDIRECT_URL`, leitet die Adresse ohne Pfad weiter wie bisher. Die neue Startseite schaltest du unter **Admin › Startseite** ein. Datenbanken, die einmal aus PostgreSQL umgewandelt wurden (Tabellen mit `public.` im Namen), passt MoeShare beim Start selbst an.
@@ -662,7 +724,7 @@ Ohne Pfad sucht MoeShare die Datei in `db/backups/`. Enthält die Datenbank scho
 
 Wer lieber selbst sichert, nimmt diese Ordner mit:
 
-- `db/` mit der Datenbank und der Schlüsseldatei `db/.secret`. Ohne die Schlüsseldatei lassen sich Zwei-Faktor-Einstellungen und S3-Zugangsdaten nicht mehr lesen.
+- `db/` mit der Datenbank und der Schlüsseldatei `db/.secret`. Ohne die Schlüsseldatei lassen sich Zwei-Faktor-Einstellungen, S3-Zugangsdaten und offene Einmal-Links nicht mehr lesen.
 - `uploads/` mit allen Dateien, sofern sie nicht in S3 liegen.
 - Bei PostgreSQL oder MySQL zusätzlich einen Dump der Datenbank, etwa mit `pg_dump` oder `mysqldump`.
 
@@ -673,6 +735,8 @@ Wer lieber selbst sichert, nimmt diese Ordner mit:
 | `npm run register` | Konto anlegen und ein ShareX-Token ausgeben |
 | `npm run token` | Neues API-Token nach Benutzername und Passwort |
 | `npm run reset` | Notfallzugang: Passwort, Rolle, Sperre, Zwei-Faktor, Passkeys oder Tokens zurücksetzen |
+| `node cli.js login-link <name> [--minuten 30] [--ziel /dashboard]` | Gibt einen [Einmal-Link](#einmal-links) für das Konto aus, auch wenn Einmal-Links abgeschaltet sind |
+| `node cli.js password-login <an\|aus>` | Schaltet die [Anmeldung mit Passwort](#anmeldung-ohne-passwort) ein oder ab, ohne Angabe zeigt der Befehl den Stand |
 | `node cli.js db` | Zeigt die genutzte Datenbank und die Einträge pro Tabelle |
 | `node cli.js copy-db <adresse> [--use]` | Kopiert alle Daten in eine andere Datenbank, mit `--use` direkt umstellen |
 | `node cli.js backup [--uploads]` | Erstellt eine Sicherung, mit `--uploads` samt Dateien |
@@ -680,7 +744,7 @@ Wer lieber selbst sichert, nimmt diese Ordner mit:
 | `node cli.js storage <s3\|lokal>` | Verschiebt vorhandene Dateien nach S3 oder zurück auf den Server |
 | `node cli.js import <zipline\|xbackbone\|chibisafe> --db <adresse> --files <ordner>` | Übernimmt einen anderen Uploader, siehe [Import](#import-aus-anderen-uploadern). Mit `--probe` nur ein Probelauf, `--ohne-admins` macht niemanden zum Admin, `--waisen-ueberspringen` lässt Dateien ohne Besitzer weg, `--als <admin>` bestimmt, wem sie gehören. |
 
-Mit Docker heißen die Befehle `docker compose exec moeshare moeshare register`, `… moeshare db`, `… moeshare backup` und so weiter. Sie laufen dort mit dem Benutzer, dem die Datenbank gehört. Für `copy-db` und `restore` muss MoeShare gestoppt sein, nimm dafür `docker compose run --rm moeshare moeshare …`. Legst du das erste Konto mit `register` an, ist der Installationsassistent nicht mehr nötig und die Einstellungen machst du danach im Browser.
+Mit Docker heißen die Befehle `docker compose exec moeshare moeshare register`, `… moeshare login-link max`, `… moeshare backup` und so weiter. Sie laufen dort mit dem Benutzer, dem die Datenbank gehört. Für `copy-db` und `restore` muss MoeShare gestoppt sein, nimm dafür `docker compose run --rm moeshare moeshare …`. Legst du das erste Konto mit `register` an, ist der Installationsassistent nicht mehr nötig und die Einstellungen machst du danach im Browser.
 
 ## API
 
@@ -728,6 +792,49 @@ while [ "$OFFSET" -lt "$GROESSE" ]; do
 done
 curl -s -X POST -H "Authorization: ms_…" https://share.example.com/api/uploads/$ID/complete
 ```
+
+### Einmal-Links über die API
+
+Für andere Systeme legst du unter **Admin › Zugänge › Integrationen** eine Integration an. Sie bekommt einen eigenen Schlüssel (`msi_…`), der nur [Einmal-Links](#einmal-links) anfordern kann und sonst nichts. Für jede Integration wählst du den Ablauf:
+
+- **Admin gibt frei**: Jede Anfrage wartet unter **Admin › Zugänge** auf eine Freigabe, Admins bekommen dazu eine E-Mail und eine Benachrichtigung. Nach der Freigabe holt die Integration den Link ab oder der Admin gibt ihn selbst weiter. Ohne Freigabe verfällt die Anfrage nach 24 Stunden.
+- **Sofort ausstellen**: Die Antwort enthält den Link direkt, die Integration gibt ihn selbst weiter.
+
+Dazu kommen eine eigene Höchstdauer und die Erlaubnis, Links auch für Admin-Konten anzufordern. Ohne diese Erlaubnis lehnt MoeShare Anfragen für Admins ab. Persönliche API-Tokens (`ms_…`) können keine Einmal-Links anfordern. Pro Adresse sind 60 Anfragen in der Minute erlaubt.
+
+| Methode | Pfad | Beschreibung |
+| --- | --- | --- |
+| `POST` | `/api/integrations/login-links` | Link anfordern, als JSON mit `user` (Benutzername), `email` (bestätigte Adresse) oder `userId`. Optional: `minutes`, `redirect` (eine Seite auf dem Server wie `/dashboard`), `note` und `deliver: "email"`. Antwort `201` mit `url` oder bei Freigabe `202` mit `status: "pending"` |
+| `GET` | `/api/integrations/login-links/:id` | Stand einer eigenen Anfrage: `pending`, `ready` (dann mit `url`), `used`, `expired`, `revoked` oder `denied` |
+| `DELETE` | `/api/integrations/login-links/:id` | Eigenen Link oder eigene Anfrage zurückziehen |
+| `GET` | `/api/integrations/info` | Name, Ablauf und erlaubte Gültigkeit der Integration |
+
+Mit `deliver: "email"` schickt MoeShare den Link selbst an die bestätigte Adresse der Person, bei einer Integration mit Freigabe direkt nach der Freigabe. Fehler kommen wie überall als JSON mit `error` und, wo es passt, `field`.
+
+```bash
+curl -H "Authorization: Bearer msi_…" -H "Content-Type: application/json" \
+  -d '{"user": "max", "minutes": 15, "note": "Ticket 4711"}' \
+  https://share.example.com/api/integrations/login-links
+```
+
+Antwort einer Integration mit Freigabe:
+
+```json
+{
+  "id": 42,
+  "status": "pending",
+  "user": { "id": 3, "username": "max" },
+  "minutes": 15,
+  "note": "Ticket 4711",
+  "redirect": null,
+  "createdAt": 1762509600000,
+  "expiresAt": 1762596000000,
+  "decidedAt": null,
+  "usedAt": null
+}
+```
+
+Sobald ein Admin freigegeben hat, liefert `GET /api/integrations/login-links/42` den Stand `ready` und den Link im Feld `url`. Er gilt ab der Freigabe für die angefragten Minuten.
 
 ## Entwicklung
 

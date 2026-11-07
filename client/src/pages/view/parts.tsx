@@ -522,7 +522,7 @@ export function Owner({ model, size = 24 }: { model: ViewModel; size?: number })
   const name = profile?.name || model.file.username;
   const content = (
     <>
-      <UserAvatar name={model.file.username} size={size} />
+      <UserAvatar name={model.file.username} src={model.file.avatar} size={size} />
       <Typography variant="body2" component="span" sx={{ fontWeight: 600, color: 'text.primary' }}>
         {name}
       </Typography>

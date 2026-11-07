@@ -31,11 +31,34 @@ const TABLES = [
       col('design', 'longtext'),
       col('profile', 'text'),
       col('watermark', 'longtext'),
+      col('avatar', 'string', { length: 24 }),
     ],
     indexes: [
       { name: 'idx_users_username', columns: ['username'], unique: true },
       { name: 'idx_users_email', columns: ['email'], unique: true },
     ],
+  },
+  {
+    name: 'user_avatars',
+    columns: [
+      userRef(),
+      col('image', 'longblob', { notNull: true }),
+      col('animated', 'int', { notNull: true, default: 0 }),
+      col('size_bytes', 'bigint', { notNull: true, default: 0 }),
+      col('created_at', 'bigint', { notNull: true }),
+    ],
+    primaryKey: ['user_id'],
+  },
+  {
+    name: 'user_paths',
+    columns: [
+      col('path', 'string', { length: 32, notNull: true }),
+      userRef(),
+      col('created_at', 'bigint', { notNull: true }),
+      col('retired_at', 'bigint'),
+    ],
+    primaryKey: ['path'],
+    indexes: [{ name: 'idx_user_paths_user', columns: ['user_id'] }],
   },
   {
     name: 'file_data',
@@ -449,12 +472,68 @@ const TABLES = [
     ],
     primaryKey: ['source', 'kind', 'source_id'],
   },
+  {
+    name: 'integrations',
+    columns: [
+      id(),
+      col('name', 'string', { length: 80, notNull: true }),
+      col('key_hash', 'string', { length: 64, notNull: true }),
+      col('hint', 'string', { length: 64, notNull: true }),
+      col('mode', 'string', { length: 16, notNull: true, default: 'approval' }),
+      col('allow_admins', 'int', { notNull: true, default: 0 }),
+      col('max_minutes', 'int'),
+      col('enabled', 'int', { notNull: true, default: 1 }),
+      userRef('created_by', 'SET NULL', false),
+      col('created_at', 'bigint', { notNull: true }),
+      col('last_used_at', 'bigint'),
+    ],
+    indexes: [{ name: 'idx_integrations_key', columns: ['key_hash'], unique: true }],
+  },
+  {
+    name: 'login_links',
+    columns: [
+      id(),
+      userRef(),
+      col('token_hash', 'string', { length: 64 }),
+      col('sealed', 'text'),
+      col('status', 'string', { length: 16, notNull: true }),
+      col('source', 'string', { length: 16, notNull: true }),
+      col('integration_id', 'bigint', { references: 'integrations(id)', onDelete: 'SET NULL' }),
+      userRef('created_by', 'SET NULL', false),
+      col('requested_by', 'string', { length: 80 }),
+      col('note', 'string', { length: 200 }),
+      col('redirect', 'string', { length: 300 }),
+      col('minutes', 'int', { notNull: true }),
+      col('second_factor', 'int', { notNull: true, default: 0 }),
+      col('delivery', 'string', { length: 16 }),
+      col('created_at', 'bigint', { notNull: true }),
+      col('expires_at', 'bigint', { notNull: true }),
+      userRef('decided_by', 'SET NULL', false),
+      col('decided_at', 'bigint'),
+      col('used_at', 'bigint'),
+      col('used_ip', 'string', { length: 64 }),
+    ],
+    indexes: [
+      { name: 'idx_login_links_token', columns: ['token_hash'], unique: true },
+      { name: 'idx_login_links_user', columns: ['user_id'] },
+      { name: 'idx_login_links_status', columns: ['status', 'expires_at'] },
+    ],
+  },
 ];
 
 const TABLE = Object.fromEntries(TABLES.map((table) => [table.name, table]));
 
 const TYPES = {
-  sqlite: { string: () => 'TEXT', text: 'TEXT', longtext: 'TEXT', int: 'INTEGER', bigint: 'INTEGER', real: 'REAL', blob: 'BLOB' },
+  sqlite: {
+    string: () => 'TEXT',
+    text: 'TEXT',
+    longtext: 'TEXT',
+    int: 'INTEGER',
+    bigint: 'INTEGER',
+    real: 'REAL',
+    blob: 'BLOB',
+    longblob: 'BLOB',
+  },
   postgres: {
     string: (length) => `VARCHAR(${length})`,
     text: 'TEXT',
@@ -463,6 +542,7 @@ const TYPES = {
     bigint: 'BIGINT',
     real: 'DOUBLE PRECISION',
     blob: 'BYTEA',
+    longblob: 'BYTEA',
   },
   mysql: {
     string: (length) => `VARCHAR(${length})`,
@@ -472,6 +552,7 @@ const TYPES = {
     bigint: 'BIGINT',
     real: 'DOUBLE',
     blob: 'BLOB',
+    longblob: 'MEDIUMBLOB',
   },
 };
 

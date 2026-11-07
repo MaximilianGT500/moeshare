@@ -26,6 +26,7 @@ import { CopyIconButton } from '../../components/CopyButton';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { useToast } from '../../components/Toaster';
 import { c, ease, fonts, radius } from '../../theme/tokens';
+import { siteName } from '../../lib/boot';
 
 function RecordLine({ label, value }: { label: string; value: string }) {
   return (
@@ -148,7 +149,8 @@ function DomainCard({
           <Typography variant="body2" sx={{ color: 'text.secondary' }}>
             {item.autoCheckUntil && item.autoCheckUntil > Date.now()
               ? t(
-                  'MoeShare prüft die Einträge in den ersten sieben Tagen alle paar Minuten von selbst. Sobald alles stimmt, ist die Domain verbunden.'
+                  '{name} prüft die Einträge in den ersten sieben Tagen alle paar Minuten von selbst. Sobald alles stimmt, ist die Domain verbunden.',
+                  { name: siteName() }
                 )
               : t('Die automatische Prüfung ist nach sieben Tagen beendet. Prüfe selbst, sobald die Einträge stehen.')}
           </Typography>

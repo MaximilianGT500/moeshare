@@ -179,6 +179,21 @@ function ReauthDialog({ open, methods, onDone }: { open: boolean; methods: SudoM
             </Alert>
           </Collapse>
 
+          {!hasForm && !canPasskey && methods.providers.length === 0 && (
+            <Alert
+              severity="info"
+              action={
+                <Button color="inherit" size="small" href="/logout">
+                  {t('Abmelden')}
+                </Button>
+              }
+            >
+              {t(
+                'Für dein Konto gibt es hier keine Bestätigung. Melde dich neu an, etwa mit einem Einmal-Link. Danach geht es zehn Minuten ohne.'
+              )}
+            </Alert>
+          )}
+
           {(canPasskey || methods.providers.length > 0) && hasForm && (
             <Divider>
               <Typography variant="caption" sx={{ color: 'text.secondary' }}>

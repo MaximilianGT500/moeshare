@@ -17,7 +17,7 @@ import type { ExpiryChoice, FileItem, TagCount, UploadOptionsInfo } from '../../
 import { formatDateTime } from '../../lib/format';
 import { t } from '../../lib/i18n';
 import { GrowTransition } from '../../components/transitions';
-import { ExpirySelect, ProtectionFields, TagInput, WarningFields } from '../../components/ShareOptions';
+import { AddressField, ExpirySelect, ProtectionFields, TagInput, WarningFields, prefixOf } from '../../components/ShareOptions';
 import { SYNTAXES } from './TextDialog';
 import { c } from '../../theme/tokens';
 
@@ -41,6 +41,8 @@ export function EditFileDialog({
   const [syntax, setSyntax] = useState('auto');
   const [listed, setListed] = useState(false);
   const [warning, setWarning] = useState<string | null>(null);
+  const [address, setAddress] = useState('');
+  const [addressError, setAddressError] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -53,6 +55,8 @@ export function EditFileDialog({
     setSyntax(file.syntax || 'auto');
     setListed(Boolean(file.listed));
     setWarning(typeof file.warning === 'string' ? file.warning : null);
+    setAddress(file.slug);
+    setAddressError('');
     setError('');
   }, [file]);
 
@@ -68,14 +72,17 @@ export function EditFileDialog({
     if (info.profiles && listed !== Boolean(file.listed)) patch.listed = listed;
     const nextWarning = warning === null ? null : warning.trim();
     if (nextWarning !== (typeof file.warning === 'string' ? file.warning : null)) patch.warning = nextWarning;
+    if (info.customAddresses && address.trim() && address.trim() !== file.slug) patch.slug = address.trim();
     setBusy(true);
     setError('');
+    setAddressError('');
     try {
       const { file: updated } = await updateFile(file.id, patch);
       onSaved(updated);
       onClose();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t('Die Änderungen konnten nicht gespeichert werden.'));
+      if (err instanceof ApiError && err.field === 'slug') setAddressError(err.message);
+      else setError(err instanceof ApiError ? err.message : t('Die Änderungen konnten nicht gespeichert werden.'));
     } finally {
       setBusy(false);
     }
@@ -110,6 +117,18 @@ export function EditFileDialog({
             size="small"
             slotProps={{ htmlInput: { maxLength: 200 } }}
           />
+          {info.customAddresses && (
+            <AddressField
+              value={address}
+              onChange={(next) => {
+                setAddress(next);
+                setAddressError('');
+              }}
+              prefix={prefixOf(file.urls.view)}
+              error={addressError}
+              renaming
+            />
+          )}
           {file.type === 'text' && (
             <TextField select label={t('Sprache')} value={syntax} onChange={(event) => setSyntax(event.target.value)} size="small">
               {SYNTAXES.map((entry) => (

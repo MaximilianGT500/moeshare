@@ -195,6 +195,7 @@ export interface FileListResponse {
   pages: number;
   limit?: number;
   hasNext: boolean;
+  avatars?: Record<string, string | null>;
 }
 
 export interface StorageBreakdown {
@@ -265,6 +266,8 @@ export interface AdminUser {
   email: string | null;
   emailVerified: boolean;
   domains: number;
+  avatar: string | null;
+  linkPath: string | null;
 }
 
 export interface Provider {
@@ -313,6 +316,7 @@ export interface SiteInfo {
   pwa?: boolean;
   language?: 'de' | 'en';
   report?: boolean;
+  poweredBy?: boolean;
   custom?: boolean;
 }
 
@@ -344,6 +348,8 @@ export interface UploadOptionsInfo {
   contentSearch: boolean;
   deduplicate: boolean;
   clips: boolean;
+  customAddresses: boolean;
+  linkPath: string | null;
 }
 
 export interface TagCount {
@@ -397,11 +403,13 @@ export interface Album {
   members?: number;
   memberList?: AlbumMember[];
   contributors?: string[];
+  avatars?: Record<string, string | null>;
 }
 
 export interface AlbumMember {
   id: number;
   username: string;
+  avatar?: string | null;
   role: string;
   addedAt: number;
 }
@@ -429,12 +437,15 @@ export interface PreferenceChoices {
   mail: boolean;
   optimize: boolean;
   export: boolean;
+  avatars: { enabled: boolean; animated: boolean; maxBytes: number };
+  customAddresses: boolean;
 }
 
 export interface SessionUser {
   username: string;
   role: Role;
   isAdmin: boolean;
+  avatar: string | null;
   canCustomizeEmbed: boolean;
   canDesign: boolean;
 }
@@ -492,7 +503,9 @@ export interface AccountOverview {
     passwordChangedAt: number | null;
     hasPassword: boolean;
     mustChangePassword: boolean;
+    avatar: string | null;
   };
+  linkPath: { enabled: boolean; current: string | null; suggestion: string };
   security: {
     totp: boolean;
     totpEnabledAt: number | null;
@@ -506,7 +519,7 @@ export interface AccountOverview {
     elevated: boolean;
   };
   limits: { usedBytes: number; quotaBytes: number | null; maxFileBytes: number | null };
-  policy: { passwordMinLength: number };
+  policy: { passwordMinLength: number; passwordLogin: boolean };
   sessions: SessionInfo[];
   tokens: ApiTokenInfo[];
   activity: AuditEvent[];
@@ -659,6 +672,7 @@ export interface DesignBoot extends BootBase {
   userStats: UserStats;
   sudo: SudoMethods;
   watermark: WatermarkConfig;
+  avatars: { enabled: boolean; animated: boolean; maxBytes: number };
 }
 
 export interface StatsCounts {
@@ -771,13 +785,19 @@ interface BootBase {
 }
 
 export interface LoginMethods {
+  password: boolean;
   passkey: boolean;
   providers: Provider[];
   token: boolean;
   register: boolean;
   reset: boolean;
+  emailLink: boolean;
   passkeyOrigin: string;
 }
+
+export type LinkInfo =
+  | { valid: true; token: string; username: string; expiresAt: number; current: string | null; same: boolean }
+  | { valid: false; reason: string };
 
 export interface MfaChallenge {
   ticket: string;
@@ -794,7 +814,8 @@ export interface InviteInfo {
 
 export interface LoginBoot extends BootBase {
   page: 'login';
-  mode: 'login' | 'register' | 'reset';
+  mode: 'login' | 'register' | 'reset' | 'link';
+  link?: LinkInfo;
   error: string;
   notice?: string;
   next: string;
@@ -808,6 +829,8 @@ export interface LoginBoot extends BootBase {
     oauth: { id: string; provider: string; label: string; name: string; suggestion: string } | null;
     providers: Provider[];
     passwordMinLength: number;
+    passwordless: boolean;
+    passkeys: boolean;
   };
 }
 
@@ -854,6 +877,45 @@ export interface AdminBoot extends BootBase {
   mail: { ready: boolean };
   webhooks: { targets: WebhookTarget[]; kinds: WebhookKind[]; events: string[] };
   imports: { sources: Array<{ id: string; label: string }>; argon2: boolean; redirects: number };
+  access: { pending: number; enabled: boolean; passwordLogin: boolean };
+}
+
+export type LoginLinkStatus = 'pending' | 'ready' | 'used' | 'revoked' | 'denied' | 'expired';
+
+export interface LoginLink {
+  id: number;
+  user: { id: number; username: string | null };
+  status: LoginLinkStatus;
+  source: 'admin' | 'api' | 'email' | 'cli';
+  integration: { id: number; name: string | null } | null;
+  createdBy: string | null;
+  requestedBy: string | null;
+  decidedBy: string | null;
+  note: string;
+  redirect: string;
+  minutes: number;
+  secondFactor: boolean;
+  delivery: 'email' | null;
+  createdAt: number;
+  expiresAt: number;
+  decidedAt: number | null;
+  usedAt: number | null;
+  usedIp: string | null;
+}
+
+export interface Integration {
+  id: number;
+  name: string;
+  hint: string;
+  mode: 'direct' | 'approval';
+  allowAdmins: boolean;
+  maxMinutes: number | null;
+  enabled: boolean;
+  createdAt: number;
+  createdBy: string | null;
+  lastUsedAt: number | null;
+  pending: number;
+  issued: number;
 }
 
 export interface DatabaseInfo {
@@ -936,6 +998,7 @@ export interface ViewFile {
   once: boolean;
   protected: boolean;
   username: string;
+  avatar?: string | null;
   owner: boolean;
   blocked?: { reason: string } | null;
   warning?: string | null;
@@ -1003,6 +1066,7 @@ export interface AlbumBoot extends BootBase, OwnerStyle {
     description: string;
     owner: string | null;
     contributors?: string[];
+    avatars?: Record<string, string | null>;
     updatedAt: number;
     url: string;
     zip: boolean;
@@ -1032,7 +1096,16 @@ export interface PublicFilePage {
 
 export interface ProfileBoot extends BootBase, OwnerStyle {
   page: 'profile';
-  profile: { id: number; username: string; name: string; bio: string; links: SiteLink[]; since: number | null; url: string };
+  profile: {
+    id: number;
+    username: string;
+    name: string;
+    bio: string;
+    links: SiteLink[];
+    since: number | null;
+    url: string;
+    avatar?: string | null;
+  };
   albums: PublicAlbum[];
   files: PublicFilePage | null;
   owner: boolean;

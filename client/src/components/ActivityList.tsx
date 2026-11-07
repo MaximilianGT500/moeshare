@@ -32,6 +32,13 @@ import CoronavirusOutlined from '@mui/icons-material/CoronavirusOutlined';
 import DownloadRounded from '@mui/icons-material/DownloadRounded';
 import MoveDownRounded from '@mui/icons-material/MoveDownRounded';
 import NotificationsRounded from '@mui/icons-material/NotificationsRounded';
+import LinkRounded from '@mui/icons-material/LinkRounded';
+import LinkOffRounded from '@mui/icons-material/LinkOffRounded';
+import HourglassTopRounded from '@mui/icons-material/HourglassTopRounded';
+import TaskAltRounded from '@mui/icons-material/TaskAltRounded';
+import ForwardToInboxRounded from '@mui/icons-material/ForwardToInboxRounded';
+import HubRounded from '@mui/icons-material/HubRounded';
+import AccountCircleOutlined from '@mui/icons-material/AccountCircleOutlined';
 import type { AuditEvent } from '../lib/types';
 import { formatDateTime, formatNumber, formatRelative } from '../lib/format';
 import { providerIcon, providerLabel } from '../lib/providers';
@@ -44,7 +51,26 @@ const METHOD: Record<string, string> = {
   token: t('mit API-Token'),
   setup: t('bei der Einrichtung'),
   totp: t('mit Code'),
+  link: t('mit Einmal-Link'),
+  register: t('bei der Registrierung'),
 };
+
+const LINK_VIA: Record<string, string> = {
+  admin: t('von einem Admin erstellt'),
+  api: t('über eine Integration'),
+  email: t('per E-Mail angefordert'),
+  cli: t('über die Kommandozeile'),
+};
+
+const INTEGRATION_CHANGES: Record<string, string> = {
+  created: t('Integration hinzugefügt'),
+  updated: t('Integration geändert'),
+  rotated: t('Neuer Schlüssel für eine Integration'),
+  removed: t('Integration entfernt'),
+};
+
+const linkVia = (d: Record<string, unknown>) =>
+  d.integration ? t('über {name}', { name: str(d.integration) }) : LINK_VIA[str(d.via)] || undefined;
 
 const methodText = (method: string) => METHOD[method] || (method ? t('mit {method}', { method: providerLabel(method) }) : '');
 
@@ -105,7 +131,12 @@ function describeEvent(event: AuditEvent): Described {
   const d = event.details || {};
   switch (event.action) {
     case 'login':
-      return { icon: <LoginRounded />, title: t('Angemeldet {method}', { method: methodText(str(d.method)) }).trim(), tone: 'good' };
+      return {
+        icon: <LoginRounded />,
+        title: t('Angemeldet {method}', { method: methodText(str(d.method)) }).trim(),
+        detail: d.method === 'link' ? linkVia(d) : undefined,
+        tone: 'good',
+      };
     case 'login_failed':
       return {
         icon: <ErrorOutlineRounded />,
@@ -193,7 +224,7 @@ function describeEvent(event: AuditEvent): Described {
       return {
         icon: <PersonAddRounded />,
         title:
-          d.method && d.method !== 'password'
+          d.method && d.method !== 'password' && d.method !== 'passwordless'
             ? t('{value} registriert', { value: methodText(str(d.method)).replace(/^mit/, 'Mit') })
             : d.invite
               ? t('Über Einladung registriert')
@@ -313,6 +344,65 @@ function describeEvent(event: AuditEvent): Described {
         title: WEBHOOK_CHANGES[str(d.change)] || t('Benachrichtigungen geändert'),
         detail: str(d.name) || undefined,
         tone: 'neutral',
+      };
+    case 'login_link_created':
+      return {
+        icon: <LinkRounded />,
+        title: t('Einmal-Link erstellt'),
+        detail: d.via === 'cli' ? LINK_VIA.cli : d.integration ? t('über {name}', { name: str(d.integration) }) : undefined,
+        tone: 'warn',
+      };
+    case 'login_link_requested':
+      return {
+        icon: <HourglassTopRounded />,
+        title: t('Einmal-Link angefragt'),
+        detail: d.integration ? t('von {name}', { name: str(d.integration) }) : undefined,
+        tone: 'neutral',
+      };
+    case 'login_link_approved':
+      return {
+        icon: <TaskAltRounded />,
+        title: t('Einmal-Link freigegeben'),
+        detail: d.integration ? t('für {name}', { name: str(d.integration) }) : undefined,
+        tone: 'warn',
+      };
+    case 'login_link_denied':
+      return { icon: <LinkOffRounded />, title: t('Einmal-Link abgelehnt'), tone: 'neutral' };
+    case 'login_link_revoked':
+      return { icon: <LinkOffRounded />, title: t('Einmal-Link zurückgezogen'), tone: 'neutral' };
+    case 'login_link_sent':
+      return { icon: <ForwardToInboxRounded />, title: t('Einmal-Link per E-Mail verschickt'), tone: 'neutral' };
+    case 'integration_changed':
+      return {
+        icon: <HubRounded />,
+        title: INTEGRATION_CHANGES[str(d.change)] || t('Integration geändert'),
+        detail: str(d.name) || undefined,
+        tone: d.change === 'removed' || d.change === 'rotated' ? 'warn' : 'neutral',
+      };
+    case 'avatar_changed':
+      return {
+        icon: <AccountCircleOutlined />,
+        title: t('Profilbild geändert'),
+        detail: d.animated ? t('animiert') : undefined,
+        tone: 'neutral',
+      };
+    case 'avatar_removed':
+      return { icon: <AccountCircleOutlined />, title: t('Profilbild entfernt'), tone: 'neutral' };
+    case 'avatar_revoked':
+      return { icon: <AccountCircleOutlined />, title: t('Profilbild von einem Admin entfernt'), tone: 'bad' };
+    case 'link_path_changed':
+      return {
+        icon: <LinkRounded />,
+        title: d.path ? t('Eigener Pfad geändert') : t('Eigener Pfad entfernt'),
+        detail: d.path ? `/${str(d.path)}/` : d.previous ? t('vorher /{path}/', { path: str(d.previous) }) : undefined,
+        tone: 'neutral',
+      };
+    case 'link_path_revoked':
+      return {
+        icon: <LinkRounded />,
+        title: t('Eigener Pfad von einem Admin entfernt'),
+        detail: d.path ? `/${str(d.path)}/` : undefined,
+        tone: 'bad',
       };
     default:
       return { icon: <HistoryRounded />, title: event.action, tone: 'neutral' };

@@ -249,7 +249,7 @@ export function FilesPanel({
 
   const owner = (file: FileItem) => (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-      <UserAvatar name={file.username} size={26} />
+      <UserAvatar name={file.username} src={data.avatars?.[file.username]} size={26} />
       <Typography variant="body2" noWrap>
         {file.username}
       </Typography>

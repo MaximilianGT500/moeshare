@@ -4,7 +4,7 @@ const express = require('express');
 const config = require('../config');
 const errorReports = require('../lib/errorReports');
 const logger = require('../lib/logger');
-const { badRequest, conflict, notFound } = require('../lib/errors');
+const { badRequest, conflict, forbidden, notFound } = require('../lib/errors');
 const { tr } = require('../lib/i18n');
 const { greeting } = require('../lib/format');
 const { integer, text } = require('../lib/input');
@@ -40,6 +40,9 @@ const scans = require('../services/scanService');
 const importer = require('../services/importService');
 const jobs = require('../services/jobService');
 const redirects = require('../services/redirectService');
+const avatars = require('../services/avatarService');
+const paths = require('../services/pathService');
+const links = require('../services/loginLinkService');
 
 const router = express.Router();
 const admin = requireApi({ admin: true });
@@ -47,6 +50,14 @@ const adminSudo = [admin, requireRecentAuth];
 
 const AUDIT_CATEGORIES = {
   signin: ['login', 'login_failed', 'logout', 'account_locked', 'reauth_failed', 'recovery_code_used'],
+  access: [
+    'login_link_created',
+    'login_link_requested',
+    'login_link_approved',
+    'login_link_denied',
+    'login_link_revoked',
+    'login_link_sent',
+  ],
   security: [
     'mfa_enabled',
     'mfa_disabled',
@@ -90,6 +101,9 @@ const AUDIT_CATEGORIES = {
     'domain_revoked',
     'import_finished',
     'webhook_changed',
+    'integration_changed',
+    'avatar_revoked',
+    'link_path_revoked',
   ],
 };
 
@@ -153,6 +167,7 @@ router.get('/admin', requirePage({ admin: true }), async (req, res) => {
     openReports,
     domainItems,
     webhookTargets,
+    pendingLinks,
   ] = await Promise.all([
     files.globalStats(),
     files.userStats(req.user.username),
@@ -168,6 +183,7 @@ router.get('/admin', requirePage({ admin: true }), async (req, res) => {
     reports.openCount(),
     domainList(req),
     webhook.list(),
+    links.pendingCount(),
   ]);
   renderPage(res, {
     page: 'admin',
@@ -193,6 +209,7 @@ router.get('/admin', requirePage({ admin: true }), async (req, res) => {
       mail: { ready: mail.ready() },
       webhooks: { targets: webhookTargets, kinds: webhook.KINDS, events: settings.WEBHOOK_EVENTS },
       imports: importInfo(),
+      access: { pending: pendingLinks, enabled: links.enabled(), passwordLogin: settings.get('auth.passwordLogin') },
     },
   });
 });
@@ -297,14 +314,14 @@ router.get('/api/admin/system', admin, (req, res) => {
 });
 
 router.get('/api/admin/files', admin, async (req, res) => {
-  res.json(
-    await files.listAll({
-      search: text(req.query.search, 200),
-      page: req.query.page,
-      limit: req.query.limit,
-      trash: req.query.trash === '1',
-    })
-  );
+  const list = await files.listAll({
+    search: text(req.query.search, 200),
+    page: req.query.page,
+    limit: req.query.limit,
+    trash: req.query.trash === '1',
+  });
+  const pictures = await avatars.urlsFor(list.files.map((file) => file.username));
+  res.json({ ...list, avatars: Object.fromEntries(pictures) });
 });
 
 router.delete('/api/admin/files/:username/:filename', admin, async (req, res) => {
@@ -358,15 +375,17 @@ router.get('/api/admin/users', admin, async (req, res) => {
 });
 
 router.post('/api/admin/users', adminSudo, async (req, res) => {
-  const generated = !req.body.password;
-  const password = generated ? users.generatePassword() : String(req.body.password);
+  const passwordless = !settings.get('auth.passwordLogin');
+  const generated = !passwordless && !req.body.password;
+  const password = passwordless ? '' : generated ? users.generatePassword() : String(req.body.password);
   const row = await users.create({
     username: req.body.username,
     password,
+    passwordless,
     role: req.body.role,
     quotaBytes: req.body.quotaBytes,
     maxFileBytes: req.body.maxFileBytes,
-    mustChangePassword: req.body.mustChangePassword !== false,
+    mustChangePassword: !passwordless && req.body.mustChangePassword !== false,
   });
   audit.log('user_created', { userId: row.id, actorId: req.user.id, req, details: { role: row.role } });
   webhook.notify(
@@ -374,7 +393,7 @@ router.post('/api/admin/users', adminSudo, async (req, res) => {
     'Neuer Benutzer',
     `**${row.username}** wurde von **${req.user.username}** angelegt (${row.role === 'admin' ? 'Admin' : 'Mitglied'}).`
   );
-  res.json({ ok: true, user: await users.getForAdmin(row.id), password: generated ? password : undefined });
+  res.json({ ok: true, user: await users.getForAdmin(row.id), password: generated ? password : undefined, passwordless });
 });
 
 router.get('/api/admin/users/:id', admin, async (req, res) => {
@@ -417,12 +436,16 @@ router.patch('/api/admin/users/:id', adminSudo, async (req, res) => {
   if (Object.keys(changes).length) audit.log(auditActionFor(changes), { userId: row.id, actorId: req.user.id, req, details: changes });
   if (changes.status === 'suspended') {
     await sessions.revokeAll(row.id);
+    await links.revokeForUser(row.id);
     webhook.notify('user', 'Benutzer gesperrt', `**${row.username}** wurde von **${req.user.username}** gesperrt.`, 'error');
   }
   res.json({ ok: true, user: await users.getForAdmin(row.id) });
 });
 
 router.post('/api/admin/users/:id/password', adminSudo, async (req, res) => {
+  if (!settings.get('auth.passwordLogin')) {
+    throw forbidden('Die Anmeldung mit Passwort ist abgeschaltet. Schick stattdessen einen Einmal-Link.', { code: 'password_disabled' });
+  }
   const row = await targetUser(req);
   const generated = !req.body.password;
   const password = generated ? users.generatePassword() : String(req.body.password);
@@ -450,6 +473,19 @@ router.delete('/api/admin/users/:id/passkeys', adminSudo, async (req, res) => {
   const count = await passkeys.removeAll(row.id);
   audit.log('passkey_removed', { userId: row.id, actorId: req.user.id, req, details: { count } });
   res.json({ ok: true, count });
+});
+
+router.delete('/api/admin/users/:id/avatar', adminSudo, async (req, res) => {
+  const row = await targetUser(req);
+  if (await avatars.remove(row.id)) audit.log('avatar_revoked', { userId: row.id, actorId: req.user.id, req });
+  res.json({ ok: true, user: await users.getForAdmin(row.id) });
+});
+
+router.delete('/api/admin/users/:id/link-path', adminSudo, async (req, res) => {
+  const row = await targetUser(req);
+  const path = await paths.revoke(row.id);
+  if (path) audit.log('link_path_revoked', { userId: row.id, actorId: req.user.id, req, details: { path } });
+  res.json({ ok: true, user: await users.getForAdmin(row.id) });
 });
 
 router.post('/api/admin/users/:id/revoke-sessions', adminSudo, async (req, res) => {
@@ -515,7 +551,25 @@ router.delete('/api/admin/invites/:code', admin, async (req, res) => {
   res.json({ ok: true });
 });
 
+const SIGN_IN_KEYS = () => ['auth.passwordLogin', 'auth.passkeys', ...oauth.PROVIDER_KEYS.map((key) => `auth.${key}.enabled`)];
+
+async function assertWayIn(req, patch) {
+  const next = settings.validatePatch(patch);
+  const merged = { ...settings.all(), ...next };
+  if (merged['auth.passwordLogin']) return;
+  const reducing = SIGN_IN_KEYS().filter((key) => key in next && next[key] === false && settings.get(key) !== false);
+  if (!reducing.length) return;
+  const [passkeyList, linked] = await Promise.all([passkeys.listForUser(req.user.id), identities.listForUser(req.user.id)]);
+  if (merged['auth.passkeys'] && passkeyList.length > 0) return;
+  if (linked.some(({ provider }) => merged[`auth.${provider}.enabled`])) return;
+  throw badRequest(
+    'Ohne Passwort kämst du danach nicht mehr in dein Konto. Lege zuerst einen Passkey an oder verknüpfe einen Anmeldedienst.',
+    { field: reducing[0] }
+  );
+}
+
 router.patch('/api/admin/settings', adminSudo, async (req, res) => {
+  await assertWayIn(req, req.body);
   const { changed } = await settings.update(req.body, req.user.id);
   if (changed.length) {
     audit.log('settings_updated', { userId: null, actorId: req.user.id, req, details: { keys: changed } });

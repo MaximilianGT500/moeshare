@@ -9,6 +9,8 @@ const storage = require('./storageService');
 const preferences = require('./preferenceService');
 const watermarks = require('./watermarkService');
 const { entryName } = require('./zipService');
+const avatars = require('./avatarService');
+const paths = require('./pathService');
 
 const log = logger.scope('export');
 
@@ -121,6 +123,8 @@ async function collect(user, language) {
         createdAt: iso(identity.created_at),
       })),
       twoFactor: Boolean(row.totp_enabled_at),
+      avatar: Boolean(row.avatar),
+      linkPath: paths.currentOf(row.id),
     },
     activity: activity.map((entry) => ({ at: iso(entry.at), action: entry.action, ip: entry.ip || null, details: parse(entry.details) })),
   };
@@ -239,6 +243,8 @@ async function send(res, user, { includeFiles = true, language = 'de' } = {}) {
     await zip.add(`${root}/albums.json`, json(index.albums), { date: now });
     await zip.add(`${root}/links.json`, json(index.links), { date: now });
     await zip.add(`${root}/activity.json`, json(data.activity), { date: now });
+    const picture = data.row.avatar ? await avatars.file(data.row.id) : null;
+    if (picture) await zip.add(`${root}/${language === 'en' ? 'avatar.webp' : 'profilbild.webp'}`, [picture], { date: now });
     if (includeFiles) {
       for (const entry of index.entries) {
         let source;

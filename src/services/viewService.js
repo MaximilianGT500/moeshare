@@ -12,6 +12,7 @@ const files = require('./fileService');
 const embeds = require('./embedService');
 const storage = require('./storageService');
 const designs = require('./designService');
+const avatars = require('./avatarService');
 const profiles = require('./profileService');
 
 const TEXT_PREVIEW_BYTES = 512 * 1024;
@@ -67,7 +68,7 @@ async function fileView(record, { access = { state: 'open' }, domain = null } = 
     typeof record.dominant_color === 'string' && record.dominant_color.toLowerCase() !== '#ffffff' ? record.dominant_color : null;
   const poster = `/uploads/${username}/preview/${baseNameOf(filename)}.jpg`;
   const slug = record.slug || filename;
-  const [style, profile] = await Promise.all([designs.forOwner(username), ownerProfile(username, domain)]);
+  const [style, profile, avatar] = await Promise.all([designs.forOwner(username), ownerProfile(username, domain), avatars.urlOf(username)]);
   return {
     file: {
       id: record.id,
@@ -90,6 +91,7 @@ async function fileView(record, { access = { state: 'open' }, domain = null } = 
       once: Boolean(record.max_views),
       protected: Boolean(record.password_hash),
       username,
+      avatar,
       owner: Boolean(access.owner),
       blocked: record.blocked_at ? { reason: record.blocked_reason || '' } : null,
       warning: record.warning === null || record.warning === undefined ? null : record.warning,

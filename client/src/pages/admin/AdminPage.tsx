@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { AnimatePresence, m } from 'motion/react';
 import Box from '@mui/material/Box';
 import Tab from '@mui/material/Tab';
@@ -20,11 +20,23 @@ import { HomePanel } from './HomePanel';
 import { ActivityPanel } from './ActivityPanel';
 import { SystemPanel } from './SystemPanel';
 import { ReportsPanel } from './ReportsPanel';
+import { AccessPanel } from './AccessPanel';
+import { AccessProvider } from './LoginLinkDialog';
 import { c, ease, radius } from '../../theme/tokens';
 import { t, tn } from '../../lib/i18n';
 
-type TabKey = 'benutzer' | 'einladungen' | 'dateien' | 'meldungen' | 'startseite' | 'einstellungen' | 'aktivitaet' | 'system';
-const ALL_TABS: TabKey[] = ['benutzer', 'einladungen', 'dateien', 'meldungen', 'startseite', 'einstellungen', 'aktivitaet', 'system'];
+type TabKey = 'benutzer' | 'einladungen' | 'zugaenge' | 'dateien' | 'meldungen' | 'startseite' | 'einstellungen' | 'aktivitaet' | 'system';
+const ALL_TABS: TabKey[] = [
+  'benutzer',
+  'einladungen',
+  'zugaenge',
+  'dateien',
+  'meldungen',
+  'startseite',
+  'einstellungen',
+  'aktivitaet',
+  'system',
+];
 
 const tabsFor = (boot: AdminBoot) => ALL_TABS.filter((key) => key !== 'meldungen' || boot.moderation.enabled || boot.moderation.open > 0);
 
@@ -60,6 +72,7 @@ function Admin({ boot }: { boot: AdminBoot }) {
   const TABS = tabsFor(boot);
   const [tab, setTab] = useState<TabKey>(() => tabFromHash(tabsFor(boot)));
   const [openReports, setOpenReports] = useState(boot.moderation.open);
+  const [pendingLinks, setPendingLinks] = useState(boot.access.pending);
   const [direction, setDirection] = useState(0);
   const [stats, setStats] = useState<GlobalStats>(boot.stats);
   const [fileTotal, setFileTotal] = useState(boot.files.total);
@@ -122,6 +135,7 @@ function Admin({ boot }: { boot: AdminBoot }) {
     benutzer: t('Benutzer ({users})', { users: formatNumber(stats.users) }),
     einladungen: activeInvites ? t('Einladungen ({activeInvites})', { activeInvites }) : t('Einladungen'),
     dateien: t('Dateien ({fileTotal})', { fileTotal: formatNumber(fileTotal) }),
+    zugaenge: pendingLinks ? t('Zugänge ({count})', { count: formatNumber(pendingLinks) }) : t('Zugänge'),
     meldungen: openReports ? t('Meldungen ({count})', { count: formatNumber(openReports) }) : t('Meldungen'),
     startseite: t('Startseite'),
     einstellungen: t('Einstellungen'),
@@ -134,119 +148,145 @@ function Admin({ boot }: { boot: AdminBoot }) {
     maxFileBytes: (values['uploads.maxFileBytes'] as number | null) ?? null,
   };
 
+  const access = useMemo(
+    () => ({
+      passwordLogin: values['auth.passwordLogin'] !== false,
+      linksEnabled: values['auth.loginLinks'] !== false,
+      defaultMinutes: Number(values['auth.loginLinkMinutes']) || 15,
+      maxMinutes: Number(values['auth.loginLinkMaxMinutes']) || 1440,
+      mailReady: boot.mail.ready,
+      baseUrl: boot.site.baseUrl,
+    }),
+    [values, boot.mail.ready, boot.site.baseUrl]
+  );
+
   return (
-    <AppShell
-      site={boot.site}
-      user={boot.user}
-      active="admin"
-      topBar={
-        <Typography variant="h5" component="h1" sx={{ pl: { xs: 1, md: 0 } }}>
-          {t('Administration')}
-        </Typography>
-      }
-      accountSummary={storageSummary(boot.userStats)}
-    >
-      <Box
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: { xs: '1fr 1fr', lg: 'repeat(4, 1fr)' },
-          borderRadius: `${radius.lg}px`,
-          bgcolor: c.surfaceContainerLow,
-          overflow: 'hidden',
-          mt: 1,
-          '& > *': { borderLeft: `1px solid ${c.outlineVariant}`, borderTop: `1px solid ${c.outlineVariant}` },
-          '& > *:nth-of-type(-n+2)': { borderTop: 'none' },
-          '& > *:nth-of-type(odd)': { borderLeft: 'none' },
-          '@media (min-width: 1200px)': {
-            '& > *': { borderTop: 'none' },
-            '& > *:nth-of-type(odd)': { borderLeft: `1px solid ${c.outlineVariant}` },
-            '& > *:first-of-type': { borderLeft: 'none' },
-          },
-        }}
+    <AccessProvider value={access}>
+      <AppShell
+        site={boot.site}
+        user={boot.user}
+        active="admin"
+        topBar={
+          <Typography variant="h5" component="h1" sx={{ pl: { xs: 1, md: 0 } }}>
+            {t('Administration')}
+          </Typography>
+        }
+        accountSummary={storageSummary(boot.userStats)}
       >
-        {figures.map((figure, index) => (
-          <Figure key={figure.label} index={index} {...figure} />
-        ))}
-      </Box>
-
-      <Box sx={{ mt: 3, mb: 2.5, borderBottom: `1px solid ${c.outlineVariant}` }}>
-        <ScrollTabs value={tab} onChange={select} label={t('Bereiche')}>
-          {TABS.map((key) => (
-            <Tab key={key} value={key} label={label[key]} id={`tab-${key}`} aria-controls={`panel-${key}`} />
-          ))}
-        </ScrollTabs>
-      </Box>
-
-      <AnimatePresence mode="wait" initial={false} custom={direction}>
-        <m.div
-          key={tab}
-          role="tabpanel"
-          id={`panel-${tab}`}
-          aria-labelledby={`tab-${tab}`}
-          custom={direction}
-          initial={{ opacity: 0, x: direction * 28 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: direction * -28, transition: { duration: 0.14, ease: ease.emphasizedAccelerate } }}
-          transition={{ duration: 0.32, ease: ease.emphasizedDecelerate }}
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr 1fr', lg: 'repeat(4, 1fr)' },
+            borderRadius: `${radius.lg}px`,
+            bgcolor: c.surfaceContainerLow,
+            overflow: 'hidden',
+            mt: 1,
+            '& > *': { borderLeft: `1px solid ${c.outlineVariant}`, borderTop: `1px solid ${c.outlineVariant}` },
+            '& > *:nth-of-type(-n+2)': { borderTop: 'none' },
+            '& > *:nth-of-type(odd)': { borderLeft: 'none' },
+            '@media (min-width: 1200px)': {
+              '& > *': { borderTop: 'none' },
+              '& > *:nth-of-type(odd)': { borderLeft: `1px solid ${c.outlineVariant}` },
+              '& > *:first-of-type': { borderLeft: 'none' },
+            },
+          }}
         >
-          {tab === 'benutzer' && (
-            <UsersPanel
-              initial={boot.users}
-              currentUser={boot.user.username}
-              onChanged={refreshStats}
-              minPasswordLength={(values['auth.passwordMinLength'] as number) || 10}
-              defaults={defaults}
-              baseUrl={boot.site.baseUrl}
-              siteTitle={boot.site.title}
-            />
-          )}
-          {tab === 'einladungen' && (
-            <InvitesPanel
-              initial={boot.invites}
-              registration={values['auth.registration'] as string}
-              onCount={setActiveInvites}
-              mailReady={boot.mail.ready}
-            />
-          )}
-          {tab === 'dateien' && (
-            <FilesPanel initial={boot.files} onChanged={refreshStats} onTotal={setFileTotal} trashEnabled={!!values['trash.enabled']} />
-          )}
-          {tab === 'meldungen' && <ReportsPanel enabled={!!values['reports.enabled']} onOpenCount={setOpenReports} />}
-          {tab === 'startseite' && (
-            <HomePanel
-              initial={settings}
-              site={boot.site}
-              stats={boot.homeStats}
-              registrationOpen={values['auth.registration'] === 'open'}
-              onSaved={setSettings}
-              onOpenSettings={() => {
-                setSettingsSection('rechtliches');
-                select('einstellungen');
-              }}
-            />
-          )}
-          {tab === 'einstellungen' && (
-            <SettingsPanel
-              initial={settings}
-              initialSection={settingsSection}
-              currentUserTotp={boot.sudo.totp}
-              storage={boot.storage}
-              backups={boot.backups}
-              webhooks={boot.webhooks}
-              imports={boot.imports}
-              onSaved={(next) => {
-                setSettings(next);
-                if (next.values['auth.enforceMfa'] !== 'off' && !boot.sudo.totp) window.location.assign('/account?setup=mfa');
-              }}
-            />
-          )}
-          {tab === 'aktivitaet' && (
-            <ActivityPanel initial={boot.audit} retentionDays={(values['system.auditRetentionDays'] as number) || 90} />
-          )}
-          {tab === 'system' && <SystemPanel initial={boot.system} database={boot.database} ffmpeg={boot.storage.ffmpeg} />}
-        </m.div>
-      </AnimatePresence>
-    </AppShell>
+          {figures.map((figure, index) => (
+            <Figure key={figure.label} index={index} {...figure} />
+          ))}
+        </Box>
+
+        <Box sx={{ mt: 3, mb: 2.5, borderBottom: `1px solid ${c.outlineVariant}` }}>
+          <ScrollTabs value={tab} onChange={select} label={t('Bereiche')}>
+            {TABS.map((key) => (
+              <Tab key={key} value={key} label={label[key]} id={`tab-${key}`} aria-controls={`panel-${key}`} />
+            ))}
+          </ScrollTabs>
+        </Box>
+
+        <AnimatePresence mode="wait" initial={false} custom={direction}>
+          <m.div
+            key={tab}
+            role="tabpanel"
+            id={`panel-${tab}`}
+            aria-labelledby={`tab-${tab}`}
+            custom={direction}
+            initial={{ opacity: 0, x: direction * 28 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: direction * -28, transition: { duration: 0.14, ease: ease.emphasizedAccelerate } }}
+            transition={{ duration: 0.32, ease: ease.emphasizedDecelerate }}
+          >
+            {tab === 'benutzer' && (
+              <UsersPanel
+                initial={boot.users}
+                currentUser={boot.user.username}
+                onChanged={refreshStats}
+                minPasswordLength={(values['auth.passwordMinLength'] as number) || 10}
+                defaults={defaults}
+                baseUrl={boot.site.baseUrl}
+                siteTitle={boot.site.title}
+              />
+            )}
+            {tab === 'einladungen' && (
+              <InvitesPanel
+                initial={boot.invites}
+                registration={values['auth.registration'] as string}
+                onCount={setActiveInvites}
+                mailReady={boot.mail.ready}
+              />
+            )}
+            {tab === 'zugaenge' && (
+              <AccessPanel
+                users={boot.users}
+                onPending={setPendingLinks}
+                onOpenSettings={() => {
+                  setSettingsSection('anmeldung');
+                  select('einstellungen');
+                }}
+              />
+            )}
+            {tab === 'dateien' && (
+              <FilesPanel initial={boot.files} onChanged={refreshStats} onTotal={setFileTotal} trashEnabled={!!values['trash.enabled']} />
+            )}
+            {tab === 'meldungen' && <ReportsPanel enabled={!!values['reports.enabled']} onOpenCount={setOpenReports} />}
+            {tab === 'startseite' && (
+              <HomePanel
+                initial={settings}
+                site={boot.site}
+                stats={boot.homeStats}
+                registrationOpen={values['auth.registration'] === 'open'}
+                onSaved={setSettings}
+                onOpenSettings={() => {
+                  setSettingsSection('rechtliches');
+                  select('einstellungen');
+                }}
+              />
+            )}
+            {tab === 'einstellungen' && (
+              <SettingsPanel
+                initial={settings}
+                initialSection={settingsSection}
+                currentUserTotp={boot.sudo.totp}
+                currentUserWayIn={boot.sudo.passkey || boot.sudo.providers.length > 0}
+                mailReady={boot.mail.ready}
+                storage={boot.storage}
+                backups={boot.backups}
+                webhooks={boot.webhooks}
+                imports={boot.imports}
+                onSaved={(next) => {
+                  setSettings(next);
+                  if (next.values['auth.enforceMfa'] !== 'off' && !boot.sudo.totp) window.location.assign('/account?setup=mfa');
+                }}
+              />
+            )}
+            {tab === 'aktivitaet' && (
+              <ActivityPanel initial={boot.audit} retentionDays={(values['system.auditRetentionDays'] as number) || 90} />
+            )}
+            {tab === 'system' && <SystemPanel initial={boot.system} database={boot.database} ffmpeg={boot.storage.ffmpeg} />}
+          </m.div>
+        </AnimatePresence>
+      </AppShell>
+    </AccessProvider>
   );
 }
 

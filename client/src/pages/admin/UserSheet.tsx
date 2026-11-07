@@ -25,6 +25,9 @@ import TokenRounded from '@mui/icons-material/TokenRounded';
 import DeleteOutlineRounded from '@mui/icons-material/DeleteOutlineRounded';
 import BlockRounded from '@mui/icons-material/BlockRounded';
 import AddRounded from '@mui/icons-material/AddRounded';
+import AccountCircleOutlined from '@mui/icons-material/AccountCircleOutlined';
+import LinkRounded from '@mui/icons-material/LinkRounded';
+import LoginRounded from '@mui/icons-material/LoginRounded';
 import type { AdminUser } from '../../lib/types';
 import { providerIcon, providerLabel } from '../../lib/providers';
 import {
@@ -32,6 +35,8 @@ import {
   deleteUserById,
   errorMessage,
   fetchUserDetail,
+  removeUserAvatar,
+  removeUserLinkPath,
   removeUserPasskeys,
   resetUserMfa,
   resetUserPassword,
@@ -56,8 +61,10 @@ import { isCancelled, useSudo } from '../../components/Sudo';
 import { SessionRow } from '../account/SessionsPanel';
 import { CredentialsDialog } from './CreateUserDialog';
 import { RoleChip, StatusChip } from './userBits';
+import { LinkResultDialog, LoginLinkDialog, useAccess } from './LoginLinkDialog';
 import { fonts } from '../../theme/tokens';
 import { t, tn } from '../../lib/i18n';
+import { siteName } from '../../lib/boot';
 
 function SuspendDialog({ user, onClose, onConfirm }: { user: AdminUser | null; onClose: () => void; onConfirm: (reason: string) => void }) {
   const [reason, setReason] = useState('');
@@ -151,7 +158,7 @@ function PasswordResetDialog({
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             fullWidth
-            helperText={t('Leer lassen, dann erzeugt MoeShare eins.')}
+            helperText={t('Leer lassen, dann erzeugt {name} eins.', { name: siteName() })}
             slotProps={{ htmlInput: { autoComplete: 'off', spellCheck: false, style: { fontFamily: fonts.mono } } }}
           />
           <FormControlLabel
@@ -207,6 +214,15 @@ export function UserSheet({
   const [naming, setNaming] = useState(false);
   const [token, setToken] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [linking, setLinking] = useState(false);
+  const [linkResult, setLinkResult] = useState<{
+    url: string;
+    username: string;
+    expiresAt: number;
+    sent?: string | null;
+    mailError?: string | null;
+  } | null>(null);
+  const access = useAccess();
 
   const load = useCallback(
     async (id: number) => {
@@ -300,7 +316,9 @@ export function UserSheet({
       <SideSheet
         open={userId !== null}
         onClose={onClose}
-        leading={user ? <UserAvatar name={user.username} size={48} /> : <Skeleton variant="circular" width={48} height={48} />}
+        leading={
+          user ? <UserAvatar name={user.username} src={user.avatar} size={48} /> : <Skeleton variant="circular" width={48} height={48} />
+        }
         title={user ? user.username : <Skeleton width={140} />}
         subtitle={
           user ? (
@@ -377,6 +395,47 @@ export function UserSheet({
                   description={tn(user.domains, '1 bestätigte Domain', '{count} bestätigte Domains')}
                 />
               )}
+              {user.avatar && (
+                <SettingRow
+                  icon={<AccountCircleOutlined />}
+                  label={t('Profilbild')}
+                  description={t('Sehen alle, die Dateien oder das Profil öffnen.')}
+                >
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                    <UserAvatar name={user.username} src={user.avatar} size={40} />
+                    <Button
+                      variant="outlined"
+                      color="error"
+                      onClick={() =>
+                        run(() => removeUserAvatar(user.id), t('Profilbild von {username} entfernt', { username: user.username }))
+                      }
+                    >
+                      {t('Entfernen')}
+                    </Button>
+                  </Box>
+                </SettingRow>
+              )}
+              {user.linkPath && (
+                <SettingRow
+                  icon={<LinkRounded />}
+                  label={t('Eigener Pfad')}
+                  description={
+                    <Box component="span" sx={{ fontFamily: fonts.mono }}>
+                      /{user.linkPath}/…
+                    </Box>
+                  }
+                >
+                  <Button
+                    variant="outlined"
+                    color="error"
+                    onClick={() =>
+                      run(() => removeUserLinkPath(user.id), t('Pfad von {username} freigegeben', { username: user.username }))
+                    }
+                  >
+                    {t('Freigeben')}
+                  </Button>
+                </SettingRow>
+              )}
             </SettingsSection>
 
             <SettingsSection title={t('Rolle und Zugang')}>
@@ -448,19 +507,44 @@ export function UserSheet({
             </SettingsSection>
 
             <SettingsSection title={t('Anmeldung')}>
+              {access.passwordLogin ? (
+                <SettingRow
+                  icon={<PasswordRounded />}
+                  label={t('Passwort')}
+                  description={
+                    user.hasPassword
+                      ? user.mustChangePassword
+                        ? t('Vorläufig, wird beim nächsten Anmelden geändert.')
+                        : t('Gesetzt.')
+                      : t('Kein Passwort (meldet sich über einen Dienst oder einen Passkey an).')
+                  }
+                >
+                  <Button variant="tonal" onClick={() => setResetting(user)}>
+                    {t('Zurücksetzen')}
+                  </Button>
+                </SettingRow>
+              ) : (
+                <SettingRow
+                  icon={<PasswordRounded />}
+                  label={t('Passwort')}
+                  description={t('Auf diesem Server abgeschaltet. Statt eines neuen Passworts hilft ein Einmal-Link.')}
+                />
+              )}
               <SettingRow
-                icon={<PasswordRounded />}
-                label={t('Passwort')}
+                icon={<LoginRounded />}
+                label={t('Einmal-Link')}
                 description={
-                  user.hasPassword
-                    ? user.mustChangePassword
-                      ? t('Vorläufig, wird beim nächsten Anmelden geändert.')
-                      : 'Gesetzt.'
-                    : t('Kein Passwort (meldet sich über einen Dienst oder einen Passkey an).')
+                  user.status !== 'active'
+                    ? t('Gesperrte Konten bekommen keine Einmal-Links.')
+                    : access.linksEnabled
+                      ? t('Meldet {username} genau einmal ohne Passwort an, etwa für ein neues Gerät oder nach einem verlorenen Passkey.', {
+                          username: user.username,
+                        })
+                      : t('Einmal-Links sind in den Einstellungen abgeschaltet.')
                 }
               >
-                <Button variant="tonal" onClick={() => setResetting(user)}>
-                  {t('Zurücksetzen')}
+                <Button variant="tonal" onClick={() => setLinking(true)} disabled={!access.linksEnabled || user.status !== 'active'}>
+                  {t('Erstellen')}
                 </Button>
               </SettingRow>
               <SettingRow
@@ -652,6 +736,17 @@ export function UserSheet({
         }}
       />
       <TokenRevealDialog token={token} onClose={() => setToken(null)} siteTitle={siteTitle} baseUrl={baseUrl} forUser={user?.username} />
+      <LoginLinkDialog
+        open={linking}
+        user={user || null}
+        onClose={() => setLinking(false)}
+        onDone={(result, username) => {
+          setLinking(false);
+          setLinkResult({ url: result.url, username, expiresAt: result.link.expiresAt, sent: result.sent, mailError: result.mailError });
+          if (user) load(user.id);
+        }}
+      />
+      <LinkResultDialog result={linkResult} onClose={() => setLinkResult(null)} />
     </>
   );
 }

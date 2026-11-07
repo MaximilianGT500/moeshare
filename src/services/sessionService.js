@@ -49,6 +49,7 @@ const toUser = (row) => ({
   passkeyCount: row.passkey_count || 0,
   hasPassword: Boolean(row.password_hash),
   language: languageOf(row.preferences),
+  avatar: row.avatar || null,
 });
 
 async function resolve(token) {
@@ -56,7 +57,7 @@ async function resolve(token) {
   const id = sha256(token);
   const row = await db.get(
     `SELECT s.*, u.username, u.role, u.status, u.must_change_password, u.totp_enabled_at,
-            u.password AS password_hash, u.preferences,
+            u.password AS password_hash, u.preferences, u.avatar,
             (SELECT COUNT(*) FROM passkeys p WHERE p.user_id = u.id) AS passkey_count
      FROM sessions s JOIN users u ON u.id = s.user_id
      WHERE s.id = ?`,
@@ -136,7 +137,7 @@ function cookieOptions(req, { persistent, expiresAt }) {
 
 function pendingSetup(user) {
   if (!user) return null;
-  if (user.mustChangePassword) return 'password';
+  if (user.mustChangePassword && settings.get('auth.passwordLogin')) return 'password';
   const enforce = settings.get('auth.enforceMfa');
   const required = enforce === 'all' || (enforce === 'admins' && user.isAdmin);
   return required && !user.totpEnabled ? 'mfa' : null;
@@ -149,10 +150,10 @@ const pendingSetupFor = (row) =>
     totpEnabled: Boolean(row.totp_enabled_at),
   });
 
-async function start(req, res, row, { method, remember = true, next = '' } = {}) {
+async function start(req, res, row, { method, remember = true, next = '', details = {} } = {}) {
   const created = await create(row.id, { method, remember, req });
   res.cookie(COOKIE, created.token, cookieOptions(req, created));
-  audit.log('login', { userId: row.id, req, details: { method } });
+  audit.log('login', { userId: row.id, req, details: { method, ...details } });
   const setup = pendingSetupFor(row);
   return setup ? `/account?setup=${setup}` : safeNext(next);
 }

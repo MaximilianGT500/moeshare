@@ -21,6 +21,8 @@ const links = require('./services/linkService');
 const storage = require('./services/storageService');
 const backups = require('./services/backupService');
 const domains = require('./services/domainService');
+const paths = require('./services/pathService');
+const loginLinks = require('./services/loginLinkService');
 const stats = require('./services/statsService');
 const resumable = require('./services/resumableService');
 const dedupe = require('./services/dedupeService');
@@ -69,12 +71,13 @@ async function prepareUserFolders() {
 function scheduleMaintenance() {
   const run = async () => {
     try {
-      const [expiredSessions, expiredFlows, auditEntries, oldInvites, oldStats] = await Promise.all([
+      const [expiredSessions, expiredFlows, auditEntries, oldInvites, oldStats, oldLinks] = await Promise.all([
         sessions.cleanup(),
         ephemeral.prune(),
         audit.prune(),
         invites.prune(),
         stats.prune(),
+        loginLinks.prune(),
       ]);
       log.debug('Wartung erledigt', {
         sessions: expiredSessions,
@@ -82,6 +85,7 @@ function scheduleMaintenance() {
         audit: auditEntries,
         invites: oldInvites,
         stats: oldStats,
+        loginLinks: oldLinks,
       });
     } catch (error) {
       log.error('Die Wartung ist fehlgeschlagen', { error });
@@ -222,6 +226,8 @@ async function start() {
     await prepareUserFolders();
     await domains.refresh();
     domains.start();
+    await paths.refresh();
+    paths.start();
     await webhook.adoptLegacy().catch((error) => log.warn('Der bisherige Discord-Webhook ließ sich nicht übernehmen', { error }));
     await redirects.load();
   } catch (error) {

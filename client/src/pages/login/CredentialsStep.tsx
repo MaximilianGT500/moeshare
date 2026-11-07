@@ -12,6 +12,7 @@ import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import FingerprintRounded from '@mui/icons-material/FingerprintRounded';
+import ForwardToInboxRounded from '@mui/icons-material/ForwardToInboxRounded';
 import type { LoginMethods, MfaChallenge, SiteInfo } from '../../lib/types';
 import { BrandMark } from '../../components/BrandMark';
 import { PasswordField } from '../../components/PasswordField';
@@ -35,12 +36,13 @@ interface Props {
   onMfa: (challenge: MfaChallenge, remember: boolean) => void;
   onToken: () => void;
   onForgot?: () => void;
+  onEmailLink?: () => void;
   onSuccess: (redirect: string) => void;
 }
 
 type PasskeyOptions = Parameters<typeof startAuthentication>[0]['optionsJSON'];
 
-export function CredentialsStep({ site, methods, next, initialError, notice, onMfa, onToken, onForgot, onSuccess }: Props) {
+export function CredentialsStep({ site, methods, next, initialError, notice, onMfa, onToken, onForgot, onEmailLink, onSuccess }: Props) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [remember, setRemember] = useState(true);
@@ -50,6 +52,7 @@ export function CredentialsStep({ site, methods, next, initialError, notice, onM
   const [forgot, setForgot] = useState(false);
   const support = passkeySupport(methods.passkeyOrigin);
   const passkeys = methods.passkey && support.ok;
+  const withPassword = methods.password;
   const conditional = useRef(false);
 
   const fail = (message: string) => {
@@ -69,7 +72,7 @@ export function CredentialsStep({ site, methods, next, initialError, notice, onM
   };
 
   useEffect(() => {
-    if (!passkeys) return undefined;
+    if (!passkeys || !withPassword) return undefined;
     let cancelled = false;
     const run = async () => {
       if (!(await browserSupportsWebAuthnAutofill()) || cancelled) return;
@@ -92,7 +95,7 @@ export function CredentialsStep({ site, methods, next, initialError, notice, onM
       cancelled = true;
       if (conditional.current) WebAuthnAbortService.cancelCeremony();
     };
-  }, [passkeys]);
+  }, [passkeys, withPassword]);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -135,6 +138,20 @@ export function CredentialsStep({ site, methods, next, initialError, notice, onM
   };
 
   const alternatives = passkeys || methods.providers.length > 0;
+  const rememberBox = (
+    <FormControlLabel
+      control={<Checkbox checked={remember} onChange={(event) => setRemember(event.target.checked)} />}
+      label={<Typography variant="body2">{t('Angemeldet bleiben')}</Typography>}
+      sx={{ ml: -1 }}
+    />
+  );
+  const errorBox = (
+    <Collapse in={!!error} unmountOnExit>
+      <Alert severity="error" role="alert">
+        {error}
+      </Alert>
+    </Collapse>
+  );
 
   return (
     <Stack spacing={3}>
@@ -151,7 +168,11 @@ export function CredentialsStep({ site, methods, next, initialError, notice, onM
             {site.title}
           </Typography>
           <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
-            {t('Melde dich an, um deine Dateien zu verwalten.')}
+            {withPassword
+              ? t('Melde dich an, um deine Dateien zu verwalten.')
+              : alternatives
+                ? t('Melde dich mit einem Passkey oder einem verknüpften Dienst an.')
+                : t('Melde dich mit einem Einmal-Link an.')}
           </Typography>
         </div>
       </Stack>
@@ -162,88 +183,91 @@ export function CredentialsStep({ site, methods, next, initialError, notice, onM
         </Alert>
       )}
 
-      <Box component="form" onSubmit={submit} noValidate>
-        <Stack spacing={2}>
-          <Shake attempt={attempt}>
-            <Stack spacing={2}>
-              <TextField
-                label={t('Benutzername')}
-                name="username"
-                fullWidth
-                autoFocus
-                value={username}
-                error={!!error}
-                onChange={(event) => {
-                  setUsername(event.target.value);
-                  if (error) setError('');
-                }}
-                slotProps={{
-                  htmlInput: { autoComplete: passkeys ? 'username webauthn' : 'username', autoCapitalize: 'off', spellCheck: false },
-                }}
-              />
-              <PasswordField
-                label={t('Passwort')}
-                name="password"
-                value={password}
-                onChange={(value) => {
-                  setPassword(value);
-                  if (error) setError('');
-                }}
-                autoComplete="current-password"
-                error={!!error}
-              />
-            </Stack>
-          </Shake>
+      {withPassword && (
+        <Box component="form" onSubmit={submit} noValidate>
+          <Stack spacing={2}>
+            <Shake attempt={attempt}>
+              <Stack spacing={2}>
+                <TextField
+                  label={t('Benutzername')}
+                  name="username"
+                  fullWidth
+                  autoFocus
+                  value={username}
+                  error={!!error}
+                  onChange={(event) => {
+                    setUsername(event.target.value);
+                    if (error) setError('');
+                  }}
+                  slotProps={{
+                    htmlInput: { autoComplete: passkeys ? 'username webauthn' : 'username', autoCapitalize: 'off', spellCheck: false },
+                  }}
+                />
+                <PasswordField
+                  label={t('Passwort')}
+                  name="password"
+                  value={password}
+                  onChange={(value) => {
+                    setPassword(value);
+                    if (error) setError('');
+                  }}
+                  autoComplete="current-password"
+                  error={!!error}
+                />
+              </Stack>
+            </Shake>
 
-          <Box
-            sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, flexWrap: 'wrap', mt: '8px !important' }}
-          >
-            <FormControlLabel
-              control={<Checkbox checked={remember} onChange={(event) => setRemember(event.target.checked)} />}
-              label={<Typography variant="body2">{t('Angemeldet bleiben')}</Typography>}
-              sx={{ ml: -1 }}
-            />
-            <Link
-              component="button"
-              type="button"
-              variant="body2"
-              onClick={() => (onForgot ? onForgot() : setForgot((v) => !v))}
-              underline="hover"
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 1,
+                flexWrap: 'wrap',
+                mt: '8px !important',
+              }}
             >
-              {t('Passwort vergessen?')}
-            </Link>
-          </Box>
-          <Collapse in={forgot} unmountOnExit>
-            <Alert severity="info">
-              {t('Wende dich an einen Admin. Er setzt dein Passwort zurück, und beim nächsten Anmelden legst du ein neues fest.')}
-            </Alert>
-          </Collapse>
+              {rememberBox}
+              <Link
+                component="button"
+                type="button"
+                variant="body2"
+                onClick={() => (onForgot ? onForgot() : setForgot((v) => !v))}
+                underline="hover"
+              >
+                {t('Passwort vergessen?')}
+              </Link>
+            </Box>
+            <Collapse in={forgot} unmountOnExit>
+              <Alert severity="info">
+                {t('Wende dich an einen Admin. Er setzt dein Passwort zurück, und beim nächsten Anmelden legst du ein neues fest.')}
+              </Alert>
+            </Collapse>
 
-          <Collapse in={!!error} unmountOnExit>
-            <Alert severity="error" role="alert">
-              {error}
-            </Alert>
-          </Collapse>
+            {errorBox}
 
-          <Button
-            type="submit"
-            variant="contained"
-            size="large"
-            fullWidth
-            disabled={busy !== ''}
-            startIcon={busy === 'password' ? <CircularProgress size={18} color="inherit" /> : null}
-          >
-            {busy === 'password' ? t('Wird geprüft') : t('Anmelden')}
-          </Button>
-        </Stack>
-      </Box>
+            <Button
+              type="submit"
+              variant="contained"
+              size="large"
+              fullWidth
+              disabled={busy !== ''}
+              startIcon={busy === 'password' ? <CircularProgress size={18} color="inherit" /> : null}
+            >
+              {busy === 'password' ? t('Wird geprüft') : t('Anmelden')}
+            </Button>
+          </Stack>
+        </Box>
+      )}
+
+      {!withPassword && errorBox}
 
       {alternatives && (
         <Stack spacing={1.5}>
-          <OrDivider />
+          {withPassword ? <OrDivider /> : rememberBox}
           {passkeys && (
             <Button
-              variant="outlined"
+              variant={withPassword ? 'outlined' : 'contained'}
               size="large"
               fullWidth
               onClick={signInWithPasskey}
@@ -262,7 +286,17 @@ export function CredentialsStep({ site, methods, next, initialError, notice, onM
         </Stack>
       )}
 
-      {(methods.register || methods.token) && (
+      {!withPassword && !alternatives && !onEmailLink && (
+        <Alert severity="info">{t('Auf diesem Server meldest du dich mit einem Einmal-Link an. Frag einen Admin danach.')}</Alert>
+      )}
+
+      {!withPassword && !alternatives && onEmailLink && (
+        <Button variant="contained" size="large" fullWidth onClick={onEmailLink} startIcon={<ForwardToInboxRounded />}>
+          {t('Link per E-Mail anfordern')}
+        </Button>
+      )}
+
+      {(methods.register || methods.token || (onEmailLink && (withPassword || alternatives))) && (
         <Stack spacing={0.5} sx={{ alignItems: 'center' }}>
           {methods.register && (
             <Typography variant="body2" sx={{ color: 'text.secondary' }}>
@@ -271,6 +305,11 @@ export function CredentialsStep({ site, methods, next, initialError, notice, onM
                 {t('Registrieren')}
               </Link>
             </Typography>
+          )}
+          {onEmailLink && (withPassword || alternatives) && (
+            <Link component="button" type="button" variant="body2" onClick={onEmailLink} underline="hover">
+              {t('Anmeldelink per E-Mail anfordern')}
+            </Link>
           )}
           {methods.token && (
             <Link component="button" type="button" variant="body2" onClick={onToken} underline="hover">

@@ -47,7 +47,7 @@ async function create(userId, name) {
 async function resolve(token) {
   if (typeof token !== 'string' || token.length < 20 || token.length > 4096) return null;
   const row = await db.get(
-    `SELECT t.id AS token_id, t.last_used_at, u.id, u.username, u.role, u.status, u.preferences
+    `SELECT t.id AS token_id, t.last_used_at, u.id, u.username, u.role, u.status, u.preferences, u.avatar
      FROM api_tokens t JOIN users u ON u.id = t.user_id
      WHERE t.token_hash = ?`,
     [sha256(token.trim())]
@@ -66,6 +66,7 @@ async function resolve(token) {
       isAdmin: row.role === 'admin',
       status: row.status,
       language: languageOf(row.preferences),
+      avatar: row.avatar || null,
     },
   };
 }

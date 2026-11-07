@@ -37,6 +37,7 @@ import { useToast } from '../../components/Toaster';
 import { LayoutPicker } from './LayoutPicker';
 import { c, ease, elevation, fonts, radius } from '../../theme/tokens';
 import { t } from '../../lib/i18n';
+import { siteName } from '../../lib/boot';
 
 type Scope = 'own' | 'default';
 type Device = 'desktop' | 'phone';
@@ -319,7 +320,9 @@ export function ViewDesigner({ user, data }: { user: SessionUser; data: ViewDesi
                 </SettingRow>
                 <SettingRow
                   label={t('Eigenes CSS')}
-                  description={t('Wer darf mit eigenem CSS gestalten? Externe Dateien wie Bilder oder Schriften lädt MoeShare dabei nie.')}
+                  description={t('Wer darf mit eigenem CSS gestalten? Externe Dateien wie Bilder oder Schriften lädt {name} dabei nie.', {
+                    name: siteName(),
+                  })}
                 >
                   <TextField
                     select

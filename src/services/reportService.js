@@ -164,7 +164,7 @@ async function describe(kind, id) {
     return {
       exists: true,
       label: row.title,
-      url: `${settings.get('site.baseUrl')}/a/${row.code}`,
+      url: `${settings.get('site.baseUrl')}/a/${encodeURIComponent(row.code)}`,
       owner: row.username,
       blocked: Boolean(row.blocked_at),
     };

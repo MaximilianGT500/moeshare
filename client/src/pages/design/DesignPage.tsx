@@ -43,6 +43,8 @@ function Design({ boot }: { boot: DesignBoot }) {
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
 
+  const [avatar, setAvatar] = useState(boot.user.avatar);
+
   const select = (next: TabKey) => {
     setDirection(tabs.indexOf(next) > tabs.indexOf(tab) ? 1 : -1);
     setTab(next);
@@ -59,7 +61,7 @@ function Design({ boot }: { boot: DesignBoot }) {
   return (
     <AppShell
       site={boot.site}
-      user={boot.user}
+      user={{ ...boot.user, avatar }}
       active="design"
       topBar={
         <Typography variant="h5" component="h1" sx={{ pl: { xs: 1, md: 0 } }}>
@@ -89,7 +91,9 @@ function Design({ boot }: { boot: DesignBoot }) {
           transition={{ duration: 0.32, ease: ease.emphasizedDecelerate }}
         >
           {tab === 'vorschauseite' && <ViewDesigner user={boot.user} data={boot.view} />}
-          {tab === 'profil' && <ProfileEditor user={boot.user} initial={boot.profile} />}
+          {tab === 'profil' && (
+            <ProfileEditor user={boot.user} initial={boot.profile} avatar={avatar} avatars={boot.avatars} onAvatar={setAvatar} />
+          )}
           {tab === 'embed' && <EmbedPanel site={boot.site} user={boot.user} data={boot.embed} />}
           {tab === 'wasserzeichen' && <WatermarkEditor initial={boot.watermark} />}
         </m.div>

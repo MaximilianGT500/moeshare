@@ -48,6 +48,7 @@ import { RecoveryCodesDialog, TotpSetupDialog } from './TotpDialogs';
 import { authUrl, providerIcon } from '../../lib/providers';
 import { c, ease } from '../../theme/tokens';
 import { t, tn } from '../../lib/i18n';
+import { siteName } from '../../lib/boot';
 
 function StatusChip({ on, label }: { on: boolean; label?: string }) {
   return (
@@ -249,12 +250,14 @@ export function SecurityPanel({
   minPasswordLength,
   reload,
   autoOpen,
+  welcome = false,
 }: {
   account: AccountOverview;
   siteTitle: string;
   minPasswordLength: number;
   reload: () => Promise<void>;
   autoOpen: 'password' | 'mfa' | null;
+  welcome?: boolean;
 }) {
   const toast = useToast();
   const confirm = useConfirm();
@@ -347,16 +350,30 @@ export function SecurityPanel({
   };
 
   const linkable = security.providers.filter((provider) => !security.identities.some((identity) => identity.provider === provider.key));
+  const passwordLogin = account.policy.passwordLogin;
+  const wayIn =
+    (passwordLogin && user.hasPassword) ||
+    (security.passkeysEnabled && security.passkeys.length > 0) ||
+    security.identities.some((identity) => identity.enabled);
+  const canAddPasskey = security.passkeysEnabled && support.ok;
 
-  return (
-    <Stack spacing={4}>
-      <SettingsSection
-        id="anmeldung"
-        title={t('Passwort und Zwei-Faktor')}
-        description={t(
-          'Mit der Zwei-Faktor-Anmeldung fragt MoeShare nach dem Passwort zusätzlich nach einem Code aus deiner Authenticator-App. Ein gestohlenes Passwort allein reicht dann nicht mehr.'
-        )}
-      >
+  const passwordSection = (
+    <SettingsSection
+      id="anmeldung"
+      title={t('Passwort und Zwei-Faktor')}
+      description={
+        passwordLogin
+          ? t(
+              'Mit der Zwei-Faktor-Anmeldung fragt {name} nach dem Passwort zusätzlich nach einem Code aus deiner Authenticator-App. Ein gestohlenes Passwort allein reicht dann nicht mehr.',
+              { name: siteName() }
+            )
+          : t(
+              'Mit der Zwei-Faktor-Anmeldung fragt {name} nach der Anmeldung über einen Dienst oder einen Link per E-Mail zusätzlich nach einem Code aus deiner Authenticator-App.',
+              { name: siteName() }
+            )
+      }
+    >
+      {passwordLogin ? (
         <SettingRow
           icon={<PasswordRounded />}
           label={t('Passwort')}
@@ -372,147 +389,197 @@ export function SecurityPanel({
             {user.hasPassword ? t('Ändern') : t('Festlegen')}
           </Button>
         </SettingRow>
+      ) : (
         <SettingRow
-          icon={<PhonelinkLockRounded />}
+          icon={<PasswordRounded />}
           label={
             <>
-              {t('Authenticator-App')} <StatusChip on={security.totp} />
+              {t('Passwort')} <StatusChip on={false} label={t('Abgeschaltet')} />
             </>
           }
-          description={
-            security.totp
-              ? security.mfaRequired
-                ? t('Eingerichtet {when}. Auf diesem Server Pflicht.', { when: relativeMs(security.totpEnabledAt) })
-                : t('Eingerichtet {when}.', { when: relativeMs(security.totpEnabledAt) })
-              : security.mfaRequired
-                ? t('Auf diesem Server Pflicht. Richte sie ein, um weiterzumachen.')
-                : t('Codes aus Apps wie Aegis, 2FAS oder Google Authenticator.')
-          }
-        >
-          {security.totp ? (
-            !security.mfaRequired && (
-              <Button variant="outlined" onClick={turnOffTotp}>
-                {t('Abschalten')}
-              </Button>
-            )
-          ) : (
-            <Button variant="contained" onClick={() => setTotpOpen(true)}>
-              {t('Einrichten')}
-            </Button>
-          )}
-        </SettingRow>
-        {security.totp && (
-          <SettingRow
-            icon={<KeyRounded />}
-            label={t('Wiederherstellungscodes')}
-            description={
-              security.recoveryCodesLeft <= 3
-                ? t('Nur noch {recoveryCodesLeft} Codes übrig. Erstelle neue, bevor sie ausgehen.', {
-                    recoveryCodesLeft: security.recoveryCodesLeft,
-                  })
-                : t('{recoveryCodesLeft} von 10 Codes übrig. Damit kommst du ohne Handy in dein Konto.', {
-                    recoveryCodesLeft: security.recoveryCodesLeft,
-                  })
-            }
-          >
-            <Button variant={security.recoveryCodesLeft <= 3 ? 'contained' : 'tonal'} onClick={newCodes}>
-              {t('Neue Codes')}
-            </Button>
-          </SettingRow>
-        )}
-      </SettingsSection>
-
-      {security.passkeysEnabled && (
-        <SettingsSection
-          id="passkeys"
-          title={t('Passkeys')}
-          description={t(
-            'Melde dich mit Fingerabdruck, Gesicht oder der PIN deines Geräts an, ganz ohne Passwort. Passkeys lassen sich nicht abfangen oder auf fremden Seiten verwenden.'
-          )}
-          action={
-            <Tooltip title={support.ok ? '' : support.reason}>
-              <span>
-                <Button
-                  variant="tonal"
-                  startIcon={adding ? <CircularProgress size={16} color="inherit" /> : <AddRounded />}
-                  onClick={addPasskey}
-                  disabled={!support.ok || adding}
-                >
-                  {t('Hinzufügen')}
-                </Button>
-              </span>
-            </Tooltip>
-          }
-        >
-          {!support.ok && (
-            <Box sx={{ px: { xs: 2, sm: 3 }, py: 2 }}>
-              <Alert severity="info">{support.reason}</Alert>
-            </Box>
-          )}
-          <AnimatePresence initial={false}>
-            {security.passkeys.map((passkey) => (
-              <m.div
-                key={passkey.id}
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                transition={{ duration: 0.28, ease: ease.emphasizedDecelerate }}
-              >
-                <SettingRow
-                  icon={<FingerprintRounded />}
-                  label={
-                    <>
-                      {passkey.name}
-                      {passkey.backedUp && (
-                        <Tooltip title={t('Wird über deine Geräte synchronisiert')}>
-                          <CloudDoneRounded sx={{ fontSize: 18, color: c.onSurfaceVariant }} aria-label="synchronisiert" />
-                        </Tooltip>
-                      )}
-                    </>
-                  }
-                  description={t('Hinzugefügt am {date}, zuletzt benutzt {lastUsedAt}.', {
-                    date: formatDate(new Date(passkey.createdAt)),
-                    lastUsedAt: relativeMs(passkey.lastUsedAt),
-                  })}
-                >
-                  <Box sx={{ display: 'flex', gap: 0.5 }}>
-                    <Tooltip title={t('Umbenennen')}>
-                      <IconButton aria-label={t('{name} umbenennen', { name: passkey.name })} onClick={() => setRenaming(passkey)}>
-                        <EditRounded />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title={t('Entfernen')}>
-                      <IconButton
-                        aria-label={t('{name} entfernen', { name: passkey.name })}
-                        onClick={() => removePasskey(passkey)}
-                        sx={{ '&:hover': { color: c.error } }}
-                      >
-                        <DeleteOutlineRounded />
-                      </IconButton>
-                    </Tooltip>
-                  </Box>
-                </SettingRow>
-              </m.div>
-            ))}
-          </AnimatePresence>
-          {security.passkeys.length === 0 && support.ok && (
-            <Box sx={{ px: { xs: 2, sm: 3 }, py: 3, display: 'flex', alignItems: 'center', gap: 2, color: 'text.secondary' }}>
-              <FingerprintRounded />
-              <Typography variant="body2">
-                {t('Noch kein Passkey. Füge einen hinzu, dann ist die Anmeldung eine Sache von Sekunden.')}
-              </Typography>
-            </Box>
-          )}
-        </SettingsSection>
+          description={t('Auf diesem Server meldest du dich mit Passkey, verknüpftem Dienst oder Einmal-Link an.')}
+        />
       )}
+      <SettingRow
+        icon={<PhonelinkLockRounded />}
+        label={
+          <>
+            {t('Authenticator-App')} <StatusChip on={security.totp} />
+          </>
+        }
+        description={
+          security.totp
+            ? security.mfaRequired
+              ? t('Eingerichtet {when}. Auf diesem Server Pflicht.', { when: relativeMs(security.totpEnabledAt) })
+              : t('Eingerichtet {when}.', { when: relativeMs(security.totpEnabledAt) })
+            : security.mfaRequired
+              ? t('Auf diesem Server Pflicht. Richte sie ein, um weiterzumachen.')
+              : t('Codes aus Apps wie Aegis, 2FAS oder Google Authenticator.')
+        }
+      >
+        {security.totp ? (
+          !security.mfaRequired && (
+            <Button variant="outlined" onClick={turnOffTotp}>
+              {t('Abschalten')}
+            </Button>
+          )
+        ) : (
+          <Button variant="contained" onClick={() => setTotpOpen(true)}>
+            {t('Einrichten')}
+          </Button>
+        )}
+      </SettingRow>
+      {security.totp && (
+        <SettingRow
+          icon={<KeyRounded />}
+          label={t('Wiederherstellungscodes')}
+          description={
+            security.recoveryCodesLeft <= 3
+              ? t('Nur noch {recoveryCodesLeft} Codes übrig. Erstelle neue, bevor sie ausgehen.', {
+                  recoveryCodesLeft: security.recoveryCodesLeft,
+                })
+              : t('{recoveryCodesLeft} von 10 Codes übrig. Damit kommst du ohne Handy in dein Konto.', {
+                  recoveryCodesLeft: security.recoveryCodesLeft,
+                })
+          }
+        >
+          <Button variant={security.recoveryCodesLeft <= 3 ? 'contained' : 'tonal'} onClick={newCodes}>
+            {t('Neue Codes')}
+          </Button>
+        </SettingRow>
+      )}
+    </SettingsSection>
+  );
+
+  const passkeySection = security.passkeysEnabled ? (
+    <SettingsSection
+      id="passkeys"
+      title={t('Passkeys')}
+      description={t(
+        'Melde dich mit Fingerabdruck, Gesicht oder der PIN deines Geräts an, ganz ohne Passwort. Passkeys lassen sich nicht abfangen oder auf fremden Seiten verwenden.'
+      )}
+      action={
+        <Tooltip title={support.ok ? '' : support.reason}>
+          <span>
+            <Button
+              variant="tonal"
+              startIcon={adding ? <CircularProgress size={16} color="inherit" /> : <AddRounded />}
+              onClick={addPasskey}
+              disabled={!support.ok || adding}
+            >
+              {t('Hinzufügen')}
+            </Button>
+          </span>
+        </Tooltip>
+      }
+    >
+      {!support.ok && (
+        <Box sx={{ px: { xs: 2, sm: 3 }, py: 2 }}>
+          <Alert severity="info">{support.reason}</Alert>
+        </Box>
+      )}
+      <AnimatePresence initial={false}>
+        {security.passkeys.map((passkey) => (
+          <m.div
+            key={passkey.id}
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.28, ease: ease.emphasizedDecelerate }}
+          >
+            <SettingRow
+              icon={<FingerprintRounded />}
+              label={
+                <>
+                  {passkey.name}
+                  {passkey.backedUp && (
+                    <Tooltip title={t('Wird über deine Geräte synchronisiert')}>
+                      <CloudDoneRounded sx={{ fontSize: 18, color: c.onSurfaceVariant }} aria-label="synchronisiert" />
+                    </Tooltip>
+                  )}
+                </>
+              }
+              description={t('Hinzugefügt am {date}, zuletzt benutzt {lastUsedAt}.', {
+                date: formatDate(new Date(passkey.createdAt)),
+                lastUsedAt: relativeMs(passkey.lastUsedAt),
+              })}
+            >
+              <Box sx={{ display: 'flex', gap: 0.5 }}>
+                <Tooltip title={t('Umbenennen')}>
+                  <IconButton aria-label={t('{name} umbenennen', { name: passkey.name })} onClick={() => setRenaming(passkey)}>
+                    <EditRounded />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title={t('Entfernen')}>
+                  <IconButton
+                    aria-label={t('{name} entfernen', { name: passkey.name })}
+                    onClick={() => removePasskey(passkey)}
+                    sx={{ '&:hover': { color: c.error } }}
+                  >
+                    <DeleteOutlineRounded />
+                  </IconButton>
+                </Tooltip>
+              </Box>
+            </SettingRow>
+          </m.div>
+        ))}
+      </AnimatePresence>
+      {security.passkeys.length === 0 && support.ok && (
+        <Box sx={{ px: { xs: 2, sm: 3 }, py: 3, display: 'flex', alignItems: 'center', gap: 2, color: 'text.secondary' }}>
+          <FingerprintRounded />
+          <Typography variant="body2">
+            {t('Noch kein Passkey. Füge einen hinzu, dann ist die Anmeldung eine Sache von Sekunden.')}
+          </Typography>
+        </Box>
+      )}
+    </SettingsSection>
+  ) : null;
+
+  return (
+    <Stack spacing={4}>
+      {!wayIn && (
+        <Alert
+          severity={welcome ? 'success' : 'warning'}
+          action={
+            passwordLogin && !welcome ? (
+              <Button color="inherit" size="small" onClick={() => setPasswordOpen(true)} startIcon={<PasswordRounded />}>
+                {t('Passwort festlegen')}
+              </Button>
+            ) : canAddPasskey ? (
+              <Button
+                color="inherit"
+                size="small"
+                onClick={addPasskey}
+                disabled={adding}
+                startIcon={adding ? <CircularProgress size={14} color="inherit" /> : <FingerprintRounded />}
+              >
+                {t('Passkey anlegen')}
+              </Button>
+            ) : undefined
+          }
+        >
+          {welcome
+            ? t('Dein Konto ist bereit. Lege jetzt einen Passkey an, damit du dich später wieder anmelden kannst.')
+            : passwordLogin
+              ? t('Du hast noch kein Passwort und keinen Passkey. Lege eins von beidem an, damit du nach dem Abmelden wieder hineinkommst.')
+              : linkable.length > 0
+                ? t(
+                    'Auf diesem Server gibt es keine Passwörter. Lege einen Passkey an oder verknüpfe einen Dienst, sonst kommst du nach dem Abmelden nur mit einem Einmal-Link wieder hinein.'
+                  )
+                : t(
+                    'Auf diesem Server gibt es keine Passwörter. Lege einen Passkey an, sonst kommst du nach dem Abmelden nur mit einem Einmal-Link wieder hinein.'
+                  )}
+        </Alert>
+      )}
+      {passwordLogin ? passwordSection : passkeySection}
+
+      {passwordLogin ? passkeySection : passwordSection}
 
       {(security.identities.length > 0 || security.providers.length > 0) && (
         <SettingsSection
           id="verbindungen"
           title={t('Verbundene Konten')}
-          description={t(
-            'Melde dich mit einem Klick über einen anderen Dienst an. Ein Dienst lässt sich nur mit einem MoeShare-Konto verknüpfen.'
-          )}
+          description={t('Melde dich mit einem Klick über einen anderen Dienst an. Ein Dienst lässt sich nur mit einem Konto verknüpfen.')}
         >
           {security.identities.map((identity) => (
             <SettingRow

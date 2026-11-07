@@ -147,7 +147,7 @@ export function SetupDone({
         <Typography sx={{ fontWeight: 700 }}>{t('Impressum und Datenschutz')}</Typography>
         <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
           {t(
-            'Ist dein MoeShare öffentlich erreichbar, trägst du beides unter Admin › Einstellungen › Rechtliches und Links ein. Die Links stehen dann im Fuß jeder Seite.'
+            'Ist dein Server öffentlich erreichbar, trägst du beides unter Admin › Einstellungen › Rechtliches und Links ein. Die Links stehen dann im Fuß jeder Seite.'
           )}
         </Typography>
       </Box>

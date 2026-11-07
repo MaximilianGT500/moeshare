@@ -13,6 +13,7 @@ import { CopyIconButton } from '../../components/CopyButton';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { useToast } from '../../components/Toaster';
 import { c, fonts, radius } from '../../theme/tokens';
+import { siteName } from '../../lib/boot';
 
 export function CaddyHint({ upstream }: { upstream: string }) {
   const snippet = `{\n  on_demand_tls {\n    ask http://${upstream}/api/domains/tls\n  }\n}\n\nhttps:// {\n  tls {\n    on_demand\n  }\n  reverse_proxy ${upstream}\n}`;
@@ -20,7 +21,8 @@ export function CaddyHint({ upstream }: { upstream: string }) {
     <Box sx={{ px: { xs: 2, sm: 3 }, py: 2.25 }}>
       <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1.25, maxWidth: 680 }}>
         {t(
-          'Für eigene Domains braucht der Reverse-Proxy Zertifikate auf Abruf. Mit Caddy reicht dieser Block. Caddy fragt MoeShare vor jedem Zertifikat, ob die Domain bestätigt ist.'
+          'Für eigene Domains braucht der Reverse-Proxy Zertifikate auf Abruf. Mit Caddy reicht dieser Block. Caddy fragt {name} vor jedem Zertifikat, ob die Domain bestätigt ist.',
+          { name: siteName() }
         )}
       </Typography>
       <Box sx={{ position: 'relative', borderRadius: `${radius.md}px`, bgcolor: c.surfaceContainerHighest }}>

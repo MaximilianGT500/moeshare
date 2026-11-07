@@ -52,6 +52,18 @@ const EVENTS = {
   report_resolved: 'Meldung bearbeitet',
   content_blocked: 'Inhalt gesperrt',
   content_unblocked: 'Inhalt freigegeben',
+  avatar_changed: 'Profilbild geändert',
+  avatar_removed: 'Profilbild entfernt',
+  avatar_revoked: 'Profilbild von einem Admin entfernt',
+  link_path_changed: 'Eigener Pfad geändert',
+  link_path_revoked: 'Eigener Pfad von einem Admin entfernt',
+  login_link_created: 'Einmal-Link erstellt',
+  login_link_requested: 'Einmal-Link angefragt',
+  login_link_approved: 'Einmal-Link freigegeben',
+  login_link_denied: 'Einmal-Link abgelehnt',
+  login_link_revoked: 'Einmal-Link zurückgezogen',
+  login_link_sent: 'Einmal-Link per E-Mail verschickt',
+  integration_changed: 'Integration geändert',
 };
 
 const WARNINGS = new Set(['login_failed', 'account_locked', 'reauth_failed', 'recovery_code_used']);

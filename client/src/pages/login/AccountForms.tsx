@@ -99,14 +99,41 @@ export function RegisterForm({ boot, onSuccess }: { boot: LoginBoot; onSuccess: 
     pending ? pending.suggestion : ''
   );
 
-  if (!registration.allowed) {
+  const passwordless = registration.passwordless;
+  const formAllowed = Boolean(pending) || !passwordless || registration.passkeys;
+
+  if (registration.allowed && !formAllowed && registration.providers.length > 0) {
+    return (
+      <Stack spacing={3}>
+        <Header site={boot.site} title={t('Konto erstellen')} text={t('Neue Konten legst du hier über einen Anmeldedienst an.')} />
+        <ProviderButtons
+          providers={registration.providers}
+          verb={t('Mit {name} registrieren')}
+          params={{ intent: 'signup', invite: invite ? invite.code : undefined }}
+        />
+        <Typography variant="body2" sx={{ color: 'text.secondary', textAlign: 'center' }}>
+          {t('Schon ein Konto?')}{' '}
+          <Link href="/login" underline="hover">
+            {t('Anmelden')}
+          </Link>
+        </Typography>
+      </Stack>
+    );
+  }
+
+  if (!registration.allowed || !formAllowed) {
     return (
       <Stack spacing={3}>
         <Header
           site={boot.site}
           icon={<MailRounded />}
           title={t('Registrierung')}
-          text={boot.error || t('Neue Konten gibt es auf diesem Server nur mit einer Einladung. Frag den Admin nach einem Link.')}
+          text={
+            boot.error ||
+            (registration.allowed
+              ? t('Neue Konten legt auf diesem Server ein Admin an. Frag dort nach einem Zugang.')
+              : t('Neue Konten gibt es auf diesem Server nur mit einer Einladung. Frag den Admin nach einem Link.'))
+          }
         />
         <Button variant="contained" size="large" href="/login" fullWidth>
           {t('Zur Anmeldung')}
@@ -123,7 +150,11 @@ export function RegisterForm({ boot, onSuccess }: { boot: LoginBoot; onSuccess: 
         text={
           pending
             ? t('Wähle noch deinen Benutzernamen. Er erscheint in deinen Datei-Links.')
-            : t('Willkommen bei {title}.', { title: boot.site.title })
+            : passwordless
+              ? t('Willkommen bei {title}. Ein Passwort brauchst du nicht: Gleich nach dem Anlegen richtest du einen Passkey ein.', {
+                  title: boot.site.title,
+                })
+              : t('Willkommen bei {title}.', { title: boot.site.title })
         }
       />
 
@@ -165,15 +196,17 @@ export function RegisterForm({ boot, onSuccess }: { boot: LoginBoot; onSuccess: 
                 helperText={USERNAME_HINT}
                 slotProps={{ htmlInput: { autoComplete: 'username', autoCapitalize: 'off', spellCheck: false } }}
               />
-              <PasswordField
-                label={pending ? t('Passwort (optional)') : t('Passwort')}
-                value={form.password}
-                onChange={form.setPassword}
-                autoComplete="new-password"
-                error={form.field === 'password'}
-                helperText={pending ? t('Damit kannst du dich auch ohne {label} anmelden.', { label: pending.label }) : undefined}
-                strength={{ minLength: registration.passwordMinLength, username: form.username }}
-              />
+              {!passwordless && (
+                <PasswordField
+                  label={pending ? t('Passwort (optional)') : t('Passwort')}
+                  value={form.password}
+                  onChange={form.setPassword}
+                  autoComplete="new-password"
+                  error={form.field === 'password'}
+                  helperText={pending ? t('Damit kannst du dich auch ohne {label} anmelden.', { label: pending.label }) : undefined}
+                  strength={{ minLength: registration.passwordMinLength, username: form.username }}
+                />
+              )}
             </Stack>
           </Shake>
           <Collapse in={!!form.error} unmountOnExit>

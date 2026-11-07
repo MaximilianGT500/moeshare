@@ -5,11 +5,13 @@ const settings = require('./settingsService');
 const users = require('./userService');
 const identities = require('./identityService');
 const oauth = require('./oauthService');
+const avatars = require('./avatarService');
 
 const summary = (user) => ({
   username: user.username,
   role: user.role,
   isAdmin: user.isAdmin,
+  avatar: avatars.urlFor(user),
   canCustomizeEmbed: user.isAdmin || settings.get('embed.allowUserTemplates'),
   canDesign:
     user.isAdmin ||
@@ -26,7 +28,7 @@ async function confirmMethods(user) {
     identities.listForUser(user.id),
   ]);
   return {
-    password: Boolean(row.password),
+    password: Boolean(row.password) && settings.get('auth.passwordLogin'),
     totp: Boolean(row.totp_enabled_at),
     passkey: settings.get('auth.passkeys') && passkeys > 0,
     providers: linked

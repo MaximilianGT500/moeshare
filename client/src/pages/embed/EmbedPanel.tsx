@@ -347,7 +347,15 @@ export function EmbedPanel({ site, user, data }: { site: SiteInfo; user: Session
                   </IconButton>
                 </Tooltip>
               </Box>
-              <DiscordPreview embed={rendered} color={color} media={sample.media} link={link} username={user.username} theme={theme} />
+              <DiscordPreview
+                embed={rendered}
+                color={color}
+                media={sample.media}
+                link={link}
+                username={user.username}
+                avatar={user.avatar}
+                theme={theme}
+              />
               <Typography variant="caption" component="p" sx={{ color: 'text.secondary', mt: 1.5, px: 0.5 }}>
                 {t(
                   'So ungefähr zeigt Discord deinen Link. Discord merkt sich Vorschauen eine Weile, Änderungen siehst du sicher bei neu geposteten Links.'

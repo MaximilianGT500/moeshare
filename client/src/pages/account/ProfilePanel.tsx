@@ -26,6 +26,7 @@ import { isCancelled, useSudo } from '../../components/Sudo';
 import { useToast } from '../../components/Toaster';
 import { c } from '../../theme/tokens';
 import { t } from '../../lib/i18n';
+import { siteName } from '../../lib/boot';
 
 function DeleteAccountDialog({ open, onClose, username }: { open: boolean; onClose: () => void; username: string }) {
   const sudo = useSudo();
@@ -125,7 +126,8 @@ function ExportSection() {
       id="export"
       title={t('Deine Daten')}
       description={t(
-        'Lade alles herunter, was MoeShare über dich gespeichert hat: Dateien, ältere Fassungen, Alben, Links und deinen Verlauf.'
+        'Lade alles herunter, was {name} über dich gespeichert hat: Dateien, ältere Fassungen, Alben, Links und deinen Verlauf.',
+        { name: siteName() }
       )}
     >
       <SettingRow

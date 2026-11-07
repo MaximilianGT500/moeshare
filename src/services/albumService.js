@@ -8,6 +8,8 @@ const files = require('./fileService');
 const protection = require('./protectionService');
 const audit = require('./auditService');
 const webhook = require('./webhookService');
+const addresses = require('./addressService');
+const avatars = require('./avatarService');
 
 const VISIBILITY = ['private', 'link', 'public'];
 const MAX_TITLE = 120;
@@ -33,7 +35,7 @@ function present(row, extra = {}) {
     coverFileId: row.cover_file_id || null,
     createdAt: Number(row.created_at),
     updatedAt: Number(row.updated_at),
-    url: `${base}/a/${row.code}`,
+    url: `${base}/a/${encodeURIComponent(row.code)}`,
     blocked: row.blocked_at ? { at: Number(row.blocked_at), reason: row.blocked_reason || '' } : null,
     owner: row.owner_name || null,
     role: row.member_role ? 'member' : 'owner',
@@ -42,7 +44,11 @@ function present(row, extra = {}) {
   };
 }
 
-const codeTaken = async (code) => Boolean(await db.get('SELECT id FROM albums WHERE code = ?', [code]));
+const codeTaken = async (code) =>
+  Boolean(
+    (await db.get('SELECT id FROM albums WHERE code = ?', [code])) ||
+    (await db.get('SELECT path FROM redirects WHERE path = ?', [`/a/${code}`]))
+  );
 
 async function create(user, input = {}) {
   const title = cleanTitle(input.title);
@@ -53,8 +59,12 @@ async function create(user, input = {}) {
     typeof input.description === 'string' ? input.description.replace(/\r\n?/g, '\n').trim().slice(0, MAX_DESCRIPTION) : '';
   const hashed = input.password ? await protection.hashPassword(input.password) : null;
   if (hashed && hashed.error) throw badRequest('Das Passwort ist zu lang.', { field: 'password' });
-  let code = randomString(10);
-  while (await codeTaken(code)) code = randomString(12);
+  let code =
+    input.code === undefined || input.code === null || input.code === '' ? null : await addresses.claim('album', String(input.code));
+  if (!code) {
+    code = randomString(10);
+    while (await codeTaken(code)) code = randomString(12);
+  }
   const now = Date.now();
   const id = await db.insertRow('albums', {
     code,
@@ -100,10 +110,16 @@ async function list(user) {
 
 async function membersOf(albumId) {
   const rows = await db.all(
-    'SELECT m.user_id, m.role, m.added_at, u.username FROM album_members m JOIN users u ON u.id = m.user_id WHERE m.album_id = ? ORDER BY m.added_at, u.username',
+    'SELECT m.user_id, m.role, m.added_at, u.username, u.avatar FROM album_members m JOIN users u ON u.id = m.user_id WHERE m.album_id = ? ORDER BY m.added_at, u.username',
     [albumId]
   );
-  return rows.map((row) => ({ id: Number(row.user_id), username: row.username, role: row.role, addedAt: Number(row.added_at) }));
+  return rows.map((row) => ({
+    id: Number(row.user_id),
+    username: row.username,
+    avatar: avatars.urlFor(row),
+    role: row.role,
+    addedAt: Number(row.added_at),
+  }));
 }
 
 async function coverFiles(rows, { domain = null } = {}) {
@@ -143,11 +159,14 @@ async function get(user, id) {
   const row = await accessible(user, id);
   const items = await filesOf(row.id);
   const members = await membersOf(row.id);
+  const contributors = [...new Set(items.map((item) => item.username))];
+  const pictures = await avatars.urlsFor([row.owner_name, ...contributors, ...members.map((member) => member.username)]);
   return present(row, {
     files: items.length,
     items: items.map((item) => ({ ...item, mine: item.username === user.username })),
     memberList: members,
-    contributors: [...new Set(items.map((item) => item.username))],
+    contributors,
+    avatars: Object.fromEntries(pictures),
   });
 }
 
@@ -183,6 +202,7 @@ async function update(user, id, patch = {}) {
       fields.cover_file_id = inside.file_id;
     }
   }
+  if (patch.code !== undefined && patch.code !== row.code) await addresses.rename('album', row, patch.code);
   fields.updated_at = Date.now();
   const columns = Object.keys(fields);
   await db.run(`UPDATE albums SET ${columns.map((column) => `${column} = ?`).join(', ')} WHERE id = ?`, [
@@ -330,7 +350,9 @@ async function leave(user, id) {
 }
 
 const findByCode = (code) =>
-  typeof code === 'string' && /^[A-Za-z0-9]{6,32}$/.test(code) ? db.get('SELECT * FROM albums WHERE code = ?', [code]) : null;
+  typeof code === 'string' && code.length <= 64 && /^[\p{L}\p{N}._-]{2,64}$/u.test(code)
+    ? db.get('SELECT * FROM albums WHERE code = ?', [code])
+    : null;
 
 const isMember = async (user, row) =>
   Boolean(user && (await db.get('SELECT 1 AS found FROM album_members WHERE album_id = ? AND user_id = ?', [row.id, user.id])));
@@ -368,7 +390,7 @@ function publicFile(file) {
   };
 }
 
-const albumUrl = (row, domain) => `${domain || settings.get('site.baseUrl')}/a/${row.code}`;
+const albumUrl = (row, domain) => `${domain || settings.get('site.baseUrl')}/a/${encodeURIComponent(row.code)}`;
 
 async function publicView(req, row, { domain = null } = {}) {
   const owner = await db.get('SELECT username FROM users WHERE id = ?', [row.user_id]);
@@ -377,8 +399,10 @@ async function publicView(req, row, { domain = null } = {}) {
     .filter((file) => !file.expiresAt || file.expiresAt > now)
     .map((file) => ({ ...publicFile(file), username: file.username }));
   const contributors = [...new Set(items.map((item) => item.username).filter((name) => name && (!owner || name !== owner.username)))];
+  const pictures = await avatars.urlsFor([...(owner ? [owner.username] : []), ...contributors]);
   return {
     album: {
+      avatars: Object.fromEntries(pictures),
       id: row.id,
       code: row.code,
       title: row.title,

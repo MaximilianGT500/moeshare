@@ -11,6 +11,9 @@ const links = require('../services/linkService');
 const stats = require('../services/statsService');
 const protection = require('../services/protectionService');
 const settings = require('../services/settingsService');
+const redirects = require('../services/redirectService');
+const db = require('../lib/db');
+const { displayPath } = require('../lib/slugs');
 
 const router = express.Router();
 const signedIn = requireApi();
@@ -29,9 +32,19 @@ async function publicLink(req) {
 
 const unlockLimiter = limiter({ windowMs: 15 * 60 * 1000, limit: 30 });
 
+async function movedLink(req) {
+  const entry = await redirects.moved('link', `/s/${req.params.code}`);
+  const row = entry ? await db.get('SELECT id, code, user_id FROM links WHERE id = ?', [entry.id]) : null;
+  if (!row || (req.customDomain && Number(row.user_id) !== req.customDomain.userId)) return null;
+  return `/s/${displayPath(row.code)}`;
+}
+
 router.get('/s/:code', async (req, res) => {
   const row = await publicLink(req);
-  if (!row) return renderMessage(res, 404, MISSING);
+  if (!row) {
+    const target = await movedLink(req);
+    return target ? res.redirect(301, target) : renderMessage(res, 404, MISSING);
+  }
   const access = await links.access(req, row);
   if (access.state === 'expired') return renderMessage(res, 410, EXPIRED, { title: 'Abgelaufen' });
   if (access.state === 'blocked') return renderMessage(res, 451, BLOCKED, { title: 'Inhalt gesperrt' });

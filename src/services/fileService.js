@@ -10,6 +10,7 @@ const { extensionOf, baseNameOf, userDirs, isSafeFilename } = require('../lib/st
 const settings = require('./settingsService');
 const storage = require('./storageService');
 const domains = require('./domainService');
+const paths = require('./pathService');
 
 const fsp = require('fs').promises;
 
@@ -133,6 +134,27 @@ function resolveDomain(value, username = null) {
 
 const hostFor = (record, domain) => (domain && originsFor(record.username).includes(domain) ? domain : settings.get('site.baseUrl'));
 
+const ROOT_TAKEN = new Set(['report', 'impressum', 'datenschutz', 'healthz', 'favicon.svg', 'robots.txt', 'sw.js', 'manifest.webmanifest']);
+
+const rootable = (slug) => !ROOT_TAKEN.has(String(slug).toLowerCase()) && !paths.isReserved(slug) && !String(slug).startsWith('.');
+
+function ownDomain(record, host) {
+  if (!host) return false;
+  try {
+    const entry = domains.ownerOfHost(new URL(host).hostname);
+    return Boolean(entry && entry.username === record.username);
+  } catch {
+    return false;
+  }
+}
+
+function viewPathOf(record, host = null) {
+  const slug = record.slug || record.filename;
+  if (ownDomain(record, host) && rootable(slug)) return `/${displayPath(slug)}`;
+  const personal = paths.currentFor(record.username);
+  return personal ? `/${personal}/${displayPath(slug)}` : `/view/${displayPath(slug)}`;
+}
+
 function urlsFor(record, { domain = null } = {}) {
   const base = settings.get('site.baseUrl');
   const host = hostFor(record, domain);
@@ -140,7 +162,7 @@ function urlsFor(record, { domain = null } = {}) {
   const preview = type === 'video' ? `${baseNameOf(record.filename)}.jpg` : record.filename;
   const slug = record.slug || record.filename;
   return {
-    view: `${host}/view/${displayPath(slug)}`,
+    view: `${host}${viewPathOf(record, host)}`,
     direct: `${host}/uploads/${record.username}/${record.filename}`,
     download: `${host}/download/${displayPath(slug)}`,
     preview: `${host}/uploads/${record.username}/preview/${preview}`,
@@ -345,7 +367,11 @@ async function findBySlug(slug) {
   );
 }
 
-const slugTaken = async (slug) => Boolean(await db.get('SELECT id FROM file_data WHERE slug = ? OR filename = ?', [slug, slug]));
+const slugTaken = async (slug) =>
+  Boolean(
+    (await db.get('SELECT id FROM file_data WHERE slug = ? OR filename = ?', [slug, slug])) ||
+    (await db.get('SELECT path FROM redirects WHERE path = ?', [`/view/${slug}`]))
+  );
 
 const find = (username, filename) =>
   db.get(`SELECT * FROM file_data WHERE username = ? AND filename = ? AND ${LIVE}`, [username, filename]);
@@ -785,6 +811,8 @@ module.exports = {
   adoptTwin,
   syntaxOf,
   urlsFor,
+  viewPathOf,
+  rootable,
   pickDomain,
   resolveDomain,
   origins,

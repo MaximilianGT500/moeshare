@@ -11,6 +11,7 @@ const { renderPage, LEGAL_PAGES } = require('../lib/render');
 const settings = require('../services/settingsService');
 const setup = require('../services/setupService');
 const home = require('../services/homeService');
+const avatars = require('../services/avatarService');
 
 const router = express.Router();
 
@@ -35,7 +36,7 @@ router.get('/', async (req, res) => {
     data: {
       home: { ...home.options(), text },
       stats: await home.publicStats(),
-      user: req.user ? { username: req.user.username } : null,
+      user: req.user ? { username: req.user.username, avatar: avatars.urlFor(req.user) } : null,
       registration: settings.get('auth.registration') === 'open',
     },
   });

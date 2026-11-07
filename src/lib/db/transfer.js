@@ -53,7 +53,7 @@ async function isEmpty(db) {
 }
 
 function guard() {
-  const known = { users: new Set(), file_data: new Set(), albums: new Set() };
+  const known = { users: new Set(), file_data: new Set(), albums: new Set(), integrations: new Set() };
   const references = {
     sessions: [['user_id', 'users']],
     api_tokens: [['user_id', 'users']],
@@ -75,22 +75,27 @@ function guard() {
     ],
     upload_sessions: [['user_id', 'users']],
     file_search: [['file_id', 'file_data']],
+    user_avatars: [['user_id', 'users']],
+    user_paths: [['user_id', 'users']],
+    login_links: [['user_id', 'users']],
+  };
+  const optional = {
+    invites: [['created_by', 'users']],
+    albums: [['cover_file_id', 'file_data']],
+    integrations: [['created_by', 'users']],
+    login_links: [
+      ['integration_id', 'integrations'],
+      ['created_by', 'users'],
+      ['decided_by', 'users'],
+    ],
   };
   return {
     accept(tableName, row) {
       for (const [column, target] of references[tableName] || []) {
         if (!known[target].has(Number(row[column]))) return false;
       }
-      if (tableName === 'invites' && row.created_by !== null && row.created_by !== undefined && !known.users.has(Number(row.created_by))) {
-        row.created_by = null;
-      }
-      if (
-        tableName === 'albums' &&
-        row.cover_file_id !== null &&
-        row.cover_file_id !== undefined &&
-        !known.file_data.has(Number(row.cover_file_id))
-      ) {
-        row.cover_file_id = null;
+      for (const [column, target] of optional[tableName] || []) {
+        if (row[column] !== null && row[column] !== undefined && !known[target].has(Number(row[column]))) row[column] = null;
       }
       if (known[tableName]) known[tableName].add(Number(row.id));
       return true;

@@ -348,6 +348,26 @@ const MIGRATIONS = [
       );
     },
   },
+  {
+    version: 9,
+    name: 'Profilbilder, eigene Adressen, eigene Pfade und Einmal-Links',
+    async up(db) {
+      await addColumns(db, 'users', ['avatar']);
+      for (const table of ['user_avatars', 'user_paths', 'integrations', 'login_links']) await createTable(db, table);
+      await db.run("DELETE FROM settings WHERE name = 'webhook.name' AND value = ?", [JSON.stringify('MoeShare')]);
+      for (const row of await db.all("SELECT id, config FROM webhooks WHERE kind = 'discord'")) {
+        let config;
+        try {
+          config = JSON.parse(row.config);
+        } catch {
+          continue;
+        }
+        if (!config || config.username !== 'MoeShare') continue;
+        delete config.username;
+        await db.run('UPDATE webhooks SET config = ? WHERE id = ?', [JSON.stringify(config), row.id]);
+      }
+    },
+  },
 ];
 
 const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

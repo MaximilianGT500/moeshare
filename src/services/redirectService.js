@@ -4,6 +4,7 @@ const db = require('../lib/db');
 const logger = require('../lib/logger');
 const { displayPath } = require('../lib/slugs');
 const protection = require('./protectionService');
+const files = require('./fileService');
 
 const log = logger.scope('weiterleitungen');
 
@@ -117,7 +118,7 @@ async function targetOf(entry) {
     const guarded = protection.isProtected(row) || (row.warning !== null && row.warning !== undefined);
     if (entry.variant === 'download') return `/download/${slug}`;
     if (entry.variant === 'direct' && !guarded) return `/uploads/${encodeURIComponent(row.username)}/${encodeURIComponent(row.filename)}`;
-    return `/view/${slug}`;
+    return files.viewPathOf(row);
   }
   if (entry.kind === 'link') {
     const row = await db.get('SELECT code FROM links WHERE id = ?', [entry.id]);
@@ -147,4 +148,35 @@ const has = (pathname) => table.has(normalize(pathname) || '');
 
 const count = () => table.size;
 
-module.exports = { load, add, middleware, has, count, normalize };
+async function drop(kind, id, pathnames) {
+  const values = pathnames.map(normalize).filter(Boolean);
+  if (!values.length) return 0;
+  const { changes } = await db.run(
+    `DELETE FROM redirects WHERE kind = ? AND target_id = ? AND path IN (${values.map(() => '?').join(', ')})`,
+    [kind, id, ...values]
+  );
+  for (const value of values) {
+    const entry = table.get(value);
+    if (entry && entry.kind === kind && entry.id === Number(id)) table.delete(value);
+  }
+  return changes;
+}
+
+async function lookup(pathnames) {
+  const values = pathnames.map(normalize).filter(Boolean);
+  if (!values.length) return [];
+  const rows = await db.all(
+    `SELECT path, kind, target_id, variant FROM redirects WHERE lower(path) IN (${values.map(() => '?').join(', ')})`,
+    values.map((value) => value.toLowerCase())
+  );
+  return rows.map((row) => ({ path: row.path, kind: row.kind, id: Number(row.target_id), variant: row.variant || 'view' }));
+}
+
+async function moved(kind, pathname) {
+  const value = normalize(pathname);
+  if (!value) return null;
+  const row = await db.get('SELECT kind, target_id, variant FROM redirects WHERE path = ?', [value]);
+  return row && row.kind === kind ? { id: Number(row.target_id), variant: row.variant || 'view' } : null;
+}
+
+module.exports = { load, add, drop, lookup, moved, middleware, has, count, normalize, targetOf };

@@ -37,6 +37,7 @@ import { useConfirm } from '../../components/ConfirmDialog';
 import { useToast } from '../../components/Toaster';
 import { isCancelled, useSudo } from '../../components/Sudo';
 import { c, fonts, radius } from '../../theme/tokens';
+import { siteName } from '../../lib/boot';
 
 interface FieldSpec {
   key: string;
@@ -63,7 +64,7 @@ const KIND_SPECS: Record<WebhookKind, KindSpec> = {
     intro: () => t('In Discord unter Kanal bearbeiten › Integrationen › Webhooks eine Adresse erstellen.'),
     fields: [
       { key: 'url', label: () => t('Webhook-Adresse'), secret: true, mono: true, placeholder: 'https://discord.com/api/webhooks/…' },
-      { key: 'username', label: () => t('Absendername'), optional: true, placeholder: 'MoeShare' },
+      { key: 'username', label: () => t('Absendername'), optional: true, placeholder: siteName() },
       { key: 'successColor', label: () => t('Farbe für Erfolg'), optional: true, color: true },
       { key: 'errorColor', label: () => t('Farbe für Fehler'), optional: true, color: true },
     ],
@@ -81,7 +82,8 @@ const KIND_SPECS: Record<WebhookKind, KindSpec> = {
     icon: <GridViewRounded />,
     intro: () =>
       t(
-        'Ein Matrix-Konto für MoeShare, das im Raum Mitglied ist. Das Zugangstoken findest du in Element unter Einstellungen › Hilfe und Info.'
+        'Ein Matrix-Konto für {name}, das im Raum Mitglied ist. Das Zugangstoken findest du in Element unter Einstellungen › Hilfe und Info.',
+        { name: siteName() }
       ),
     fields: [
       { key: 'homeserver', label: () => t('Matrix-Server'), mono: true, placeholder: 'https://matrix.org' },
@@ -121,7 +123,9 @@ const KIND_SPECS: Record<WebhookKind, KindSpec> = {
     label: t('Eigener Webhook'),
     icon: <DataObjectRounded />,
     intro: () =>
-      t('MoeShare schickt jedes Ereignis als JSON per POST. Mit Schlüssel steht die HMAC-SHA256-Signatur im Header X-MoeShare-Signature.'),
+      t('{name} schickt jedes Ereignis als JSON per POST. Mit Schlüssel steht die HMAC-SHA256-Signatur im Header X-MoeShare-Signature.', {
+        name: siteName(),
+      }),
     fields: [
       { key: 'url', label: () => t('Adresse'), secret: true, mono: true, placeholder: 'https://example.com/hooks/moeshare' },
       { key: 'secret', label: () => t('Signatur-Schlüssel'), secret: true, optional: true, mono: true },
@@ -440,7 +444,7 @@ export function WebhookTargets({ initial, kinds, events }: { initial: WebhookTar
   const remove = async (target: WebhookTarget) => {
     const ok = await confirm({
       title: t('„{name}“ entfernen?', { name: target.name }),
-      message: t('MoeShare schickt dorthin keine Nachrichten mehr.'),
+      message: t('{name} schickt dorthin keine Nachrichten mehr.', { name: siteName() }),
       confirmLabel: t('Entfernen'),
     });
     if (!ok) return;

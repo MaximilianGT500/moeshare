@@ -17,7 +17,7 @@ import { postAuth, Shake } from './AuthLayout';
 import { c, radius } from '../../theme/tokens';
 import { t } from '../../lib/i18n';
 
-function Header({ icon, title, text }: { icon: ReactNode; title: string; text: ReactNode }) {
+export function StepHeader({ icon, title, text }: { icon: ReactNode; title: string; text: ReactNode }) {
   return (
     <Stack spacing={2} sx={{ alignItems: 'center', textAlign: 'center' }}>
       <m.div
@@ -81,7 +81,7 @@ export function ForgotStep({ onBack }: { onBack: () => void }) {
   if (sent) {
     return (
       <Stack spacing={3}>
-        <Header
+        <StepHeader
           icon={<MarkEmailReadRounded />}
           title={t('Schau in dein Postfach')}
           text={t('Wenn zu dieser Angabe ein Konto mit bestätigter E-Mail-Adresse gehört, ist ein Link unterwegs. Er gilt eine Stunde.')}
@@ -98,7 +98,7 @@ export function ForgotStep({ onBack }: { onBack: () => void }) {
 
   return (
     <Stack spacing={3}>
-      <Header
+      <StepHeader
         icon={<LockResetRounded />}
         title={t('Passwort vergessen')}
         text={t('Wir schicken dir einen Link, mit dem du ein neues Passwort festlegst.')}
@@ -191,7 +191,11 @@ export function ResetForm({
   if (expired) {
     return (
       <Stack spacing={3}>
-        <Header icon={<LinkOffRounded />} title={t('Link abgelaufen')} text={t('Dieser Link ist abgelaufen oder wurde schon benutzt.')} />
+        <StepHeader
+          icon={<LinkOffRounded />}
+          title={t('Link abgelaufen')}
+          text={t('Dieser Link ist abgelaufen oder wurde schon benutzt.')}
+        />
         <Stack spacing={1}>
           {canRequest && (
             <Button variant="contained" size="large" fullWidth href="/login#vergessen">
@@ -208,7 +212,7 @@ export function ResetForm({
 
   return (
     <Stack spacing={3}>
-      <Header
+      <StepHeader
         icon={<LockResetRounded />}
         title={t('Neues Passwort')}
         text={t('Für {username}. Danach wirst du auf allen Geräten abgemeldet.', { username: reset.username })}

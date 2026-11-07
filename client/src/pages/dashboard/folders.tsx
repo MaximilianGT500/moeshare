@@ -23,6 +23,7 @@ import { commonFolder, extractEntry, listZip, type ZipEntry } from '../../lib/un
 import { GrowTransition } from '../../components/transitions';
 import { useUploads } from './uploads';
 import { c, radius } from '../../theme/tokens';
+import { siteName } from '../../lib/boot';
 
 export type FolderSource = { kind: 'folders'; contents: DropContents } | { kind: 'zip'; file: File };
 
@@ -256,7 +257,7 @@ export function FolderImportDialog({
       <DialogContent>
         <Typography variant="body2" sx={{ color: 'text.secondary', textAlign: 'center', mb: 2.5 }}>
           {isZip
-            ? t('MoeShare entpackt das Archiv in deinem Browser und legt die Dateien in ein neues Album.')
+            ? t('{name} entpackt das Archiv in deinem Browser und legt die Dateien in ein neues Album.', { name: siteName() })
             : tn(
                 folderCount,
                 'Die Dateien aus dem Ordner landen in einem neuen Album. Unterordner werden mit aufgenommen.',

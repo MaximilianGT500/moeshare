@@ -1,8 +1,9 @@
 'use strict';
 
+const fs = require('fs');
 const express = require('express');
 const { tr } = require('../lib/i18n');
-const { badRequest, conflict, forbidden, notFound, unauthorized } = require('../lib/errors');
+const { badRequest, conflict, forbidden, notFound, tooLarge, unauthorized } = require('../lib/errors');
 const { text, integer } = require('../lib/input');
 const { renderPage } = require('../lib/render');
 const { requirePage, requireApi, assertRecentAuth, requireRecentAuth } = require('../middleware/auth');
@@ -24,6 +25,10 @@ const emails = require('../services/emailService');
 const mail = require('../services/mailService');
 const watermarks = require('../services/watermarkService');
 const exporter = require('../services/exportService');
+const avatars = require('../services/avatarService');
+const paths = require('../services/pathService');
+const storage = require('../services/storageService');
+const { filePaths } = require('../lib/storage');
 const { STYLES } = require('../lib/slugs');
 const { EXPIRY_CHOICES } = require('../lib/expiry');
 
@@ -66,6 +71,11 @@ const OWN_ACTIVITY = [
   'album_left',
   'virus_found',
   'data_exported',
+  'avatar_changed',
+  'avatar_removed',
+  'avatar_revoked',
+  'link_path_changed',
+  'link_path_revoked',
 ];
 
 const mfaRequired = (user) => {
@@ -111,6 +121,12 @@ async function overview(req) {
       passwordChangedAt: row.password_changed_at,
       hasPassword: Boolean(row.password),
       mustChangePassword: Boolean(row.must_change_password),
+      avatar: avatars.urlFor(row),
+    },
+    linkPath: {
+      enabled: paths.enabled(),
+      current: paths.currentOf(row.id),
+      suggestion: paths.suggestionFor(row.username),
     },
     security: {
       totp: Boolean(row.totp_enabled_at),
@@ -129,7 +145,7 @@ async function overview(req) {
       elevated: Boolean(req.session && req.session.elevated),
     },
     limits: { usedBytes, quotaBytes: limits.quotaBytes, maxFileBytes: limits.maxFileBytes },
-    policy: { passwordMinLength: settings.get('auth.passwordMinLength') },
+    policy: { passwordMinLength: settings.get('auth.passwordMinLength'), passwordLogin: settings.get('auth.passwordLogin') },
     sessions: sessionList.map((session) => ({ ...session, device: tr(req, session.device) })),
     tokens: tokenList,
     activity,
@@ -153,6 +169,8 @@ async function overview(req) {
       mail: mail.ready(),
       optimize: settings.get('images.optimize'),
       export: exporter.enabled(),
+      avatars: { enabled: avatars.enabled(), animated: settings.get('profiles.animatedAvatars'), maxBytes: avatars.MAX_INPUT_BYTES },
+      customAddresses: settings.get('links.customAddresses'),
     },
   };
 }
@@ -163,8 +181,18 @@ async function keepsSignIn(userId, removing) {
   const otherIdentities = (await identities.listForUser(userId)).filter(
     ({ provider }) => provider !== removing && oauth.isEnabled(provider)
   );
-  return Boolean(row.password) || (settings.get('auth.passkeys') && passkeyCount > 0) || otherIdentities.length > 0;
+  const password = Boolean(row.password) && settings.get('auth.passwordLogin');
+  return password || (settings.get('auth.passkeys') && passkeyCount > 0) || otherIdentities.length > 0;
 }
+
+const lastWayIn = (without) =>
+  settings.get('auth.passwordLogin')
+    ? without
+      ? `Ohne ${without} könntest du dich nicht mehr anmelden. Lege zuerst ein Passwort fest.`
+      : 'Das ist deine letzte Anmeldemöglichkeit. Lege zuerst ein Passwort fest.'
+    : without
+      ? `Ohne ${without} könntest du dich nicht mehr anmelden. Lege zuerst einen Passkey an.`
+      : 'Das ist deine letzte Anmeldemöglichkeit. Lege zuerst einen weiteren Passkey an oder verknüpfe einen Dienst.';
 
 router.get('/account', requirePage(), async (req, res) => {
   const [account, userStats] = await Promise.all([overview(req), files.userStats(req.user.username)]);
@@ -183,6 +211,11 @@ router.patch('/api/account/preferences', signedIn, async (req, res) => {
 });
 
 router.post('/api/account/password', signedIn, async (req, res) => {
+  if (!settings.get('auth.passwordLogin')) {
+    throw forbidden('Die Anmeldung mit Passwort ist auf diesem Server abgeschaltet. Lege stattdessen einen Passkey an.', {
+      code: 'password_disabled',
+    });
+  }
   const next = text(req.body.next, 300);
   const current = text(req.body.current, 300);
   const row = await users.findById(req.user.id);
@@ -264,8 +297,7 @@ router.patch('/api/account/passkeys/:id', signedIn, async (req, res) => {
 });
 
 router.delete('/api/account/passkeys/:id', sudo, async (req, res) => {
-  if (!(await keepsSignIn(req.user.id, 'passkey')))
-    throw conflict('Das ist deine letzte Anmeldemöglichkeit. Lege zuerst ein Passwort fest.');
+  if (!(await keepsSignIn(req.user.id, 'passkey'))) throw conflict(lastWayIn());
   await passkeys.remove(req.user.id, req.params.id);
   audit.log('passkey_removed', { userId: req.user.id, req });
   res.json({ ok: true });
@@ -274,8 +306,7 @@ router.delete('/api/account/passkeys/:id', sudo, async (req, res) => {
 router.delete('/api/account/identities/:provider', sudo, async (req, res) => {
   const { provider } = req.params;
   const label = oauth.isKnown(provider) ? oauth.labelOf(provider) : provider;
-  if (!(await keepsSignIn(req.user.id, provider)))
-    throw conflict(`Ohne ${label} könntest du dich nicht mehr anmelden. Lege zuerst ein Passwort fest.`);
+  if (!(await keepsSignIn(req.user.id, provider))) throw conflict(lastWayIn(label));
   if (!(await identities.unlink(req.user.id, provider))) throw notFound('Diese Verknüpfung gibt es nicht (mehr).');
   audit.log('identity_unlinked', { userId: req.user.id, req, details: { provider } });
   res.json({ ok: true });
@@ -382,6 +413,54 @@ router.post('/api/account/watermark/preview', watermarkJson, signedIn, async (re
   const image = await watermarks.preview(req.user, req.body && Object.keys(req.body).length ? req.body : null);
   res.set('Cache-Control', 'private, no-store');
   res.type('image/jpeg').send(image);
+});
+
+function avatarBody(req, res, next) {
+  if (req.is('application/json')) return next();
+  return express.raw({ type: () => true, limit: avatars.MAX_INPUT_BYTES })(req, res, (error) => {
+    if (error && error.type === 'entity.too.large') return next(tooLarge('Das Bild ist zu groß. Erlaubt sind bis zu 15 MB.'));
+    return next(error);
+  });
+}
+
+async function avatarSource(req) {
+  if (Buffer.isBuffer(req.body)) return req.body;
+  const fileId = Number(req.body && req.body.fileId);
+  if (!Number.isSafeInteger(fileId) || fileId <= 0) throw badRequest('Es kam kein Bild an.', { field: 'image' });
+  const record = await files.findById(fileId);
+  if (!record || record.username !== req.user.username || record.deleted_at) throw notFound('Diese Datei gibt es nicht (mehr).');
+  if (files.typeOf(record.filename, record.syntax).type !== 'image') throw badRequest('Nimm dafür ein Bild.', { field: 'fileId' });
+  const local = filePaths(record.username, record.filename).file;
+  if (fs.existsSync(local)) return fs.promises.readFile(local);
+  if (record.storage === 's3') return storage.readRemote(`${record.username}/${record.filename}`);
+  throw notFound('Diese Datei gibt es nicht (mehr).');
+}
+
+router.put('/api/account/avatar', signedIn, avatarBody, async (req, res) => {
+  const crop = Buffer.isBuffer(req.body) ? req.query : (req.body && req.body.crop) || null;
+  const saved = await avatars.save(req.user.id, await avatarSource(req), crop);
+  audit.log('avatar_changed', { userId: req.user.id, req, details: { animated: saved.animated || undefined } });
+  const row = await users.findById(req.user.id);
+  res.json({ ok: true, avatar: avatars.urlFor(row), animated: saved.animated });
+});
+
+router.delete('/api/account/avatar', signedIn, async (req, res) => {
+  if (await avatars.remove(req.user.id)) audit.log('avatar_removed', { userId: req.user.id, req });
+  res.json({ ok: true, avatar: null });
+});
+
+router.put('/api/account/link-path', signedIn, async (req, res) => {
+  const result = await paths.set(req.user, req.body && req.body.path);
+  if (result.path !== result.previous) {
+    audit.log('link_path_changed', { userId: req.user.id, req, details: { path: result.path, previous: result.previous || undefined } });
+  }
+  res.json({ ok: true, path: result.path });
+});
+
+router.delete('/api/account/link-path', signedIn, async (req, res) => {
+  const previous = await paths.clear(req.user.id);
+  if (previous) audit.log('link_path_changed', { userId: req.user.id, req, details: { path: null, previous } });
+  res.json({ ok: true, path: null });
 });
 
 router.get('/api/account/export', sudo, async (req, res) => {

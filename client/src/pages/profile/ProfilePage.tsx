@@ -134,7 +134,7 @@ function Profile({ boot }: { boot: ProfileBoot }) {
             gap: { xs: 2, sm: 3 },
           }}
         >
-          <UserAvatar name={profile.username} size={96} />
+          <UserAvatar name={profile.username} src={profile.avatar} size={96} />
           <Box sx={{ minWidth: 0 }}>
             <Typography
               component="h1"

@@ -1,16 +1,20 @@
 import { useEffect, useState } from 'react';
 import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
+import InputAdornment from '@mui/material/InputAdornment';
 import MenuItem from '@mui/material/MenuItem';
 import Stack from '@mui/material/Stack';
 import Switch from '@mui/material/Switch';
 import TextField from '@mui/material/TextField';
+import Typography from '@mui/material/Typography';
+import SignpostOutlined from '@mui/icons-material/SignpostOutlined';
 import TranslateRounded from '@mui/icons-material/TranslateRounded';
 import LinkRounded from '@mui/icons-material/LinkRounded';
 import TimerOutlined from '@mui/icons-material/TimerOutlined';
 import LanguageRounded from '@mui/icons-material/LanguageRounded';
 import PhotoSizeSelectLargeRounded from '@mui/icons-material/PhotoSizeSelectLargeRounded';
 import type { AccountOverview, ExpiryChoice, Preferences, UrlStyle } from '../../lib/types';
-import { errorMessage, savePreferences } from '../../lib/api';
+import { ApiError, clearLinkPath, errorMessage, saveLinkPath, savePreferences } from '../../lib/api';
 import { t } from '../../lib/i18n';
 import { SettingRow, SettingsSection } from '../../components/SettingsKit';
 import { DomainSelect, ExpirySelect, UrlStyleSelect, expiryLabel, urlStyleExample, urlStyleLabel } from '../../components/ShareOptions';
@@ -19,6 +23,98 @@ import { EmailSection } from './EmailSection';
 import { fonts } from '../../theme/tokens';
 
 const LANGUAGE_NAMES: Record<'de' | 'en', string> = { de: 'Deutsch', en: 'English' };
+
+function LinkPathRow({ initial, base }: { initial: AccountOverview['linkPath']; base: string }) {
+  const toast = useToast();
+  const [current, setCurrent] = useState(initial.current);
+  const [value, setValue] = useState(initial.current || initial.suggestion);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const wanted = value
+    .trim()
+    .toLowerCase()
+    .replace(/^\/+|\/+$/g, '');
+  const dirty = wanted !== (current || '');
+
+  const save = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      const result = await saveLinkPath(wanted);
+      setCurrent(result.path);
+      setValue(result.path);
+      toast(t('Pfad gespeichert. Neue Links sehen jetzt so aus.'), { variant: 'success' });
+    } catch (failure) {
+      if (failure instanceof ApiError && failure.field === 'path') setError(failure.message);
+      else toast(errorMessage(failure), { variant: 'error' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const clear = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      await clearLinkPath();
+      setCurrent(null);
+      toast(t('Pfad entfernt. Neue Links nutzen wieder /view/.'), { variant: 'success' });
+    } catch (failure) {
+      toast(errorMessage(failure), { variant: 'error' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <SettingRow
+      icon={<SignpostOutlined />}
+      label={t('Eigener Pfad')}
+      description={t('Statt /view/ steht dein Pfad in deinen Links. Ändern kannst du ihn jederzeit, alte Links leiten weiter.')}
+      htmlFor="pref-link-path"
+      stacked
+    >
+      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+        <TextField
+          id="pref-link-path"
+          size="small"
+          value={value}
+          placeholder={t('dein-name')}
+          disabled={busy}
+          error={!!error}
+          helperText={error || undefined}
+          onChange={(event) => {
+            setValue(event.target.value);
+            setError('');
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && dirty && wanted) save();
+          }}
+          slotProps={{
+            input: { startAdornment: <InputAdornment position="start">/</InputAdornment> },
+            htmlInput: { maxLength: 32, spellCheck: false, autoCapitalize: 'off', autoComplete: 'off' },
+          }}
+          sx={{ width: { xs: '100%', sm: 260 } }}
+        />
+        <Button variant="tonal" onClick={save} disabled={busy || !dirty || !wanted}>
+          {current ? t('Ändern') : t('Speichern')}
+        </Button>
+        {current && (
+          <Button onClick={clear} disabled={busy}>
+            {t('Entfernen')}
+          </Button>
+        )}
+      </Box>
+      <Typography variant="caption" sx={{ color: 'text.secondary', fontFamily: fonts.mono, wordBreak: 'break-all' }}>
+        {base}/
+        <Box component="span" sx={{ color: 'primary.main', fontWeight: 700 }}>
+          {wanted || current || t('dein-name')}
+        </Box>
+        /JrinQR99
+      </Typography>
+    </SettingRow>
+  );
+}
 
 export function PreferencesPanel({ account, onSaved }: { account: AccountOverview; onSaved: (preferences: Preferences) => void }) {
   const toast = useToast();
@@ -147,6 +243,7 @@ export function PreferencesPanel({ account, onSaved }: { account: AccountOvervie
             />
           </SettingRow>
         )}
+        {account.linkPath.enabled && <LinkPathRow initial={account.linkPath} base={choices.domains[0] || window.location.origin} />}
         {choices.domains.length > 1 && (
           <SettingRow
             icon={<LanguageRounded />}

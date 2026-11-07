@@ -39,6 +39,7 @@ const siteInfo = (language = settings.get('site.language'), custom = false) => (
   pwa: settings.get('site.pwa') && !custom,
   language: settings.get('site.language'),
   report: settings.get('reports.enabled'),
+  poweredBy: settings.get('site.poweredBy'),
   custom,
 });
 

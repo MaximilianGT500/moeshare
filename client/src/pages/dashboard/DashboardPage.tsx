@@ -9,7 +9,7 @@ import Typography from '@mui/material/Typography';
 import Tab from '@mui/material/Tab';
 import useScrollTrigger from '@mui/material/useScrollTrigger';
 import CloudUploadRounded from '@mui/icons-material/CloudUploadRounded';
-import { readBoot } from '../../lib/boot';
+import { readBoot, siteName } from '../../lib/boot';
 import type { Album, DashboardBoot, FileItem, TagCount, UserStats } from '../../lib/types';
 import {
   ApiError,
@@ -401,7 +401,9 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
       setLinkOpen(true);
     }
     if (shared === 'fehler')
-      toast(t('Das Teilen hat nicht geklappt. Öffne MoeShare einmal im Browser und versuche es erneut.'), { variant: 'error' });
+      toast(t('Das Teilen hat nicht geklappt. Öffne {name} einmal im Browser und versuche es erneut.', { name: siteName() }), {
+        variant: 'error',
+      });
     if (shared === '1') {
       takeSharedItems().then(({ files: sharedFiles, text }) => {
         if (sharedFiles.length) {

@@ -55,6 +55,7 @@ import { buildScheme } from '../../theme/scheme';
 import { useThemeSeed } from '../../app/mount';
 import { c, ease, fonts, radius } from '../../theme/tokens';
 import { rich, t } from '../../lib/i18n';
+import { siteName } from '../../lib/boot';
 
 type Values = Record<string, SettingValue>;
 type SectionKey =
@@ -93,7 +94,17 @@ const SECTIONS: Array<{ key: SectionKey; label: string; icon: ReactNode; prefixe
     key: 'anmeldung',
     label: t('Anmeldung'),
     icon: <LoginRounded />,
-    prefixes: ['auth.registration', 'auth.sessionDays', 'auth.passwordMinLength', 'auth.enforceMfa', 'auth.passkeys', 'auth.tokenLogin'],
+    prefixes: [
+      'auth.registration',
+      'auth.sessionDays',
+      'auth.passwordMinLength',
+      'auth.enforceMfa',
+      'auth.passkeys',
+      'auth.tokenLogin',
+      'auth.passwordLogin',
+      'auth.loginLink',
+      'auth.emailLinks',
+    ],
   },
   {
     key: 'dienste',
@@ -224,6 +235,8 @@ function SchemeSwatches({ seed }: { seed: string }) {
 export function SettingsPanel({
   initial,
   currentUserTotp,
+  currentUserWayIn,
+  mailReady,
   initialSection = 'allgemein',
   onSaved,
   storage,
@@ -233,6 +246,8 @@ export function SettingsPanel({
 }: {
   initial: SettingsPayload;
   currentUserTotp: boolean;
+  currentUserWayIn: boolean;
+  mailReady: boolean;
   initialSection?: string;
   onSaved: (payload: SettingsPayload) => void;
   storage: StorageInfo;
@@ -643,6 +658,8 @@ export function SettingsPanel({
   const originMismatch = baseUrl && baseUrl !== window.location.origin;
   const enforce = v<string>('auth.enforceMfa');
   const lockoutRisk = enforce !== 'off' && !currentUserTotp;
+  const passwordless = v<boolean>('auth.passwordLogin') === false;
+  const passwordlessRisk = passwordless && saved['auth.passwordLogin'] !== false && !currentUserWayIn;
 
   const content: Record<SectionKey, ReactNode> = {
     allgemein: (
@@ -653,7 +670,8 @@ export function SettingsPanel({
             'site.baseUrl',
             'Basis-URL',
             t(
-              'Die öffentliche Adresse, unter der MoeShare erreichbar ist. Daraus entstehen alle Links, und Passkeys sind an diese Domain gebunden.'
+              'Die öffentliche Adresse, unter der {name} erreichbar ist. Daraus entstehen alle Links, und Passkeys sind an diese Domain gebunden.',
+              { name: siteName() }
             ),
             { mono: true, placeholder: 'https://share.example.com' }
           )}
@@ -691,7 +709,7 @@ export function SettingsPanel({
         </SettingsSection>
         <SettingsSection
           title={t('Farbe der Oberfläche')}
-          description={t('Aus einer Grundfarbe berechnet MoeShare alle Farben für helles und dunkles Design.')}
+          description={t('Aus einer Grundfarbe berechnet {name} alle Farben für helles und dunkles Design.', { name: siteName() })}
         >
           <SettingRow label={t('Grundfarbe')} description={t('Wird nach dem Speichern sofort übernommen.')} stacked>
             <Stack spacing={2}>
@@ -714,7 +732,7 @@ export function SettingsPanel({
           {toggle(
             'site.detectLanguage',
             t('Sprache des Browsers verwenden'),
-            t('Besucher ohne Konto sehen MoeShare in der Sprache ihres Browsers, wenn es sie gibt.')
+            t('Besucher ohne Konto sehen {name} in der Sprache ihres Browsers, wenn es sie gibt.', { name: siteName() })
           )}
         </SettingsSection>
         <SettingsSection
@@ -726,7 +744,9 @@ export function SettingsPanel({
           {list(
             'site.domains',
             t('Domains'),
-            t('Jede Domain muss per DNS und Reverse-Proxy auf MoeShare zeigen. Anmeldung und Verwaltung laufen weiter über die Basis-URL.'),
+            t('Jede Domain muss per DNS und Reverse-Proxy auf {name} zeigen. Anmeldung und Verwaltung laufen weiter über die Basis-URL.', {
+              name: siteName(),
+            }),
             'https://i.example.com'
           )}
         </SettingsSection>
@@ -734,7 +754,14 @@ export function SettingsPanel({
           {toggle(
             'site.pwa',
             t('Als App installierbar'),
-            t('MoeShare lässt sich auf Handy und Computer installieren und taucht dann im Teilen-Menü auf. Braucht HTTPS.')
+            t('{name} lässt sich auf Handy und Computer installieren und taucht dann im Teilen-Menü auf. Braucht HTTPS.', {
+              name: siteName(),
+            })
+          )}
+          {toggle(
+            'site.poweredBy',
+            t('„Läuft mit MoeShare“ zeigen'),
+            t('Ein kleiner Hinweis unten auf der Startseite, mit welcher Software der Server läuft.')
           )}
         </SettingsSection>
       </Stack>
@@ -837,7 +864,7 @@ export function SettingsPanel({
           {number(
             'uploads.resumeHours',
             t('Unfertige Uploads aufbewahren'),
-            t('So lange lässt sich ein abgebrochener Upload fortsetzen. Danach räumt MoeShare die Teile weg.'),
+            t('So lange lässt sich ein abgebrochener Upload fortsetzen. Danach räumt {name} die Teile weg.', { name: siteName() }),
             { min: 1, max: 168, unit: t('Stunden') }
           )}
         </SettingsSection>
@@ -986,7 +1013,8 @@ export function SettingsPanel({
         <SettingsSection
           title={t('Aus einem anderen Uploader übernehmen')}
           description={t(
-            'Holt Konten, Dateien, Alben, Texte und Kurzlinks aus Zipline, XBackBone oder Chibisafe. Alte Links leiten danach auf MoeShare weiter.'
+            'Holt Konten, Dateien, Alben, Texte und Kurzlinks aus Zipline, XBackBone oder Chibisafe. Alte Links leiten danach auf {name} weiter.',
+            { name: siteName() }
           )}
         >
           <ImportTools sources={imports.sources} argon2={imports.argon2} redirects={imports.redirects} />
@@ -999,6 +1027,21 @@ export function SettingsPanel({
         <SettingsSection title={t('Kurzlinks')} description={t('Lange Adressen kürzen, im Dashboard oder mit ShareX.')}>
           {toggle('links.enabled', t('Link-Kürzer'), t('Angemeldete können Kurzlinks anlegen. Sie leiten über /s/… zum Ziel weiter.'))}
           {select('links.urlStyle', t('Adressstil für Kurzlinks'), t('Wie neue Kurzlinks aussehen.'), styleOptions(LINK_STYLES))}
+        </SettingsSection>
+        <SettingsSection
+          title={t('Eigene Links')}
+          description={t('Alte Adressen leiten nach einer Änderung weiter und bleiben für andere gesperrt.')}
+        >
+          {toggle(
+            'links.customAddresses',
+            t('Eigene Adressen'),
+            t('Dateien, Kurzlinks und Alben bekommen auf Wunsch eine selbst gewählte Adresse wie /view/urlaub.')
+          )}
+          {toggle(
+            'links.personalPaths',
+            t('Eigener Pfad statt /view/'),
+            t('Jeder kann einen Pfad wählen, etwa /max/JrinQR99. Abgeschaltet leiten solche Links auf /view/ weiter.')
+          )}
         </SettingsSection>
         <SettingsSection title={t('Alben')}>
           {toggle('albums.enabled', t('Alben'), t('Dateien in Alben sammeln und gemeinsam über einen Link teilen.'))}
@@ -1013,7 +1056,7 @@ export function SettingsPanel({
             t('Papierkorb'),
             t('Ausgeschaltet ist Löschen sofort endgültig. Was schon im Papierkorb liegt, bleibt bis zum Ablauf.')
           )}
-          {number('trash.days', t('Aufbewahren'), t('Danach löscht MoeShare die Dateien endgültig.'), {
+          {number('trash.days', t('Aufbewahren'), t('Danach löscht {name} die Dateien endgültig.', { name: siteName() }), {
             min: 1,
             max: 365,
             unit: t('Tage'),
@@ -1026,7 +1069,7 @@ export function SettingsPanel({
           )}
         >
           {toggle('stats.enabled', t('Statistiken zählen'), t('Jeder sieht die Zahlen zu den eigenen Dateien, Alben und Kurzlinks.'))}
-          {number('stats.retentionDays', t('Aufbewahren'), t('Ältere Tage löscht MoeShare automatisch.'), {
+          {number('stats.retentionDays', t('Aufbewahren'), t('Ältere Tage löscht {name} automatisch.', { name: siteName() }), {
             min: 30,
             max: 1825,
             unit: t('Tage'),
@@ -1051,6 +1094,16 @@ export function SettingsPanel({
             t(
               'Jeder kann unter /u/name eine öffentliche Seite mit Beschreibung, Links, öffentlichen Alben und ausgewählten Dateien einschalten.'
             )
+          )}
+          {toggle(
+            'profiles.avatars',
+            t('Profilbilder'),
+            t('Jeder kann ein Profilbild hochladen. Es erscheint im Profil, auf Vorschauseiten und in Alben.')
+          )}
+          {toggle(
+            'profiles.animatedAvatars',
+            t('Bewegte Profilbilder'),
+            t('GIFs und animierte WebP-Bilder bleiben bewegt. Ausgeschaltet wird nur das erste Bild verwendet.')
           )}
           {toggle(
             'reports.enabled',
@@ -1216,10 +1269,15 @@ export function SettingsPanel({
           {text('storage.s3.bucket', t('Bucket'), undefined, { mono: true })}
           {text('storage.s3.accessKeyId', t('Access Key ID'), undefined, { mono: true })}
           {secret('storage.s3.secretAccessKey', t('Secret Access Key'), t('Wird verschlüsselt gespeichert und nicht wieder angezeigt.'))}
-          {text('storage.s3.prefix', t('Ordner im Bucket'), t('Optional. So kann sich MoeShare einen Bucket mit anderem teilen.'), {
-            mono: true,
-            placeholder: 'moeshare',
-          })}
+          {text(
+            'storage.s3.prefix',
+            t('Ordner im Bucket'),
+            t('Optional. So kann sich {name} einen Bucket mit anderem teilen.', { name: siteName() }),
+            {
+              mono: true,
+              placeholder: 'moeshare',
+            }
+          )}
           {toggle(
             'storage.s3.pathStyle',
             t('Pfad-Adressen'),
@@ -1229,7 +1287,8 @@ export function SettingsPanel({
             'storage.s3.delivery',
             t('Auslieferung'),
             t(
-              'Über den Server bleibt der Bucket privat und alles läuft durch MoeShare. Direkt laden Besucher über eine kurzlebige, signierte Adresse aus S3, das entlastet den Server.'
+              'Über den Server bleibt der Bucket privat und alles läuft durch {name}. Direkt laden Besucher über eine kurzlebige, signierte Adresse aus S3, das entlastet den Server.',
+              { name: siteName() }
             ),
             [
               { value: 'proxy', label: t('Über den Server') },
@@ -1337,6 +1396,58 @@ export function SettingsPanel({
             )
           )}
         </SettingsSection>
+        <SettingsSection
+          title={t('Passwort')}
+          description={t('Ohne Passwörter melden sich alle mit Passkey, über einen verknüpften Dienst oder mit einem Einmal-Link an.')}
+        >
+          {toggle(
+            'auth.passwordLogin',
+            t('Anmeldung mit Passwort'),
+            t('Abgeschaltet gibt es keine Anmeldung mit Benutzername und Passwort mehr, auch kein Zurücksetzen per E-Mail.')
+          )}
+          {passwordless && (
+            <Box sx={{ px: { xs: 2, sm: 3 }, pb: 2 }}>
+              <Alert severity={passwordlessRisk ? 'error' : 'info'}>
+                {passwordlessRisk
+                  ? t(
+                      'Du selbst hast noch keinen Passkey und keinen verknüpften Dienst. Lege zuerst einen an, sonst lässt sich das nicht speichern.'
+                    )
+                  : t(
+                      'Gespeicherte Passwörter bleiben erhalten, funktionieren aber nicht mehr. Neue Konten bekommen keins. Wer weder Passkey noch verknüpften Dienst hat, braucht einen Einmal-Link.'
+                    )}
+              </Alert>
+            </Box>
+          )}
+        </SettingsSection>
+        <SettingsSection
+          title={t('Einmal-Links')}
+          description={t('Ein Einmal-Link meldet genau einmal an und läuft danach ab. Verwalten unter Admin › Zugänge.')}
+        >
+          {toggle(
+            'auth.loginLinks',
+            t('Einmal-Links erlauben'),
+            t('Admins erstellen sie für ein Konto, Integrationen fordern sie über die API an.')
+          )}
+          {number('auth.loginLinkMinutes', t('Übliche Gültigkeit'), t('Vorauswahl für neue Links.'), {
+            min: 1,
+            max: 10080,
+            unit: t('Minuten'),
+          })}
+          {number('auth.loginLinkMaxMinutes', t('Längste Gültigkeit'), t('Länger gilt kein Link, egal wer ihn erstellt oder anfordert.'), {
+            min: 1,
+            max: 43200,
+            unit: t('Minuten'),
+          })}
+          {toggle(
+            'auth.emailLinks',
+            t('Link per E-Mail anfordern'),
+            mailReady
+              ? t(
+                  'Auf der Anmeldeseite kann man sich einen Link an die bestätigte Adresse schicken lassen. Mit Zwei-Faktor-Anmeldung fragt der Server danach noch nach dem Code.'
+                )
+              : t('Braucht den E-Mail-Versand. Richte ihn unter E-Mail ein.')
+          )}
+        </SettingsSection>
       </Stack>
     ),
 
@@ -1377,7 +1488,8 @@ export function SettingsPanel({
         <SettingsSection
           title={t('Impressum')}
           description={t(
-            'Erscheint unten auf jeder Seite. Verlinke eine bestehende Seite oder schreib den Text hier, dann zeigt MoeShare ihn unter /impressum.'
+            'Erscheint unten auf jeder Seite. Verlinke eine bestehende Seite oder schreib den Text hier, dann zeigt {name} ihn unter /impressum.',
+            { name: siteName() }
           )}
         >
           {text('legal.imprintUrl', t('Link'), t('Hat Vorrang vor dem eigenen Text.'), {
@@ -1394,7 +1506,8 @@ export function SettingsPanel({
         <SettingsSection
           title={t('Datenschutz')}
           description={t(
-            'Erscheint unten auf jeder Seite. Verlinke deine Datenschutzerklärung oder schreib sie hier, dann zeigt MoeShare sie unter /datenschutz.'
+            'Erscheint unten auf jeder Seite. Verlinke deine Datenschutzerklärung oder schreib sie hier, dann zeigt {name} sie unter /datenschutz.',
+            { name: siteName() }
           )}
         >
           {text('legal.privacyUrl', t('Link'), t('Hat Vorrang vor dem eigenen Text.'), {
@@ -1430,7 +1543,9 @@ export function SettingsPanel({
       <Stack spacing={4}>
         <SettingsSection
           title={t('Benachrichtigungen')}
-          description={t('MoeShare meldet Ereignisse wie neue Konten, Anmeldungen oder Virenfunde an die Dienste, die du hier einträgst.')}
+          description={t('{name} meldet Ereignisse wie neue Konten, Anmeldungen oder Virenfunde an die Dienste, die du hier einträgst.', {
+            name: siteName(),
+          })}
         >
           <WebhookTargets initial={webhooks.targets} kinds={webhooks.kinds} events={webhooks.events} />
         </SettingsSection>
@@ -1444,7 +1559,8 @@ export function SettingsPanel({
             'system.trustProxy',
             t('Hinter einem Reverse-Proxy'),
             t(
-              'Einschalten, wenn nginx, Caddy, Traefik oder Cloudflare vor MoeShare sitzen. Sonst sehen alle Besucher gleich aus und das Bremsen falscher Anmeldungen trifft alle.'
+              'Einschalten, wenn nginx, Caddy, Traefik oder Cloudflare vor {name} sitzen. Sonst sehen alle Besucher gleich aus und das Bremsen falscher Anmeldungen trifft alle.',
+              { name: siteName() }
             )
           )}
           {initial.environment.errorReports === 'off' ? (
@@ -1477,11 +1593,16 @@ export function SettingsPanel({
             t('IP-Adressen speichern'),
             t('Bei Sitzungen und im Aktivitätsprotokoll. Werden mit den Einträgen gelöscht.')
           )}
-          {number('system.auditRetentionDays', t('Aktivität aufbewahren'), t('Ältere Einträge löscht MoeShare automatisch.'), {
-            min: 7,
-            max: 730,
-            unit: t('Tage'),
-          })}
+          {number(
+            'system.auditRetentionDays',
+            t('Aktivität aufbewahren'),
+            t('Ältere Einträge löscht {name} automatisch.', { name: siteName() }),
+            {
+              min: 7,
+              max: 730,
+              unit: t('Tage'),
+            }
+          )}
         </SettingsSection>
         <SettingsSection
           title={t('Server')}

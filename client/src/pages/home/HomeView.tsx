@@ -334,10 +334,12 @@ export function HomeView({ site, home, stats, user, registration, preview = fals
         <Box sx={{ ml: { sm: 'auto' }, display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 2, rowGap: 0.5 }}>
           <LanguageLink inert={inert} />
           {site.copyright && <Typography variant="caption">{site.copyright}</Typography>}
-          <Typography variant="caption" sx={{ opacity: 0.75 }}>
-            {t('Läuft mit MoeShare')}
-            {site.version ? ` ${site.version}` : ''}
-          </Typography>
+          {site.poweredBy !== false && (
+            <Typography variant="caption" sx={{ opacity: 0.75 }}>
+              {t('Läuft mit MoeShare')}
+              {site.version ? ` ${site.version}` : ''}
+            </Typography>
+          )}
         </Box>
       </Box>
     </Box>

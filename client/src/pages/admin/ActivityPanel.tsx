@@ -14,6 +14,7 @@ import { t } from '../../lib/i18n';
 const CATEGORIES = [
   { key: '', label: t('Alles') },
   { key: 'signin', label: t('Anmeldungen') },
+  { key: 'access', label: t('Einmal-Links') },
   { key: 'security', label: t('Sicherheit') },
   { key: 'admin', label: t('Verwaltung') },
 ];

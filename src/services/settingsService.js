@@ -50,6 +50,7 @@ const DEFINITIONS = {
   'site.detectLanguage': { type: 'bool', default: true },
   'site.domains': { type: 'domains', default: [], max: 10 },
   'site.pwa': { type: 'bool', default: true },
+  'site.poweredBy': { type: 'bool', default: true },
 
   'legal.imprintUrl': { type: 'url', default: '', allowEmpty: true, allowPath: true },
   'legal.imprintText': { type: 'string', default: '', allowEmpty: true, multiline: true, max: 20000 },
@@ -131,6 +132,11 @@ const DEFINITIONS = {
   'auth.enforceMfa': { type: 'enum', values: ['off', 'admins', 'all'], default: 'off' },
   'auth.passkeys': { type: 'bool', default: true },
   'auth.tokenLogin': { type: 'bool', default: false },
+  'auth.passwordLogin': { type: 'bool', default: true },
+  'auth.loginLinks': { type: 'bool', default: true },
+  'auth.loginLinkMinutes': { type: 'int', min: 1, max: 10080, default: 15 },
+  'auth.loginLinkMaxMinutes': { type: 'int', min: 1, max: 43200, default: 1440 },
+  'auth.emailLinks': { type: 'bool', default: true },
   'auth.discord.enabled': { type: 'bool', default: false },
   'auth.discord.clientId': {
     type: 'string',
@@ -204,6 +210,8 @@ const DEFINITIONS = {
   'view.customCss': { type: 'enum', values: ['off', 'admins', 'all'], default: 'off' },
 
   'profiles.enabled': { type: 'bool', default: true },
+  'profiles.avatars': { type: 'bool', default: true },
+  'profiles.animatedAvatars': { type: 'bool', default: true },
 
   'domains.enabled': { type: 'bool', default: false },
   'domains.maxPerUser': { type: 'int', min: 1, max: 20, default: 3 },
@@ -258,13 +266,15 @@ const DEFINITIONS = {
     pattern: /^https:\/\/(?:(?:canary|ptb)\.)?discord(?:app)?\.com\/api\/webhooks\/\d+\/[\w-]+$/,
     patternMessage: 'Das ist keine Discord-Webhook-Adresse (https://discord.com/api/webhooks/…).',
   },
-  'webhook.name': { type: 'string', default: 'MoeShare', max: 80 },
+  'webhook.name': { type: 'string', default: '', allowEmpty: true, max: 80 },
   'webhook.successColor': { type: 'color', default: '#03fc28' },
   'webhook.errorColor': { type: 'color', default: '#fc0303' },
   'webhook.events': { type: 'list', values: WEBHOOK_EVENTS, default: WEBHOOK_EVENTS },
 
   'links.enabled': { type: 'bool', default: true },
   'links.urlStyle': { type: 'enum', values: LINK_STYLES, default: 'random' },
+  'links.customAddresses': { type: 'bool', default: true },
+  'links.personalPaths': { type: 'bool', default: true },
 
   'albums.enabled': { type: 'bool', default: true },
 
@@ -507,6 +517,15 @@ function validatePatch(patch) {
     if (!touches(key('enabled'), key('clientId'), key('clientSecret'), key('issuer')) || !merged[key('enabled')]) continue;
     if (!merged[key('clientId')] || !merged[key('clientSecret')]) fail(key('enabled'), 'Dafür braucht es Client-ID und Client-Secret.');
     if (provider === 'oidc' && !merged[key('issuer')]) fail(key('enabled'), 'Trage zuerst die Adresse des Anbieters (Issuer) ein.');
+  }
+  if (
+    touches('auth.loginLinkMinutes', 'auth.loginLinkMaxMinutes') &&
+    merged['auth.loginLinkMinutes'] > merged['auth.loginLinkMaxMinutes']
+  ) {
+    fail(
+      touches('auth.loginLinkMinutes') ? 'auth.loginLinkMinutes' : 'auth.loginLinkMaxMinutes',
+      'Die übliche Gültigkeit darf nicht länger sein als die längste erlaubte.'
+    );
   }
   if (touches('webhook.enabled', 'webhook.url') && merged['webhook.enabled'] && !merged['webhook.url']) {
     fail('webhook.enabled', 'Trage zuerst eine Webhook-Adresse ein.');

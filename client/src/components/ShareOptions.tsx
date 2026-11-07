@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import Autocomplete from '@mui/material/Autocomplete';
 import Box from '@mui/material/Box';
 import Chip from '@mui/material/Chip';
@@ -428,6 +428,63 @@ export function ProtectionBadges({
           {!compact && item.label}
         </Box>
       ))}
+    </Box>
+  );
+}
+
+export const prefixOf = (url: string) => url.slice(0, url.lastIndexOf('/') + 1);
+
+export function AddressField({
+  value,
+  onChange,
+  prefix,
+  error,
+  label = t('Eigene Adresse'),
+  placeholder,
+  renaming = false,
+  maxLength = 100,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  prefix: string;
+  error?: string;
+  label?: string;
+  placeholder?: string;
+  renaming?: boolean;
+  maxLength?: number;
+}) {
+  const previewId = useId();
+  return (
+    <Box>
+      <TextField
+        label={label}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        size="small"
+        fullWidth
+        error={!!error}
+        helperText={error || undefined}
+        slotProps={{
+          htmlInput: { maxLength, spellCheck: false, autoCapitalize: 'off', autoComplete: 'off', 'aria-describedby': previewId },
+        }}
+      />
+      <Typography
+        id={previewId}
+        variant="caption"
+        component="p"
+        sx={{ color: 'text.secondary', mt: 0.75, fontFamily: fonts.mono, fontSize: '0.75rem', wordBreak: 'break-all' }}
+      >
+        {prefix}
+        <Box component="span" sx={{ color: value ? c.primary : 'inherit', fontWeight: value ? 700 : 400 }}>
+          {value || placeholder || '…'}
+        </Box>
+      </Typography>
+      <Typography variant="caption" component="p" sx={{ color: 'text.secondary', mt: 0.5 }}>
+        {renaming
+          ? t('Die alte Adresse leitet danach weiter. Eigene Adressen sind leichter zu erraten, für Privates besser ein Passwort setzen.')
+          : t('Buchstaben, Ziffern, Punkte, Binde- und Unterstriche. Eigene Adressen sind leichter zu erraten.')}
+      </Typography>
     </Box>
   );
 }

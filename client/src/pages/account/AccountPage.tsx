@@ -13,7 +13,7 @@ import { providerLabel } from '../../lib/providers';
 import { AppShell } from '../../components/AppShell';
 import { ConfirmProvider } from '../../components/ConfirmDialog';
 import { SudoProvider } from '../../components/Sudo';
-import { UserAvatar } from '../../components/UserAvatar';
+import { AvatarButton, AvatarDialog } from '../../components/AvatarEditor';
 import { QuotaMeter } from '../../components/QuotaMeter';
 import { useToast } from '../../components/Toaster';
 import { ScrollTabs } from '../../components/ScrollTabs';
@@ -65,6 +65,9 @@ function Account({ boot }: { boot: AccountBoot }) {
   const TABS = tabsFor(account);
   const [tab, setTab] = useState<TabKey>(() => (account.setup ? 'sicherheit' : tabFromHash(tabsFor(boot.account))));
   const [direction, setDirection] = useState(0);
+  const [avatar, setAvatar] = useState(boot.account.user.avatar);
+  const [editingAvatar, setEditingAvatar] = useState(false);
+  const [welcome] = useState(() => new URLSearchParams(window.location.search).get('passkey') === 'neu');
   const setup = account.setup;
 
   const reload = useCallback(async () => {
@@ -79,6 +82,11 @@ function Account({ boot }: { boot: AccountBoot }) {
     const onHash = () => setTab(tabFromHash(tabsFor(boot.account)));
     window.addEventListener('hashchange', onHash);
     const params = new URLSearchParams(window.location.search);
+    if (params.has('passkey')) {
+      params.delete('passkey');
+      const rest = params.toString();
+      window.history.replaceState(null, '', `${window.location.pathname}${rest ? `?${rest}` : ''}${window.location.hash}`);
+    }
     const emailNotice = EMAIL_NOTICES[params.get('email') || ''];
     if (emailNotice) {
       toast(emailNotice.text(), { variant: emailNotice.variant, duration: 6000 });
@@ -110,7 +118,7 @@ function Account({ boot }: { boot: AccountBoot }) {
   return (
     <SudoProvider
       methods={{
-        password: user.hasPassword,
+        password: user.hasPassword && account.policy.passwordLogin,
         totp: security.totp,
         passkey: security.passkeysEnabled && security.passkeys.length > 0,
         providers: security.identities.filter((identity) => identity.enabled).map(({ provider, label }) => ({ key: provider, label })),
@@ -119,7 +127,7 @@ function Account({ boot }: { boot: AccountBoot }) {
     >
       <AppShell
         site={boot.site}
-        user={boot.user}
+        user={{ ...boot.user, avatar }}
         active="account"
         topBar={
           <Typography variant="h5" component="h1" sx={{ pl: { xs: 1, md: 0 } }}>
@@ -156,7 +164,13 @@ function Account({ boot }: { boot: AccountBoot }) {
             }}
           >
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1, minWidth: 0 }}>
-              <UserAvatar name={user.username} size={64} />
+              <AvatarButton
+                name={user.username}
+                src={avatar}
+                size={64}
+                label={avatar ? t('Profilbild ändern') : t('Profilbild hinzufügen')}
+                onClick={account.choices.avatars.enabled && !setup ? () => setEditingAvatar(true) : undefined}
+              />
               <Box sx={{ minWidth: 0 }}>
                 <Typography variant="h4" component="h2" noWrap sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                   {user.username}
@@ -216,6 +230,7 @@ function Account({ boot }: { boot: AccountBoot }) {
                   minPasswordLength={account.policy.passwordMinLength}
                   reload={reload}
                   autoOpen={setup}
+                  welcome={welcome}
                 />
               )}
               {tab === 'einstellungen' && (
@@ -242,6 +257,14 @@ function Account({ boot }: { boot: AccountBoot }) {
             </m.div>
           </AnimatePresence>
         </Box>
+        <AvatarDialog
+          open={editingAvatar}
+          onClose={() => setEditingAvatar(false)}
+          name={user.username}
+          current={avatar}
+          limits={account.choices.avatars}
+          onSaved={setAvatar}
+        />
       </AppShell>
     </SudoProvider>
   );

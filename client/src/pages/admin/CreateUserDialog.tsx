@@ -26,6 +26,8 @@ import { GrowTransition, SlideUpTransition } from '../../components/transitions'
 import { isCancelled, useSudo } from '../../components/Sudo';
 import { c, fonts, radius } from '../../theme/tokens';
 import { t } from '../../lib/i18n';
+import { siteName } from '../../lib/boot';
+import { useAccess } from './LoginLinkDialog';
 
 export function CredentialsDialog({
   data,
@@ -89,11 +91,12 @@ export function CreateUserDialog({
 }: {
   open: boolean;
   onClose: () => void;
-  onCreated: (user: AdminUser, password: string | null) => void;
+  onCreated: (user: AdminUser, password: string | null, passwordless: boolean) => void;
   minPasswordLength: number;
   defaults: { quotaBytes: number | null; maxFileBytes: number | null };
 }) {
   const sudo = useSudo();
+  const { passwordLogin, linksEnabled } = useAccess();
   const phone = useMediaQuery('(max-width:599.95px)', { noSsr: true });
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -126,14 +129,14 @@ export function CreateUserDialog({
       const result = await sudo(() =>
         createUser({
           username: username.trim(),
-          password: password || undefined,
+          password: passwordLogin ? password || undefined : undefined,
           role,
           quotaBytes: quota,
           maxFileBytes: maxFile,
           mustChangePassword: mustChange,
         })
       );
-      onCreated(result.user, result.password ?? (password || null));
+      onCreated(result.user, result.passwordless ? null : (result.password ?? (password || null)), Boolean(result.passwordless));
     } catch (failure) {
       if (!isCancelled(failure)) {
         setError(errorMessage(failure));
@@ -170,15 +173,23 @@ export function CreateUserDialog({
               helperText={t('2 bis 32 Zeichen: Buchstaben, Ziffern, Punkt, Unterstrich, Bindestrich')}
               slotProps={{ htmlInput: { autoComplete: 'off', autoCapitalize: 'off', spellCheck: false } }}
             />
-            <PasswordField
-              label={t('Passwort (optional)')}
-              value={password}
-              onChange={setPassword}
-              autoComplete="new-password"
-              error={field === 'password'}
-              helperText={password ? undefined : t('Leer lassen, dann erzeugt MoeShare ein sicheres Passwort.')}
-              strength={password ? { minLength: minPasswordLength, username } : undefined}
-            />
+            {passwordLogin ? (
+              <PasswordField
+                label={t('Passwort (optional)')}
+                value={password}
+                onChange={setPassword}
+                autoComplete="new-password"
+                error={field === 'password'}
+                helperText={password ? undefined : t('Leer lassen, dann erzeugt {name} ein sicheres Passwort.', { name: siteName() })}
+                strength={password ? { minLength: minPasswordLength, username } : undefined}
+              />
+            ) : (
+              <Alert severity="info">
+                {linksEnabled
+                  ? t('Passwörter sind abgeschaltet. Nach dem Anlegen erstellst du einen Einmal-Link für die erste Anmeldung.')
+                  : t('Passwörter sind abgeschaltet. Das Konto meldet sich über einen verknüpften Dienst an.')}
+              </Alert>
+            )}
             <Box>
               <Typography variant="subtitle2" sx={{ mb: 1 }}>
                 {t('Rolle')}
@@ -219,10 +230,12 @@ export function CreateUserDialog({
                 />
               </Box>
             </Box>
-            <FormControlLabel
-              control={<Switch checked={mustChange} onChange={(event) => setMustChange(event.target.checked)} />}
-              label={t('Beim ersten Anmelden eigenes Passwort festlegen')}
-            />
+            {passwordLogin && (
+              <FormControlLabel
+                control={<Switch checked={mustChange} onChange={(event) => setMustChange(event.target.checked)} />}
+                label={t('Beim ersten Anmelden eigenes Passwort festlegen')}
+              />
+            )}
             <Collapse in={!!error} unmountOnExit>
               <Alert severity="error" role="alert">
                 {error}

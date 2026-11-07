@@ -96,6 +96,9 @@ async function token() {
 
 async function reset() {
   say('\nNotfallzugang: Konto zurücksetzen. Leere Eingaben lassen den Wert unverändert.\n');
+  if (!settings.get('auth.passwordLogin')) {
+    say(`Die Anmeldung mit Passwort ist abgeschaltet. Einen Einmal-Link bekommst du mit: ${program} login-link <name>\n`);
+  }
   const user = await findUser();
   const done = [];
 
@@ -301,10 +304,48 @@ async function importData() {
   console.log('');
 }
 
+const LINK_OPTIONS = new Set(['--minuten', '--minutes', '--ziel', '--redirect']);
+
+async function loginLink() {
+  const links = require('./src/services/loginLinkService');
+  const name = args.find((arg, index) => !arg.startsWith('--') && !LINK_OPTIONS.has(args[index - 1]));
+  const user = name ? await users.findByName(name) : await findUser();
+  if (!user) throw new Error('Diesen Benutzer gibt es nicht.');
+  if (user.status !== 'active') throw new Error(`Dieses Konto ist gesperrt. Entsperre es zuerst mit: ${program} reset`);
+  const minutes = valueOf('--minuten', '--minutes');
+  const { link, url } = await links.create({
+    user,
+    source: 'cli',
+    requestedBy: 'Kommandozeile',
+    minutes: minutes === null ? undefined : Number(minutes),
+    redirect: valueOf('--ziel', '--redirect') || undefined,
+  });
+  await audit.log('login_link_created', { userId: user.id, actorId: null, details: { link: link.id, minutes: link.minutes, via: 'cli' } });
+  say(`\nEinmal-Link für ${user.username}, gilt ${link.minutes} Minuten und funktioniert genau einmal:\n${url}\n`);
+}
+
+const SWITCH = { an: true, ein: true, on: true, aus: false, off: false };
+
+async function passwordLogin() {
+  const [value] = positional();
+  const key = String(value || '').toLowerCase();
+  if (!(key in SWITCH)) {
+    say(`\nDie Anmeldung mit Passwort ist gerade ${settings.get('auth.passwordLogin') ? 'an' : 'aus'}.`);
+    return say(`Ändern mit: ${program} password-login <an|aus>\n`);
+  }
+  await settings.update({ 'auth.passwordLogin': SWITCH[key] });
+  await audit.log('settings_updated', { userId: null, actorId: null, details: { keys: ['auth.passwordLogin'], via: 'cli' } });
+  return say(
+    `\nDie Anmeldung mit Passwort ist jetzt ${SWITCH[key] ? 'eingeschaltet' : 'abgeschaltet'}. Ein laufender Server übernimmt das nach wenigen Sekunden.\n`
+  );
+}
+
 const COMMANDS = {
   register,
   token,
   reset,
+  'login-link': loginLink,
+  'password-login': passwordLogin,
   db: databaseInfo,
   'copy-db': copyDatabase,
   backup,
@@ -320,6 +361,8 @@ async function main() {
     say('  register             Konto anlegen');
     say('  token                neues API-Token für ShareX erstellen');
     say('  reset                Notfallzugang: Passwort, Rolle, 2FA, Passkeys oder Tokens zurücksetzen');
+    say('  login-link <name>    erstellt einen Einmal-Link zum Anmelden (--minuten 30, --ziel /dashboard)');
+    say('  password-login <an|aus>  schaltet die Anmeldung mit Passwort ein oder ab');
     say('  db                   zeigt die genutzte Datenbank und ihre Einträge');
     say('  copy-db <adresse>    kopiert alle Daten in eine andere Datenbank (--use stellt direkt um)');
     say('  backup               erstellt eine Sicherung in db/backups (--uploads nimmt die Dateien mit)');

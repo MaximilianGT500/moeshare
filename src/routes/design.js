@@ -14,6 +14,7 @@ const viewer = require('../services/viewerService');
 const audit = require('../services/auditService');
 const watermarks = require('../services/watermarkService');
 const { fileView, sampleRecord } = require('../services/viewService');
+const avatars = require('../services/avatarService');
 const { DEFAULT_DESIGN, LAYOUTS, BACKGROUNDS, FONTS, CORNERS, SCHEMES, ELEMENTS, MAX_CSS } = require('../lib/viewDesign');
 
 const router = express.Router();
@@ -62,7 +63,16 @@ router.get('/design', requirePage(), async (req, res) => {
   return renderPage(res, {
     page: 'design',
     title: 'Gestalten',
-    data: { user: summary, view, profile, embed, userStats, sudo, watermark: watermarks.present(watermark) },
+    data: {
+      user: summary,
+      view,
+      profile,
+      embed,
+      userStats,
+      sudo,
+      watermark: watermarks.present(watermark),
+      avatars: { enabled: avatars.enabled(), animated: settings.get('profiles.animatedAvatars'), maxBytes: avatars.MAX_INPUT_BYTES },
+    },
   });
 });
 

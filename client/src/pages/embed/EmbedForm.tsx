@@ -17,6 +17,7 @@ import { LIMITS, PLACEHOLDERS, unknownPlaceholders } from '../../lib/embed';
 import { ColorField } from '../../components/Fields';
 import { c, css, radius } from '../../theme/tokens';
 import { t } from '../../lib/i18n';
+import { siteName } from '../../lib/boot';
 
 type TextKey = 'siteName' | 'siteUrl' | 'author' | 'authorUrl' | 'title' | 'description';
 
@@ -191,7 +192,7 @@ export function EmbedForm({ value, onChange, errors, disabled }: Props) {
               {t('Inhalt')}
             </Typography>
             <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
-              {t('Leere Felder lässt Discord weg. Platzhalter füllt MoeShare beim Teilen mit den Daten der Datei.')}
+              {t('Leere Felder lässt Discord weg. Platzhalter füllt {name} beim Teilen mit den Daten der Datei.', { name: siteName() })}
             </Typography>
             <Stack spacing={2}>
               <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>

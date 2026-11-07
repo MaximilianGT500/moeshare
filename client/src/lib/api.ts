@@ -12,7 +12,9 @@ import type {
   FileVersion,
   ImportPreview,
   ImportReport,
+  Integration,
   Job,
+  LoginLink,
   UploadSession,
   WatermarkConfig,
   WebhookTarget,
@@ -155,10 +157,14 @@ export interface UploadOptions {
   warning?: string | null;
   optimize?: boolean;
   watermark?: boolean;
+  slug?: string;
+  code?: string;
 }
 
 function optionFields(options: UploadOptions): Array<[string, string]> {
   const fields: Array<[string, string]> = [];
+  if (options.slug) fields.push(['slug', options.slug]);
+  if (options.code) fields.push(['code', options.code]);
   if (options.expires) fields.push(['expires', String(options.expires)]);
   if (options.password) fields.push(['password', options.password]);
   if (options.maxViews) fields.push(['maxViews', String(options.maxViews)]);
@@ -490,6 +496,7 @@ export interface FilePatch {
   tags?: string[];
   syntax?: string | null;
   listed?: boolean;
+  slug?: string;
 }
 
 export const updateFile = (id: number, data: FilePatch) => patch<{ file: FileItem }>(`/api/files/${id}`, data);
@@ -636,17 +643,23 @@ export const createLink = (url: string, options: UploadOptions = {}) =>
   post<{ success: boolean; url: string; code: string; id: number }>('/api/links', { url, ...Object.fromEntries(optionFields(options)) });
 export const updateLink = (
   id: number,
-  data: { url?: string; title?: string | null; expires?: string; password?: string | null; maxClicks?: number | null }
+  data: { url?: string; title?: string | null; expires?: string; password?: string | null; maxClicks?: number | null; code?: string }
 ) => patch<{ link: ShortLink }>(`/api/links/${id}`, data);
 export const deleteLink = (id: number) => del<{ ok: boolean }>(`/api/links/${id}`);
 
 export const listAlbums = () => api<{ albums: Album[] }>('/api/albums');
 export const fetchAlbum = (id: number) => api<{ album: Album }>(`/api/albums/${id}`);
-export const createAlbum = (data: { title: string; description?: string; visibility?: string; password?: string; fileIds?: number[] }) =>
-  post<{ album: Album }>('/api/albums', data);
+export const createAlbum = (data: {
+  title: string;
+  description?: string;
+  visibility?: string;
+  password?: string;
+  fileIds?: number[];
+  code?: string;
+}) => post<{ album: Album }>('/api/albums', data);
 export const updateAlbum = (
   id: number,
-  data: { title?: string; description?: string; visibility?: string; password?: string | null; coverFileId?: number | null }
+  data: { title?: string; description?: string; visibility?: string; password?: string | null; coverFileId?: number | null; code?: string }
 ) => patch<{ album: Album }>(`/api/albums/${id}`, data);
 export const deleteAlbum = (id: number) => del<{ ok: boolean }>(`/api/albums/${id}`);
 export const addToAlbum = (id: number, fileIds: number[]) => post<{ album: Album }>(`/api/albums/${id}/files`, { fileIds });
@@ -670,6 +683,26 @@ export const uploadFromUrl = (url: string, options: UploadOptions = {}) =>
   post<UploadResponse>('/api/fetch', { url, ...Object.fromEntries(optionFields(options)) });
 
 export const fetchAccount = () => api<AccountOverview>('/api/account');
+
+export interface AvatarCrop {
+  x: number;
+  y: number;
+  size: number;
+}
+
+export async function uploadAvatar(file: Blob, crop: AvatarCrop) {
+  const query = new URLSearchParams({ x: String(Math.round(crop.x)), y: String(Math.round(crop.y)), size: String(Math.round(crop.size)) });
+  return api<{ ok: boolean; avatar: string | null; animated: boolean }>(`/api/account/avatar?${query}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': file.type || 'application/octet-stream' },
+    body: file,
+  });
+}
+export const avatarFromFile = (fileId: number, crop: AvatarCrop) =>
+  put<{ ok: boolean; avatar: string | null; animated: boolean }>('/api/account/avatar', { fileId, crop });
+export const removeAvatar = () => del<{ ok: boolean; avatar: null }>('/api/account/avatar');
+export const saveLinkPath = (path: string) => put<{ ok: boolean; path: string }>('/api/account/link-path', { path });
+export const clearLinkPath = () => del<{ ok: boolean; path: null }>('/api/account/link-path');
 export const changePassword = (current: string, next: string) =>
   post<{ ok: boolean; endedSessions: number }>('/api/account/password', { current, next });
 export const beginTotpSetup = () => post<{ secret: string; uri: string; qr: string }>('/api/account/totp/setup');
@@ -769,7 +802,7 @@ export const createUser = (data: {
   quotaBytes: number | null;
   maxFileBytes: number | null;
   mustChangePassword: boolean;
-}) => post<{ ok: boolean; user: AdminUser; password?: string }>('/api/admin/users', data);
+}) => post<{ ok: boolean; user: AdminUser; password?: string; passwordless?: boolean }>('/api/admin/users', data);
 export const updateUser = (
   id: number,
   data: Partial<Pick<AdminUser, 'role' | 'status' | 'suspendedReason' | 'quotaBytes' | 'maxFileBytes'>>
@@ -779,12 +812,50 @@ export const resetUserPassword = (id: number, password: string, mustChange: bool
 export const resetUserMfa = (id: number) => post<{ ok: boolean }>(`/api/admin/users/${id}/reset-mfa`);
 export const removeUserPasskeys = (id: number) => del<{ ok: boolean; count: number }>(`/api/admin/users/${id}/passkeys`);
 export const revokeUserSessions = (id: number) => post<{ ok: boolean; count: number }>(`/api/admin/users/${id}/revoke-sessions`);
+export const removeUserAvatar = (id: number) => del<{ ok: boolean; user: AdminUser }>(`/api/admin/users/${id}/avatar`);
+export const removeUserLinkPath = (id: number) => del<{ ok: boolean; user: AdminUser }>(`/api/admin/users/${id}/link-path`);
 export const createUserToken = (id: number, name: string) =>
   post<{ ok: boolean; token: string; record: ApiTokenInfo }>(`/api/admin/users/${id}/tokens`, { name });
 export const revokeUserToken = (id: number, tokenId: number) => del<{ ok: boolean }>(`/api/admin/users/${id}/tokens/${tokenId}`);
 export const unlinkUserIdentity = (id: number, provider: string) =>
   del<{ ok: boolean }>(`/api/admin/users/${id}/identities/${encodeURIComponent(provider)}`);
 export const deleteUserById = (id: number) => del<{ ok: boolean }>(`/api/admin/users/${id}`);
+
+export interface LoginLinkResult {
+  ok: boolean;
+  link: LoginLink;
+  url: string;
+  sent: string | null;
+  mailError: string | null;
+}
+
+export const fetchLoginLinks = (userId?: number) =>
+  api<{ links: LoginLink[]; pending: number }>(`/api/admin/login-links${userId ? `?user=${userId}` : ''}`);
+export const createLoginLink = (data: { userId: number; minutes: number; redirect?: string; note?: string; email?: boolean }) =>
+  post<LoginLinkResult>('/api/admin/login-links', data);
+export const approveLoginLink = (id: number, data: { minutes?: number; email?: boolean } = {}) =>
+  post<LoginLinkResult>(`/api/admin/login-links/${id}/approve`, data);
+export const denyLoginLink = (id: number) => post<{ ok: boolean; link: LoginLink }>(`/api/admin/login-links/${id}/deny`);
+export const revealLoginLink = (id: number) => post<{ url: string }>(`/api/admin/login-links/${id}/reveal`);
+export const sendLoginLink = (id: number) => post<{ ok: boolean; sent: string }>(`/api/admin/login-links/${id}/send`);
+export const revokeLoginLink = (id: number) => del<{ ok: boolean; link: LoginLink }>(`/api/admin/login-links/${id}`);
+
+export interface IntegrationInput {
+  name?: string;
+  mode?: Integration['mode'];
+  allowAdmins?: boolean;
+  maxMinutes?: number | null;
+  enabled?: boolean;
+}
+
+export const fetchIntegrations = () => api<{ integrations: Integration[] }>('/api/admin/integrations');
+export const createIntegration = (data: IntegrationInput) =>
+  post<{ ok: boolean; key: string; integration: Integration }>('/api/admin/integrations', data);
+export const updateIntegration = (id: number, data: IntegrationInput) =>
+  patch<{ ok: boolean; integration: Integration }>(`/api/admin/integrations/${id}`, data);
+export const rotateIntegration = (id: number) =>
+  post<{ ok: boolean; key: string; integration: Integration }>(`/api/admin/integrations/${id}/rotate`);
+export const deleteIntegration = (id: number) => del<{ ok: boolean }>(`/api/admin/integrations/${id}`);
 
 export const createInvite = (data: {
   role: string;

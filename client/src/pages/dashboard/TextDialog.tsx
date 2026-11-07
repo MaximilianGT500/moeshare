@@ -18,7 +18,15 @@ import type { TagCount, UploadOptionsInfo } from '../../lib/types';
 import { formatBytes } from '../../lib/format';
 import { t } from '../../lib/i18n';
 import { GrowTransition } from '../../components/transitions';
-import { ExpirySelect, ProtectionFields, TagInput, UrlStyleSelect, expiryLabel, urlStyleLabel } from '../../components/ShareOptions';
+import {
+  AddressField,
+  ExpirySelect,
+  ProtectionFields,
+  TagInput,
+  UrlStyleSelect,
+  expiryLabel,
+  urlStyleLabel,
+} from '../../components/ShareOptions';
 import type { UploadPrefs } from './options';
 import { EMPTY_PREFS, toUploadOptions } from './options';
 import { c, css, fonts } from '../../theme/tokens';
@@ -74,6 +82,8 @@ export function TextDialog({
   const [content, setContent] = useState(initialText);
   const [prefs, setPrefs] = useState<UploadPrefs>(EMPTY_PREFS);
   const [more, setMore] = useState(false);
+  const [address, setAddress] = useState('');
+  const [addressError, setAddressError] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -98,12 +108,21 @@ export function TextDialog({
     setBusy(true);
     setError('');
     try {
-      const result = await createText(content, { ...toUploadOptions(prefs), title: title.trim() || undefined, syntax });
+      const result = await createText(content, {
+        ...toUploadOptions(prefs),
+        title: title.trim() || undefined,
+        syntax,
+        slug: address.trim() || undefined,
+      });
       reset();
+      setAddress('');
       onDone(result);
       onClose();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t('Der Text konnte nicht gespeichert werden.'));
+      if (err instanceof ApiError && err.field === 'slug') {
+        setMore(true);
+        setAddressError(err.message);
+      } else setError(err instanceof ApiError ? err.message : t('Der Text konnte nicht gespeichert werden.'));
     } finally {
       setBusy(false);
     }
@@ -198,11 +217,25 @@ export function TextDialog({
               onChange={(next) => setPrefs({ ...prefs, ...next })}
               onceHelp={t('Nach dem ersten Öffnen ist der Text für alle anderen weg.')}
             />
-            <UrlStyleSelect
-              value={prefs.urlStyle}
-              onChange={(urlStyle) => setPrefs({ ...prefs, urlStyle })}
-              includeDefault={t('Standard ({value})', { value: urlStyleLabel(info.urlStyle) })}
-            />
+            {info.customAddresses && (
+              <AddressField
+                label={t('Eigene Adresse (optional)')}
+                value={address}
+                onChange={(next) => {
+                  setAddress(next);
+                  setAddressError('');
+                }}
+                prefix={`${info.domains[0] || window.location.origin}/${info.linkPath || 'view'}/`}
+                error={addressError}
+              />
+            )}
+            {!address.trim() && (
+              <UrlStyleSelect
+                value={prefs.urlStyle}
+                onChange={(urlStyle) => setPrefs({ ...prefs, urlStyle })}
+                includeDefault={t('Standard ({value})', { value: urlStyleLabel(info.urlStyle) })}
+              />
+            )}
             <TagInput value={prefs.tags} onChange={(next) => setPrefs({ ...prefs, tags: next })} suggestions={tags} />
           </Box>
         </Collapse>

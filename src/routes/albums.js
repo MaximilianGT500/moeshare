@@ -13,6 +13,8 @@ const protection = require('../services/protectionService');
 const settings = require('../services/settingsService');
 const stats = require('../services/statsService');
 const zips = require('../services/zipService');
+const redirects = require('../services/redirectService');
+const db = require('../lib/db');
 
 const router = express.Router();
 const signedIn = requireApi();
@@ -34,9 +36,19 @@ async function publicAlbum(req) {
   return row;
 }
 
+async function movedAlbum(req) {
+  const entry = await redirects.moved('album', `/a/${req.params.code}`);
+  const row = entry ? await db.get('SELECT id, code, user_id FROM albums WHERE id = ?', [entry.id]) : null;
+  if (!row || (req.customDomain && Number(row.user_id) !== req.customDomain.userId)) return null;
+  return `/a/${encodeURIComponent(row.code)}`;
+}
+
 router.get('/a/:code', async (req, res) => {
   const row = await publicAlbum(req);
-  if (!row) return renderMessage(res, 404, MISSING);
+  if (!row) {
+    const target = await movedAlbum(req);
+    return target ? res.redirect(301, target) : renderMessage(res, 404, MISSING);
+  }
   const access = await albums.access(req, row);
   if (access.state === 'hidden') return renderMessage(res, 404, MISSING);
   if (access.state === 'blocked') return renderMessage(res, 451, BLOCKED, { title: 'Inhalt gesperrt' });

@@ -71,18 +71,21 @@ import { fileIcon } from '../../components/FileIcons';
 import { UserAvatar } from '../../components/UserAvatar';
 import { displayName, hasWarning } from './MediaTile';
 import { useUploads } from './uploads';
+import { AddressField, prefixOf } from '../../components/ShareOptions';
 import { c, css, radius } from '../../theme/tokens';
 
 export function AlbumEditorDialog({
   open,
   album,
   fileIds = [],
+  customAddresses = false,
   onClose,
   onSaved,
 }: {
   open: boolean;
   album: Album | null;
   fileIds?: number[];
+  customAddresses?: boolean;
   onClose: () => void;
   onSaved: (album: Album) => void;
 }) {
@@ -91,11 +94,15 @@ export function AlbumEditorDialog({
   const [visibility, setVisibility] = useState<AlbumVisibility>('link');
   const [passwordEnabled, setPasswordEnabled] = useState(false);
   const [password, setPassword] = useState('');
+  const [code, setCode] = useState('');
+  const [codeError, setCodeError] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
     if (!open) return;
+    setCode(album?.code || '');
+    setCodeError('');
     setTitle(album?.title || '');
     setDescription(album?.description || '');
     setVisibility(album?.visibility || 'link');
@@ -112,11 +119,13 @@ export function AlbumEditorDialog({
     setBusy(true);
     setError('');
     try {
+      const wanted = code.trim();
       const data = {
         title: title.trim(),
         description,
         visibility,
         ...(passwordEnabled ? (password ? { password } : {}) : album?.password ? { password: null } : {}),
+        ...(customAddresses && wanted && wanted !== album?.code ? { code: wanted } : {}),
       };
       const result = album
         ? await updateAlbum(album.id, data)
@@ -124,7 +133,8 @@ export function AlbumEditorDialog({
       onSaved(result.album);
       onClose();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t('Das Album konnte nicht gespeichert werden.'));
+      if (err instanceof ApiError && err.field === 'code') setCodeError(err.message);
+      else setError(err instanceof ApiError ? err.message : t('Das Album konnte nicht gespeichert werden.'));
     } finally {
       setBusy(false);
     }
@@ -163,6 +173,21 @@ export function AlbumEditorDialog({
             minRows={2}
             maxRows={6}
           />
+          {customAddresses && (
+            <AddressField
+              label={album ? t('Adresse') : t('Eigene Adresse (optional)')}
+              value={code}
+              onChange={(next) => {
+                setCode(next);
+                setCodeError('');
+              }}
+              prefix={album ? prefixOf(album.url) : `${window.location.origin}/a/`}
+              placeholder={album ? undefined : t('zufällig')}
+              error={codeError}
+              renaming={Boolean(album)}
+              maxLength={64}
+            />
+          )}
           <RadioGroup value={visibility} onChange={(event) => setVisibility(event.target.value as AlbumVisibility)}>
             <FormControlLabel
               value="link"
@@ -420,6 +445,7 @@ function AlbumThumb({
   onCover,
   dragProps,
   contributor,
+  contributorAvatar,
 }: {
   file: FileItem;
   isCover: boolean;
@@ -427,6 +453,7 @@ function AlbumThumb({
   onCover?: () => void;
   dragProps?: DragProps;
   contributor?: string;
+  contributorAvatar?: string | null;
 }) {
   const [failed, setFailed] = useState(false);
   const visual = (file.type === 'image' || file.type === 'video') && !failed;
@@ -555,7 +582,7 @@ function AlbumThumb({
             pointerEvents: 'none',
           }}
         >
-          <UserAvatar name={contributor} size={18} />
+          <UserAvatar name={contributor} src={contributorAvatar} size={18} />
           <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {contributor}
           </Box>
@@ -627,12 +654,15 @@ function MembersPanel({ album, onChange }: { album: Album; onChange: (album: Alb
       </Typography>
       <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
         {!owner && album.owner && (
-          <Chip avatar={<UserAvatar name={album.owner} size={24} />} label={t('{name} (Besitzer)', { name: album.owner })} />
+          <Chip
+            avatar={<UserAvatar name={album.owner} src={album.avatars?.[album.owner]} size={24} />}
+            label={t('{name} (Besitzer)', { name: album.owner })}
+          />
         )}
         {members.map((member) => (
           <Chip
             key={member.id}
-            avatar={<UserAvatar name={member.username} size={24} />}
+            avatar={<UserAvatar name={member.username} src={member.avatar} size={24} />}
             label={member.username}
             onDelete={owner ? () => remove(member.id, member.username) : undefined}
             deleteIcon={<CloseRounded />}
@@ -915,6 +945,7 @@ function AlbumDetail({
               onRemove={owner || file.mine ? () => remove(file) : undefined}
               onCover={owner ? () => setCover(file) : undefined}
               contributor={shared && file.username !== album.owner ? file.username : undefined}
+              contributorAvatar={album.avatars?.[file.username]}
               dragProps={
                 owner
                   ? {
@@ -939,6 +970,7 @@ function AlbumDetail({
       <AlbumEditorDialog
         open={editing}
         album={album}
+        customAddresses={info?.customAddresses}
         onClose={() => setEditing(false)}
         onSaved={(saved) => {
           setAlbum({ ...album, ...saved });
@@ -1068,6 +1100,7 @@ export function AlbumsView({
       <AlbumEditorDialog
         open={creating}
         album={null}
+        customAddresses={info?.customAddresses}
         onClose={() => setCreating(false)}
         onSaved={(album) => {
           load();

@@ -8,6 +8,7 @@ const domains = require('../services/domainService');
 const profiles = require('../services/profileService');
 const settings = require('../services/settingsService');
 const stats = require('../services/statsService');
+const avatars = require('../services/avatarService');
 
 const router = express.Router();
 
@@ -26,6 +27,7 @@ async function render(req, res, username) {
   if (!owner) stats.track(req, 'p', found.row.id, 'views');
   const description = data.profile.bio ? data.profile.bio.replace(/\s+/g, ' ').slice(0, 200) : '';
   const meta = (key, value) => `<meta ${key} content="${escapeHtml(value)}" />`;
+  const picture = data.profile.avatar ? `${domain || settings.get('site.baseUrl')}${data.profile.avatar}` : null;
   return renderPage(res, {
     page: 'profile',
     titleRaw: data.profile.name,
@@ -35,6 +37,9 @@ async function render(req, res, username) {
       description && meta('name="description"', description),
       meta('property="og:type"', 'profile'),
       meta('property="og:url"', data.profile.url),
+      picture && meta('property="og:image"', picture),
+      picture && meta('property="og:image:width"', String(avatars.SIZE)),
+      picture && meta('property="og:image:height"', String(avatars.SIZE)),
       meta('name="theme-color"', settings.get('site.uiColor')),
     ]
       .filter(Boolean)
@@ -55,6 +60,17 @@ router.get('/', async (req, res, next) => {
 });
 
 router.get('/u/:username', (req, res) => render(req, res, req.params.username));
+
+router.get('/u/:username/avatar', async (req, res) => {
+  const found = avatars.assertFound(await avatars.read(req.params.username));
+  const current = req.query.v === found.version;
+  res.removeHeader('Content-Security-Policy');
+  res.set('Cache-Control', current ? 'public, max-age=31536000, immutable' : 'public, max-age=300');
+  res.set('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.set('ETag', `"${found.version}"`);
+  if (req.fresh) return res.status(304).end();
+  return res.type('image/webp').send(found.image);
+});
 
 router.get('/api/profiles/:username/files', async (req, res) => {
   const found = await profiles.findPublic(req.params.username);

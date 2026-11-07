@@ -21,7 +21,8 @@ import TimerOutlined from '@mui/icons-material/TimerOutlined';
 import AdsClickRounded from '@mui/icons-material/AdsClickRounded';
 import BarChartRounded from '@mui/icons-material/BarChartRounded';
 import BlockRounded from '@mui/icons-material/BlockRounded';
-import { ApiError, createLink, deleteLink, listLinks } from '../../lib/api';
+import EditOutlined from '@mui/icons-material/EditOutlined';
+import { ApiError, createLink, deleteLink, listLinks, updateLink } from '../../lib/api';
 import type { ExpiryChoice, ShortLink, UploadOptionsInfo, UrlStyle } from '../../lib/types';
 import { formatNumber, relativeMs } from '../../lib/format';
 import { t, tn } from '../../lib/i18n';
@@ -31,12 +32,123 @@ import { useConfirm } from '../../components/ConfirmDialog';
 import { useToast } from '../../components/Toaster';
 import { SearchField } from '../../components/SearchField';
 import { GrowTransition } from '../../components/transitions';
-import { DomainSelect, ExpirySelect, URL_STYLES, UrlStyleSelect } from '../../components/ShareOptions';
+import { AddressField, DomainSelect, ExpirySelect, URL_STYLES, UrlStyleSelect, prefixOf } from '../../components/ShareOptions';
 import { PasswordField } from '../../components/PasswordField';
 import { StatsDialog, type StatsTarget } from '../../components/StatsView';
 import { c, css, fonts, radius } from '../../theme/tokens';
 
 const LINK_STYLES = URL_STYLES.filter((style) => style !== 'original');
+
+const linkHost = (domain: string, info: UploadOptionsInfo) =>
+  domain && domain !== 'base' && domain !== 'random' ? domain : info.domains[0] || window.location.origin;
+
+function LinkEditDialog({
+  link,
+  info,
+  onClose,
+  onSaved,
+}: {
+  link: ShortLink | null;
+  info: UploadOptionsInfo;
+  onClose: () => void;
+  onSaved: (link: ShortLink) => void;
+}) {
+  const [url, setUrl] = useState('');
+  const [title, setTitle] = useState('');
+  const [code, setCode] = useState('');
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!link) return;
+    setUrl(link.url);
+    setTitle(link.title || '');
+    setCode(link.code);
+    setErrors({});
+  }, [link]);
+
+  if (!link) return null;
+
+  const save = async () => {
+    setBusy(true);
+    setErrors({});
+    try {
+      const data: { url?: string; title?: string | null; code?: string } = {};
+      if (url.trim() !== link.url) data.url = url.trim();
+      if ((title.trim() || null) !== (link.title || null)) data.title = title.trim() || null;
+      if (info.customAddresses && code.trim() && code.trim() !== link.code) data.code = code.trim();
+      const result = Object.keys(data).length ? await updateLink(link.id, data) : { link };
+      onSaved(result.link);
+      onClose();
+    } catch (err) {
+      const field = err instanceof ApiError && err.field ? err.field : 'form';
+      setErrors({ [field]: err instanceof ApiError ? err.message : t('Die Änderungen konnten nicht gespeichert werden.') });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog
+      open
+      onClose={busy ? undefined : onClose}
+      maxWidth="sm"
+      fullWidth
+      slots={{ transition: GrowTransition }}
+      aria-labelledby="link-edit-title"
+    >
+      <Box sx={{ display: 'flex', justifyContent: 'center', pt: 2, color: c.secondary }}>
+        <EditOutlined sx={{ fontSize: 28 }} />
+      </Box>
+      <DialogTitle id="link-edit-title" sx={{ textAlign: 'center' }}>
+        {t('Kurzlink bearbeiten')}
+      </DialogTitle>
+      <DialogContent>
+        <Box sx={{ display: 'grid', gap: 2, pt: 0.5 }}>
+          <TextField
+            label={t('Ziel')}
+            value={url}
+            onChange={(event) => setUrl(event.target.value)}
+            error={!!errors.url}
+            helperText={errors.url}
+            size="small"
+            slotProps={{ htmlInput: { inputMode: 'url', spellCheck: false, autoComplete: 'off' } }}
+          />
+          <TextField label={t('Notiz (nur für dich)')} value={title} onChange={(event) => setTitle(event.target.value)} size="small" />
+          {info.customAddresses && (
+            <AddressField
+              label={t('Kürzel')}
+              value={code}
+              onChange={setCode}
+              prefix={prefixOf(link.short)}
+              error={errors.code}
+              renaming
+              maxLength={64}
+            />
+          )}
+          {errors.form && (
+            <Typography variant="body2" sx={{ color: c.error }}>
+              {errors.form}
+            </Typography>
+          )}
+        </Box>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose} disabled={busy}>
+          {t('Abbrechen')}
+        </Button>
+        <Button
+          variant="contained"
+          onClick={save}
+          disabled={busy || !url.trim()}
+          startIcon={busy ? <CircularProgress size={16} color="inherit" /> : undefined}
+        >
+          {t('Speichern')}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
 
 export function LinkDialog({
   open,
@@ -58,6 +170,8 @@ export function LinkDialog({
   const [maxClicks, setMaxClicks] = useState('');
   const [style, setStyle] = useState<'' | UrlStyle>('');
   const [domain, setDomain] = useState('');
+  const [code, setCode] = useState('');
+  const [codeError, setCodeError] = useState('');
   const [more, setMore] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -78,6 +192,8 @@ export function LinkDialog({
     setMaxClicks('');
     setStyle('');
     setDomain('');
+    setCode('');
+    setCodeError('');
     setMore(false);
   };
 
@@ -105,12 +221,16 @@ export function LinkDialog({
         maxViews: clicks,
         urlStyle: style || undefined,
         domain: domain || undefined,
+        code: code.trim() || undefined,
       });
       setCreated(result.url);
       reset();
       onCreated(result.url);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t('Der Link konnte nicht gekürzt werden.'));
+      if (err instanceof ApiError && err.field === 'code') {
+        setMore(true);
+        setCodeError(err.message);
+      } else setError(err instanceof ApiError ? err.message : t('Der Link konnte nicht gekürzt werden.'));
     } finally {
       setBusy(false);
     }
@@ -202,7 +322,20 @@ export function LinkDialog({
                   size="small"
                   slotProps={{ htmlInput: { inputMode: 'numeric' } }}
                 />
-                <UrlStyleSelect value={style} onChange={setStyle} styles={LINK_STYLES} includeDefault={t('Standard')} />
+                {info.customAddresses && (
+                  <AddressField
+                    label={t('Eigenes Kürzel (optional)')}
+                    value={code}
+                    onChange={(next) => {
+                      setCode(next);
+                      setCodeError('');
+                    }}
+                    prefix={`${linkHost(domain, info)}/s/`}
+                    error={codeError}
+                    maxLength={64}
+                  />
+                )}
+                {!code.trim() && <UrlStyleSelect value={style} onChange={setStyle} styles={LINK_STYLES} includeDefault={t('Standard')} />}
                 <DomainSelect value={domain} onChange={setDomain} domains={info.domains} includeDefault={t('Standard')} />
               </Box>
             </Collapse>
@@ -237,7 +370,7 @@ export function LinkDialog({
   );
 }
 
-function LinkRow({ link, onDelete, onStats }: { link: ShortLink; onDelete: () => void; onStats?: () => void }) {
+function LinkRow({ link, onDelete, onEdit, onStats }: { link: ShortLink; onDelete: () => void; onEdit: () => void; onStats?: () => void }) {
   let host = '';
   try {
     host = new URL(link.url).host;
@@ -316,6 +449,11 @@ function LinkRow({ link, onDelete, onStats }: { link: ShortLink; onDelete: () =>
         </Tooltip>
       )}
       <CopyIconButton value={link.short} label={t('Kurzlink kopieren')} message={t('Kurzlink kopiert')} />
+      <Tooltip title={t('Bearbeiten')}>
+        <IconButton aria-label={t('Kurzlink bearbeiten')} onClick={onEdit}>
+          <EditOutlined />
+        </IconButton>
+      </Tooltip>
       <Tooltip title={t('Löschen')}>
         <IconButton aria-label={t('Kurzlink löschen')} onClick={onDelete}>
           <DeleteOutlineRounded />
@@ -336,6 +474,7 @@ export function LinksView({ info, version }: { info: UploadOptionsInfo; version:
   const [query, setQuery] = useState('');
   const search = useDebouncedValue(query.trim(), 280);
   const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<ShortLink | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
 
   const load = useCallback(async () => {
@@ -441,6 +580,7 @@ export function LinksView({ info, version }: { info: UploadOptionsInfo; version:
               key={link.id}
               link={link}
               onDelete={() => remove(link)}
+              onEdit={() => setEditing(link)}
               onStats={
                 info.stats ? () => setStatsTarget({ kind: 'link', id: link.id, title: link.short.replace(/^https?:\/\//, '') }) : undefined
               }
@@ -455,6 +595,15 @@ export function LinksView({ info, version }: { info: UploadOptionsInfo; version:
         </Box>
       )}
       <StatsDialog target={statsTarget} onClose={() => setStatsTarget(null)} />
+      <LinkEditDialog
+        link={editing}
+        info={info}
+        onClose={() => setEditing(null)}
+        onSaved={(saved) => {
+          setLinks((prev) => (prev || []).map((entry) => (entry.id === saved.id ? saved : entry)));
+          toast(t('Kurzlink gespeichert'), { variant: 'success' });
+        }}
+      />
       <LinkDialog
         open={creating}
         info={info}

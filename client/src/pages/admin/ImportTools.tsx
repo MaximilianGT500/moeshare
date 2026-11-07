@@ -23,6 +23,7 @@ import { CopyTextButton } from '../../components/CopyButton';
 import { isCancelled, useSudo } from '../../components/Sudo';
 import { useToast } from '../../components/Toaster';
 import { c, fonts, radius } from '../../theme/tokens';
+import { siteName } from '../../lib/boot';
 
 const HINTS: Record<string, { database: () => string; files: () => string; placeholder: string; filesPlaceholder: string }> = {
   zipline: {
@@ -161,7 +162,8 @@ function ReportCard({ report }: { report: ImportReport }) {
           <Typography variant="subtitle2">{t('Vorläufige Passwörter')}</Typography>
           <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1 }}>
             {t(
-              'Diese Konten hatten ein Passwort, das MoeShare nicht lesen kann. Gib ihnen die Passwörter weiter, sie müssen sie beim ersten Anmelden ändern. Die Liste wird nur jetzt angezeigt.'
+              'Diese Konten hatten ein Passwort, das {name} nicht lesen kann. Gib ihnen die Passwörter weiter, sie müssen sie beim ersten Anmelden ändern. Die Liste wird nur jetzt angezeigt.',
+              { name: siteName() }
             )}
           </Typography>
           <Box

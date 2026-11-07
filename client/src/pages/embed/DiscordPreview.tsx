@@ -88,6 +88,7 @@ export function DiscordPreview({
   media,
   link,
   username,
+  avatar,
   theme,
 }: {
   embed: RenderedEmbed;
@@ -95,6 +96,7 @@ export function DiscordPreview({
   media: PreviewMedia;
   link: string;
   username: string;
+  avatar?: string | null;
   theme: ChatTheme;
 }) {
   const palette = THEMES[theme];
@@ -118,7 +120,7 @@ export function DiscordPreview({
     >
       <Box sx={{ display: 'flex', gap: 2 }}>
         <Box sx={{ flexShrink: 0, pt: 0.25 }}>
-          <UserAvatar name={username} size={40} />
+          <UserAvatar name={username} src={avatar} size={40} />
         </Box>
         <Box sx={{ minWidth: 0, flex: 1 }}>
           <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>

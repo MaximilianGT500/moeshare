@@ -22,6 +22,7 @@ import { UserAvatar } from '../../components/UserAvatar';
 import { useToast } from '../../components/Toaster';
 import { CreateUserDialog, CredentialsDialog } from './CreateUserDialog';
 import { UserSheet } from './UserSheet';
+import { LinkResultDialog, LoginLinkDialog, useAccess } from './LoginLinkDialog';
 import { RoleChip, SecurityBadges, StatusChip } from './userBits';
 import { c, ease, radius, srOnly } from '../../theme/tokens';
 import { t, tn } from '../../lib/i18n';
@@ -91,6 +92,15 @@ export function UsersPanel({
   const [open, setOpen] = useState<number | null>(null);
   const [creating, setCreating] = useState(false);
   const [credentials, setCredentials] = useState<{ username: string; password: string } | null>(null);
+  const [firstLink, setFirstLink] = useState<AdminUser | null>(null);
+  const [linkResult, setLinkResult] = useState<{
+    url: string;
+    username: string;
+    expiresAt: number;
+    sent?: string | null;
+    mailError?: string | null;
+  } | null>(null);
+  const access = useAccess();
   const first = useRef(true);
 
   const refresh = useCallback(
@@ -131,7 +141,7 @@ export function UsersPanel({
 
   const nameCell = (user: AdminUser) => (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0 }}>
-      <UserAvatar name={user.username} size={36} />
+      <UserAvatar name={user.username} src={user.avatar} size={36} />
       <Box sx={{ minWidth: 0 }}>
         <Typography variant="subtitle2" noWrap sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           {user.username}
@@ -309,15 +319,26 @@ export function UsersPanel({
         onClose={() => setCreating(false)}
         minPasswordLength={minPasswordLength}
         defaults={defaults}
-        onCreated={(user, password) => {
+        onCreated={(user, password, passwordless) => {
           setCreating(false);
           setUsers((list) => [...list, user]);
           onChanged();
           if (password) setCredentials({ username: user.username, password });
           else toast(t('{username} wurde angelegt', { username: user.username }), { variant: 'success' });
+          if (passwordless && access.linksEnabled) setFirstLink(user);
         }}
       />
       <CredentialsDialog data={credentials} onClose={() => setCredentials(null)} baseUrl={baseUrl} />
+      <LoginLinkDialog
+        open={!!firstLink}
+        user={firstLink}
+        onClose={() => setFirstLink(null)}
+        onDone={(result, username) => {
+          setFirstLink(null);
+          setLinkResult({ url: result.url, username, expiresAt: result.link.expiresAt, sent: result.sent, mailError: result.mailError });
+        }}
+      />
+      <LinkResultDialog result={linkResult} onClose={() => setLinkResult(null)} />
     </Box>
   );
 }

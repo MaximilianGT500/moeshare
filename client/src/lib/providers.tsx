@@ -29,6 +29,8 @@ export const PROVIDER_LABELS: Record<string, string> = {
   passkey: t('Passkey'),
   token: t('Token'),
   setup: t('Einrichtung'),
+  link: t('Einmal-Link'),
+  register: t('Registrierung'),
 };
 
 export const providerLabel = (key: string, fallback?: string) => fallback || PROVIDER_LABELS[key] || key;

@@ -26,6 +26,7 @@ const audit = require('../services/auditService');
 const webhook = require('../services/webhookService');
 const emails = require('../services/emailService');
 const mail = require('../services/mailService');
+const links = require('../services/loginLinkService');
 
 const router = express.Router();
 const log = logger.scope('auth');
@@ -67,9 +68,9 @@ const MAX_TICKET_ATTEMPTS = 5;
 
 const expired = () => gone('Die Anmeldung ist abgelaufen. Bitte starte sie neu.', { code: 'expired' });
 
-async function issueTicket(userId, { method, remember, next }) {
+async function issueTicket(userId, { method, remember, next, details = null }) {
   const id = randomToken(24);
-  await ephemeral.put(TICKET, id, { userId, method, remember, next, attempts: 0 }, TICKET_TTL_MS);
+  await ephemeral.put(TICKET, id, { userId, method, remember, next, details, attempts: 0 }, TICKET_TTL_MS);
   return id;
 }
 
@@ -101,12 +102,23 @@ async function signIn(req, res, row, { method, remember, next }) {
   return res.json({ ok: true, redirect: await sessions.start(req, res, row, { method, remember, next }) });
 }
 
+const passwordLogin = () => settings.get('auth.passwordLogin');
+
+const passwordOff = () => forbidden('Die Anmeldung mit Passwort ist auf diesem Server abgeschaltet.', { code: 'password_disabled' });
+
+const requirePasswordLogin = (req, res, next) => {
+  if (!passwordLogin()) throw passwordOff();
+  next();
+};
+
 const methodsInfo = () => ({
+  password: passwordLogin(),
   passkey: settings.get('auth.passkeys'),
   providers: oauth.enabled(),
   token: settings.get('auth.tokenLogin'),
   register: settings.get('auth.registration') === 'open',
-  reset: mail.ready(),
+  reset: mail.ready() && passwordLogin(),
+  emailLink: links.emailReady(),
   passkeyOrigin: new URL(settings.get('site.baseUrl')).origin,
 });
 
@@ -141,6 +153,7 @@ router.get('/login', async (req, res) => {
 
 router.get('/reset', async (req, res) => {
   if (await setup.isOpen()) return res.redirect('/setup');
+  if (!passwordLogin()) return res.redirect('/login');
   const found = await emails.peekReset(text(req.query.token, 200));
   return renderPage(res, {
     page: 'login',
@@ -161,14 +174,14 @@ router.get('/reset', async (req, res) => {
 
 const resetLimiter = limiter({ windowMs: 15 * 60 * 1000, limit: 10 });
 
-router.post('/api/auth/forgot', sameOriginOnly, resetLimiter, async (req, res) => {
+router.post('/api/auth/forgot', sameOriginOnly, resetLimiter, requirePasswordLogin, async (req, res) => {
   const login = text(req.body.login, 191).trim();
   if (!login) throw badRequest('Gib deinen Benutzernamen oder deine E-Mail-Adresse ein.', { field: 'login' });
   await emails.requestReset(login, req.language);
   res.json({ ok: true });
 });
 
-router.post('/api/auth/reset', guarded, async (req, res) => {
+router.post('/api/auth/reset', guarded, requirePasswordLogin, async (req, res) => {
   const token = text(req.body.token, 200);
   const password = text(req.body.password, 300);
   const found = await emails.peekReset(token);
@@ -232,6 +245,8 @@ router.get('/register', async (req, res) => {
         oauth: pending,
         providers: mode === 'closed' ? [] : oauth.registrationProviders(),
         passwordMinLength: settings.get('auth.passwordMinLength'),
+        passwordless: !passwordLogin(),
+        passkeys: settings.get('auth.passkeys'),
       },
     },
   });
@@ -255,7 +270,7 @@ router.post('/api/auth/logout', async (req, res) => {
   res.json({ ok: true });
 });
 
-router.post('/api/auth/login', guarded, async (req, res) => {
+router.post('/api/auth/login', guarded, requirePasswordLogin, async (req, res) => {
   const username = text(req.body.username, 64).trim();
   const password = text(req.body.password, 300);
   if (!username || !password) throw badRequest('Gib Benutzername und Passwort ein.');
@@ -298,7 +313,12 @@ async function finishSecondFactor(req, res, ticketId, ticket, extra = {}) {
   const row = await users.findById(ticket.userId);
   if (!row) throw expired();
   assertActive(row);
-  const redirect = await sessions.start(req, res, row, { method: ticket.method, remember: ticket.remember, next: ticket.next });
+  const redirect = await sessions.start(req, res, row, {
+    method: ticket.method,
+    remember: ticket.remember,
+    next: ticket.next,
+    details: ticket.details || {},
+  });
   res.json({ ok: true, redirect, ...extra });
 }
 
@@ -331,6 +351,86 @@ router.post('/api/auth/mfa/passkey', guarded, async (req, res) => {
   const result = await passkeys.authenticate({ flowId: text(req.body.flowId, 100), response: req.body.response, purpose: 'mfa' });
   if (result.userId !== ticket.userId) throw unauthorized('Dieser Passkey gehört zu einem anderen Konto.');
   return finishSecondFactor(req, res, ticketId, ticket);
+});
+
+const LINK_REASONS = {
+  unknown: 'Diesen Link kennt der Server nicht. Prüfe, ob du ihn vollständig kopiert hast.',
+  used: 'Dieser Link wurde schon benutzt. Jeder Einmal-Link funktioniert nur ein einziges Mal.',
+  expired: 'Dieser Link ist abgelaufen. Frag nach einem neuen.',
+  revoked: 'Dieser Link wurde zurückgezogen. Frag nach einem neuen.',
+  suspended: 'Dieses Konto ist gesperrt. Wende dich an einen Admin.',
+  disabled: 'Einmal-Links sind auf diesem Server gerade abgeschaltet.',
+};
+
+router.get('/login/link/:token', async (req, res) => {
+  if (await setup.isOpen()) return res.redirect('/setup');
+  const token = text(req.params.token, 120);
+  const found = await links.peek(token);
+  res.set('X-Robots-Tag', 'noindex, nofollow');
+  const same = Boolean(found.valid && req.user && req.user.id === found.userId);
+  return renderPage(res, {
+    page: 'login',
+    title: 'Anmelden',
+    head: '<meta name="robots" content="noindex, nofollow">',
+    data: {
+      mode: 'link',
+      error: '',
+      next: '',
+      methods: methodsInfo(),
+      link: found.valid
+        ? {
+            valid: true,
+            token,
+            username: found.username,
+            expiresAt: found.expiresAt,
+            current: req.user && !same ? req.user.username : null,
+            same,
+          }
+        : { valid: false, reason: tr(req, LINK_REASONS[found.reason] || LINK_REASONS.unknown) },
+    },
+  });
+});
+
+function linkLoginText(username, link, by) {
+  if (link.source === 'cli') return `**${username}** hat sich mit einem Einmal-Link von der Kommandozeile angemeldet.`;
+  if (link.source === 'api' && by) return `**${username}** hat sich mit einem Einmal-Link über **${by}** angemeldet.`;
+  if (by) return `**${username}** hat sich mit einem Einmal-Link von **${by}** angemeldet.`;
+  return `**${username}** hat sich mit einem Einmal-Link angemeldet.`;
+}
+
+function announceLinkLogin(row, link) {
+  if (link.source === 'email') return;
+  const by = link.integration ? link.integration.name : link.createdBy || link.decidedBy || link.requestedBy || '';
+  webhook.notify('security', 'Anmeldung mit Einmal-Link', linkLoginText(row.username, link, by));
+  emails.notifySecurity(row.id, 'login_link', { name: by });
+}
+
+router.post('/api/auth/link', guarded, async (req, res) => {
+  const link = await links.consume(text(req.body.token, 120), req);
+  if (!link) {
+    log.warn('Anmeldung mit Einmal-Link fehlgeschlagen', { ip: storedIp(req), reason: 'ungültig oder verbraucht' });
+    throw gone('Dieser Link ist abgelaufen, wurde schon benutzt oder zurückgezogen.', { code: 'expired' });
+  }
+  const row = await users.findById(link.user.id);
+  assertActive(row);
+  if (req.sessionToken) await sessions.revokeToken(req.sessionToken).catch(() => {});
+  announceLinkLogin(row, link);
+  const details = { via: link.source, ...(link.integration ? { integration: link.integration.name } : {}) };
+  const options = { method: 'link', remember: flag(req.body.remember), next: link.redirect || text(req.body.next), details };
+  if (link.secondFactor && row.totp_enabled_at) {
+    const ticket = await issueTicket(row.id, options);
+    return res.json({ mfa: { ticket, ...(await secondFactor(row.id)) } });
+  }
+  return res.json({ ok: true, redirect: await sessions.start(req, res, row, options) });
+});
+
+const linkRequestLimiter = limiter({ windowMs: 15 * 60 * 1000, limit: 10 });
+
+router.post('/api/auth/link/request', sameOriginOnly, linkRequestLimiter, async (req, res) => {
+  const login = text(req.body.login, 191).trim();
+  if (!login) throw badRequest('Gib deinen Benutzernamen oder deine E-Mail-Adresse ein.', { field: 'login' });
+  await links.requestByEmail(login, req.language);
+  res.json({ ok: true });
 });
 
 const passkeysEnabled = (req, res, next) => {
@@ -469,7 +569,7 @@ async function registerWithProvider(req, res, pendingId) {
   const invite = entry.invite ? await invites.requireUsable(entry.invite) : null;
   const row = await users.create({
     username: text(req.body.username, 64),
-    password: text(req.body.password, 300),
+    password: passwordLogin() ? text(req.body.password, 300) : '',
     role: invite ? invite.role : 'mitglied',
     quotaBytes: invite ? invite.quotaBytes : null,
     maxFileBytes: invite ? invite.maxFileBytes : null,
@@ -496,19 +596,31 @@ router.post('/api/auth/register', guarded, async (req, res) => {
   const code = text(req.body.invite, 60);
   if (!code && mode === 'invite') throw forbidden('Für ein neues Konto brauchst du eine Einladung.');
   const invite = code ? await invites.requireUsable(code) : null;
+  const passwordless = !passwordLogin();
+  if (passwordless && !settings.get('auth.passkeys'))
+    throw forbidden('Neue Konten gibt es auf diesem Server nur über einen Anmeldedienst.');
 
   const row = await users.create({
     username: text(req.body.username, 64),
-    password: text(req.body.password, 300),
+    password: passwordless ? '' : text(req.body.password, 300),
+    passwordless,
     role: invite ? invite.role : 'mitglied',
     quotaBytes: invite ? invite.quotaBytes : null,
     maxFileBytes: invite ? invite.maxFileBytes : null,
   });
   if (invite) await invites.consume(invite.code);
-  audit.log('user_registered', { userId: row.id, req, details: { method: 'password', invite: invite ? invite.code.slice(0, 4) : null } });
+  const method = passwordless ? 'passwordless' : 'password';
+  audit.log('user_registered', { userId: row.id, req, details: { method, invite: invite ? invite.code.slice(0, 4) : null } });
   webhook.notify('user', 'Neuer Benutzer', `**${row.username}** hat sich registriert.`);
-  emails.notifyNewUser(row.username, invite ? 'Einladung' : 'Passwort');
-  return res.json({ ok: true, redirect: await sessions.start(req, res, row, { method: 'password', remember: flag(req.body.remember) }) });
+  emails.notifyNewUser(row.username, invite ? 'Einladung' : passwordless ? 'ohne Passwort' : 'Passwort');
+  const redirect = await sessions.start(req, res, row, {
+    method: passwordless ? 'register' : 'password',
+    remember: flag(req.body.remember),
+  });
+  return res.json({
+    ok: true,
+    redirect: passwordless && !redirect.startsWith('/account?setup=') ? '/account?passkey=neu#sicherheit' : redirect,
+  });
 });
 
 const sudo = requireApi({ allowSetup: true });
@@ -518,6 +630,11 @@ router.post('/api/auth/reauth', sudo, credentialLimiter, async (req, res) => {
   const password = text(req.body.password, 300);
   const code = text(req.body.code, 40);
   let ok = false;
+  if (password && !passwordLogin()) {
+    throw forbidden('Bestätige dich mit einem Passkey, einem Code aus deiner App oder einem verknüpften Dienst.', {
+      code: 'password_disabled',
+    });
+  }
   if (password) ok = await users.verifyPassword(row, password);
   else if (code && row.totp_enabled_at) ok = (await totp.verifySecondFactor(row.id, code)).ok;
   if (!ok) {

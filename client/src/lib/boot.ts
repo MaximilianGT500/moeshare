@@ -25,3 +25,5 @@ export function readBoot<T extends AnyBoot>(): T {
   }
   return cached as T;
 }
+
+export const siteName = () => readBoot().site.title || 'MoeShare';

@@ -20,6 +20,10 @@ const storage = require('../services/storageService');
 const domains = require('../services/domainService');
 const stats = require('../services/statsService');
 const { viewPage, blurredPreview } = require('../services/viewService');
+const redirects = require('../services/redirectService');
+const paths = require('../services/pathService');
+const profiles = require('../services/profileService');
+const { displayPath } = require('../lib/slugs');
 
 const router = express.Router();
 
@@ -45,9 +49,17 @@ function refuse(res, access) {
 
 const unavailable = (access) => ['expired', 'used', 'blocked', 'missing'].includes(access.state);
 
-router.get('/view/:slug', async (req, res) => {
-  const record = await existing(req, req.params.slug);
-  if (!record) return renderMessage(res, 404, MISSING);
+async function movedTarget(req, slug, variant = 'view') {
+  const entry = await redirects.moved('file', `/${variant}/${slug}`);
+  if (!entry) return null;
+  const record = await files.findById(entry.id);
+  if (!record || record.deleted_at || !domains.servesOwner(req, record.username)) return null;
+  const host = domains.requestOrigin(req);
+  if (variant === 'download') return `/download/${displayPath(record.slug || record.filename)}`;
+  return files.viewPathOf(record, host);
+}
+
+async function showFile(req, res, record) {
   const access = protection.fileAccess(req, record);
   if (unavailable(access)) return refuse(res, access);
 
@@ -80,6 +92,14 @@ router.get('/view/:slug', async (req, res) => {
     noscript: page.noscript,
     scheme: page.data.design ? page.data.design.scheme : null,
   });
+}
+
+router.get('/view/:slug', async (req, res) => {
+  const record = await existing(req, req.params.slug);
+  if (record) return showFile(req, res, record);
+  const target = await movedTarget(req, req.params.slug);
+  if (target) return res.redirect(301, target);
+  return renderMessage(res, 404, MISSING);
 });
 
 router.get('/view/:slug/blur.jpg', async (req, res) => {
@@ -139,7 +159,11 @@ function downloadName(record) {
 
 router.get('/download/:slug', async (req, res) => {
   const record = await existing(req, req.params.slug);
-  if (!record) throw notFound('Datei nicht gefunden');
+  if (!record) {
+    const target = await movedTarget(req, req.params.slug, 'download');
+    if (target) return res.redirect(301, target);
+    throw notFound('Datei nicht gefunden');
+  }
   const access = protection.fileAccess(req, record);
   if (unavailable(access)) return refuse(res, access);
   if (access.state !== 'open') return res.redirect(302, `/view/${encodeURIComponent(record.slug || record.filename)}`);
@@ -252,4 +276,41 @@ router.get('/uploads/:user/preview/:name', serveUpload('preview'));
 router.get('/uploads/:user/m3u8/:name', serveUpload('hls'));
 router.get('/uploads/:user/:name', serveUpload('original'));
 
+const tail = express.Router();
+
+const withQuery = (req, target) => {
+  const index = req.originalUrl.indexOf('?');
+  return index === -1 ? target : `${target}${req.originalUrl.slice(index)}`;
+};
+
+tail.get('/:path/:slug', async (req, res, next) => {
+  const owner = await paths.resolve(req.params.path);
+  if (!owner || (req.customDomain && req.customDomain.username !== owner.username)) return next();
+  const record = await existing(req, req.params.slug);
+  const own = record && record.username === owner.username ? record : null;
+  if (!own) {
+    const target = await movedTarget(req, req.params.slug);
+    return target ? res.redirect(301, withQuery(req, target)) : next();
+  }
+  const preferred = files.viewPathOf(own, domains.requestOrigin(req));
+  const here = `/${owner.path}/${displayPath(own.slug || own.filename)}`;
+  if (!paths.enabled() || owner.retired || !owner.exact) return res.redirect(owner.retired ? 301 : 302, withQuery(req, preferred));
+  if (preferred !== here && req.customDomain) return res.redirect(302, withQuery(req, preferred));
+  return showFile(req, res, own);
+});
+
+tail.get('/:slug', async (req, res, next) => {
+  if (!req.customDomain) {
+    const owner = await paths.resolve(req.params.slug);
+    if (!owner || !paths.enabled()) return next();
+    const found = await profiles.findPublic(owner.username);
+    return found ? res.redirect(302, `/u/${encodeURIComponent(owner.username)}`) : next();
+  }
+  const record = await existing(req, req.params.slug);
+  if (record) return showFile(req, res, record);
+  const target = await movedTarget(req, req.params.slug);
+  return target ? res.redirect(301, withQuery(req, target)) : next();
+});
+
 module.exports = router;
+module.exports.tail = tail;

@@ -12,7 +12,7 @@ import { tn, t } from '../../lib/i18n';
 import { CopyIconButton } from '../../components/CopyButton';
 import { LinkListEditor } from '../../components/LinkListEditor';
 import { SaveBar, SettingRow, SettingsSection, SwitchRow } from '../../components/SettingsKit';
-import { UserAvatar } from '../../components/UserAvatar';
+import { AvatarButton, AvatarDialog, type AvatarLimits } from '../../components/AvatarEditor';
 import { useToast } from '../../components/Toaster';
 import { c, fonts, radius } from '../../theme/tokens';
 
@@ -30,8 +30,21 @@ const pick = (profile: ProfileSettings): Editable => ({
 const countChanges = (a: Editable, b: Editable) =>
   (Object.keys(a) as Array<keyof Editable>).filter((key) => JSON.stringify(a[key]) !== JSON.stringify(b[key])).length;
 
-export function ProfileEditor({ user, initial }: { user: SessionUser; initial: ProfileSettings }) {
+export function ProfileEditor({
+  user,
+  initial,
+  avatar,
+  avatars,
+  onAvatar,
+}: {
+  user: SessionUser;
+  initial: ProfileSettings;
+  avatar: string | null;
+  avatars: AvatarLimits & { enabled: boolean };
+  onAvatar: (avatar: string | null) => void;
+}) {
   const toast = useToast();
+  const [editingAvatar, setEditingAvatar] = useState(false);
   const [profile, setProfile] = useState(initial);
   const [draft, setDraft] = useState<Editable>(pick(initial));
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -76,7 +89,13 @@ export function ProfileEditor({ user, initial }: { user: SessionUser; initial: P
             flexWrap: 'wrap',
           }}
         >
-          <UserAvatar name={user.username} size={64} />
+          <AvatarButton
+            name={user.username}
+            src={avatar}
+            size={64}
+            label={avatar ? t('Profilbild ändern') : t('Profilbild hinzufügen')}
+            onClick={avatars.enabled ? () => setEditingAvatar(true) : undefined}
+          />
           <Box sx={{ flex: 1, minWidth: 220 }}>
             <Typography variant="h6" component="h2">
               {draft.name || user.username}
@@ -191,6 +210,14 @@ export function ProfileEditor({ user, initial }: { user: SessionUser; initial: P
       </Stack>
 
       <SaveBar count={dirty} busy={busy} onSave={save} onReset={() => setDraft(saved)} />
+      <AvatarDialog
+        open={editingAvatar}
+        onClose={() => setEditingAvatar(false)}
+        name={user.username}
+        current={avatar}
+        limits={avatars}
+        onSaved={onAvatar}
+      />
     </Box>
   );
 }

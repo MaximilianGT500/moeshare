@@ -2,7 +2,7 @@
 
 const db = require('../lib/db');
 const logger = require('../lib/logger');
-const { badRequest, notFound } = require('../lib/errors');
+const { badRequest, conflict, notFound } = require('../lib/errors');
 const slugs = require('../lib/slugs');
 const { resolveExpiry } = require('../lib/expiry');
 const settings = require('./settingsService');
@@ -11,6 +11,7 @@ const domains = require('./domainService');
 const protection = require('./protectionService');
 const uploads = require('./uploadService');
 const webhook = require('./webhookService');
+const addresses = require('./addressService');
 
 const log = logger.scope('links');
 
@@ -36,7 +37,11 @@ function validateUrl(value) {
   return parsed.href;
 }
 
-const codeTaken = async (code) => Boolean(await db.get('SELECT id FROM links WHERE code = ?', [code]));
+const codeTaken = async (code) =>
+  Boolean(
+    (await db.get('SELECT id FROM links WHERE code = ?', [code])) ||
+    (await db.get('SELECT path FROM redirects WHERE path = ?', [`/s/${code}`]))
+  );
 
 function urlsFor(row, domain = null, username = null) {
   const base = settings.get('site.baseUrl');
@@ -65,7 +70,7 @@ async function create(user, target, raw = {}) {
   const language = settings.get('site.language');
   let id = null;
   for (let attempt = 0; attempt < 6 && !id; attempt++) {
-    const code = await slugs.unique(options.style, { language }, codeTaken);
+    const code = options.code || (await slugs.unique(options.style, { language }, codeTaken));
     try {
       id = await db.insertRow('links', {
         code,
@@ -79,6 +84,7 @@ async function create(user, target, raw = {}) {
         clicks: 0,
       });
     } catch (error) {
+      if (db.isUniqueViolation(error) && options.code) throw conflict('Diese Adresse ist schon vergeben.', { field: 'code' });
       if (!db.isUniqueViolation(error) || attempt === 5) throw error;
     }
   }
@@ -139,6 +145,7 @@ async function update(userId, id, patch) {
       throw badRequest('Ungültige Anzahl an Klicks.', { field: 'maxClicks' });
     fields.max_clicks = count || null;
   }
+  if (patch.code !== undefined && patch.code !== row.code) await addresses.rename('link', row, patch.code);
   const columns = Object.keys(fields);
   if (columns.length) {
     await db.run(`UPDATE links SET ${columns.map((column) => `${column} = ?`).join(', ')} WHERE id = ?`, [

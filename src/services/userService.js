@@ -10,6 +10,8 @@ const passwords = require('../lib/passwords');
 const settings = require('./settingsService');
 const files = require('./fileService');
 const identities = require('./identityService');
+const avatars = require('./avatarService');
+const paths = require('./pathService');
 
 const BCRYPT_COST = 12;
 const ROLES = ['admin', 'mitglied'];
@@ -96,9 +98,10 @@ async function create({
   maxFileBytes = null,
   mustChangePassword = false,
   identity = null,
+  passwordless = false,
 }) {
   const name = await validateNewAccount(username, password);
-  if (!password && !identity) throw badRequest('Ein Passwort ist erforderlich.', { field: 'password' });
+  if (!password && !identity && !passwordless) throw badRequest('Ein Passwort ist erforderlich.', { field: 'password' });
   if (identity) await identities.assertFree(identity.provider, identity.subject, null, identity.label);
 
   const now = Date.now();
@@ -215,6 +218,8 @@ function toAdminUser(row, linked = []) {
     identities: linked,
     hasPassword: Boolean(row.password),
     mustChangePassword: Boolean(row.must_change_password),
+    avatar: avatars.urlFor(row),
+    linkPath: paths.currentOf(row.id),
   };
 }
 
@@ -257,11 +262,24 @@ async function remove(userId) {
   await db.run("DELETE FROM stats_daily WHERE kind = 'p' AND ref_id = ?", [user.id]);
   await db.run("DELETE FROM stats_sources WHERE kind = 'p' AND ref_id = ?", [user.id]);
   await db.run('DELETE FROM album_files WHERE album_id IN (SELECT id FROM albums WHERE user_id = ?)', [user.id]);
-  for (const table of ['sessions', 'api_tokens', 'passkeys', 'recovery_codes', 'identities', 'links', 'albums', 'user_domains']) {
+  for (const table of [
+    'sessions',
+    'api_tokens',
+    'passkeys',
+    'recovery_codes',
+    'identities',
+    'links',
+    'albums',
+    'user_domains',
+    'user_avatars',
+    'user_paths',
+    'login_links',
+  ]) {
     await db.run(`DELETE FROM ${table} WHERE user_id = ?`, [user.id]);
   }
   await db.run('DELETE FROM users WHERE id = ?', [user.id]);
   cache.clear();
+  await paths.refresh();
   return user;
 }
 

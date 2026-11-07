@@ -8,16 +8,23 @@ import { SecondFactorStep } from './SecondFactorStep';
 import { TokenStep } from './TokenStep';
 import { RegisterForm } from './AccountForms';
 import { ForgotStep, ResetForm } from './ResetSteps';
+import { EmailLinkStep, LinkStep } from './LinkSteps';
 
-type Step = 'credentials' | 'forgot' | 'mfa' | 'token';
+type Step = 'link' | 'credentials' | 'forgot' | 'email' | 'mfa' | 'token';
 
-const ORDER: Step[] = ['credentials', 'forgot', 'token', 'mfa'];
+const ORDER: Step[] = ['link', 'credentials', 'forgot', 'email', 'token', 'mfa'];
 
 function firstStep(boot: LoginBoot): Step {
   if (boot.mfa) return 'mfa';
+  if (boot.mode === 'link' && boot.link) return 'link';
   if (window.location.hash === '#vergessen' && boot.methods.reset) return 'forgot';
+  if (window.location.hash === '#link' && boot.methods.emailLink) return 'email';
   return 'credentials';
 }
+
+const clearHash = () => {
+  if (window.location.hash) window.history.replaceState(null, '', window.location.pathname + window.location.search);
+};
 
 export function LoginPage() {
   const boot = readBoot<LoginBoot>();
@@ -53,6 +60,18 @@ export function LoginPage() {
     <AuthLayout site={boot.site}>
       <AnimatePresence mode="wait" initial={false} custom={direction}>
         <m.div key={step} custom={direction} variants={stepMotion} initial="initial" animate="animate" exit="exit">
+          {step === 'link' && boot.link && (
+            <LinkStep
+              link={boot.link}
+              canRequest={!!boot.methods.emailLink}
+              onMfa={(next) => {
+                setChallenge(next);
+                setError('');
+                go('mfa');
+              }}
+              onSuccess={finish}
+            />
+          )}
           {step === 'credentials' && (
             <CredentialsStep
               site={boot.site}
@@ -74,13 +93,29 @@ export function LoginPage() {
                 go('mfa');
               }}
               onToken={() => go('token')}
+              onEmailLink={
+                boot.methods.emailLink
+                  ? () => {
+                      setError('');
+                      go('email');
+                    }
+                  : undefined
+              }
               onSuccess={finish}
             />
           )}
           {step === 'forgot' && (
             <ForgotStep
               onBack={() => {
-                if (window.location.hash) window.history.replaceState(null, '', window.location.pathname + window.location.search);
+                clearHash();
+                go('credentials');
+              }}
+            />
+          )}
+          {step === 'email' && (
+            <EmailLinkStep
+              onBack={() => {
+                clearHash();
                 go('credentials');
               }}
             />
@@ -88,6 +123,7 @@ export function LoginPage() {
           {step === 'token' && (
             <TokenStep
               next={boot.next}
+              passwordless={!boot.methods.password}
               onBack={() => go('credentials')}
               onMfa={(next) => {
                 setChallenge(next);

@@ -194,6 +194,10 @@ const SECURITY_EVENTS = {
     subject: 'Neuer Passkey hinzugefügt',
     text: 'Zu deinem Konto {username} bei {site} wurde ein neuer Passkey hinzugefügt: {name}.',
   },
+  login_link: {
+    subject: 'Anmeldung mit Einmal-Link',
+    text: 'In dein Konto {username} bei {site} hat sich gerade jemand mit einem Einmal-Link angemeldet. Erstellt hat den Link: {name}.',
+  },
 };
 
 function notifySecurity(userId, event, params = {}) {
@@ -207,7 +211,9 @@ function notifySecurity(userId, event, params = {}) {
         title: t(spec.subject),
         paragraphs: [
           t(spec.text, { username: row.username, site: site(), name: params.name ? translate(language, params.name) : '' }),
-          t('Warst du das nicht? Melde dich sofort an, ändere dein Passwort und wende dich an einen Admin.'),
+          settings.get('auth.passwordLogin')
+            ? t('Warst du das nicht? Melde dich sofort an, ändere dein Passwort und wende dich an einen Admin.')
+            : t('Warst du das nicht? Melde dich sofort an, prüfe deine Geräte und wende dich an einen Admin.'),
         ],
         button: { label: t('Konto öffnen'), url: `${base()}/account#sicherheit` },
       };

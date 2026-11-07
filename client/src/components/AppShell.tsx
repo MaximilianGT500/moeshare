@@ -125,7 +125,7 @@ function AccountMenu({
       slotProps={{ paper: { sx: { width: 300 } } }}
     >
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, px: 1.5, pt: 1, pb: 1.5 }}>
-        <UserAvatar name={user.username} size={44} />
+        <UserAvatar name={user.username} src={user.avatar} size={44} />
         <Box sx={{ minWidth: 0 }}>
           <Typography variant="subtitle2" noWrap>
             {user.username}
@@ -179,7 +179,7 @@ function AccountButton({ user, summary, size = 40 }: { user: SessionUser; summar
           onClick={(event) => setAnchor(event.currentTarget)}
           sx={{ p: 0.5 }}
         >
-          <UserAvatar name={user.username} size={size} />
+          <UserAvatar name={user.username} src={user.avatar} size={size} />
         </IconButton>
       </Tooltip>
       <AccountMenu user={user} summary={summary} anchor={anchor} onClose={() => setAnchor(null)} />

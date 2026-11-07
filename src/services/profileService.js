@@ -7,6 +7,7 @@ const settings = require('./settingsService');
 const files = require('./fileService');
 const albums = require('./albumService');
 const designs = require('./designService');
+const avatars = require('./avatarService');
 const domains = require('./domainService');
 
 const MAX_NAME = 60;
@@ -128,7 +129,7 @@ function profileUrls(username) {
 
 async function findPublic(username) {
   if (!settings.get('profiles.enabled') || typeof username !== 'string' || !/^[A-Za-z0-9_.-]{1,64}$/.test(username)) return null;
-  const row = await db.get('SELECT id, username, role, status, profile, created_at FROM users WHERE lower(username) = lower(?)', [
+  const row = await db.get('SELECT id, username, role, status, profile, created_at, avatar FROM users WHERE lower(username) = lower(?)', [
     username,
   ]);
   if (!row || row.status !== 'active') return null;
@@ -162,6 +163,7 @@ async function publicData(found, { domain = null } = {}) {
       links: profile.links,
       since: row.created_at ? Number(row.created_at) : null,
       url: domain ? `${domain}/` : profileUrls(row.username).profile,
+      avatar: avatars.urlFor(row),
     },
     albums: albumList,
     files: fileList,
