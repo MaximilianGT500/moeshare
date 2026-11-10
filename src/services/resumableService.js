@@ -15,6 +15,7 @@ const settings = require('./settingsService');
 const quota = require('./quotaService');
 const files = require('./fileService');
 const uploads = require('./uploadService');
+const rules = require('./uploadRules');
 
 const log = logger.scope('upload');
 
@@ -95,6 +96,7 @@ async function create(user, input = {}, raw = {}) {
   if (!enabled()) throw notFound('Fortsetzbare Uploads sind auf diesem Server abgeschaltet.');
   const name = cleanName(input.name);
   if (!name) throw badRequest('Es fehlt der Dateiname.', { field: 'name' });
+  rules.assertName(user, name);
   const size = Number(input.size);
   if (!Number.isSafeInteger(size) || size < 1) throw badRequest('Ungültige Dateigröße.', { field: 'size' });
   const open = await db.count('SELECT COUNT(*) FROM upload_sessions WHERE user_id = ? AND expires_at > ?', [user.id, Date.now()]);

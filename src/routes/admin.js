@@ -48,6 +48,7 @@ const updates = require('../services/updateService');
 const caddy = require('../services/caddyService');
 const metrics = require('../services/metricsService');
 const announcementService = require('../services/announcementService');
+const discordApp = require('../services/discordAppService');
 
 const router = express.Router();
 const admin = requireApi({ admin: true });
@@ -772,6 +773,18 @@ router.post('/api/admin/webhooks/:id/test', admin, async (req, res) => {
   const failure = await webhook.test(req.params.id, body);
   if (failure) throw badRequest(tr(req, failure.message));
   res.json({ ok: true, targets: await webhook.list() });
+});
+
+const discordState = async (req) => {
+  const state = await discordApp.state();
+  return { ...state, error: state.error ? tr(req, state.error) : null };
+};
+
+router.get('/api/admin/discord', admin, async (req, res) => res.json(await discordState(req)));
+
+router.post('/api/admin/discord/commands', admin, async (req, res) => {
+  await discordApp.register();
+  res.json(await discordState(req));
 });
 
 router.post('/api/admin/clamav/test', admin, async (req, res) => {

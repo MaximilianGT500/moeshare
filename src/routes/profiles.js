@@ -3,6 +3,8 @@
 const express = require('express');
 const { notFound } = require('../lib/errors');
 const { escapeHtml } = require('../lib/format');
+const { tr } = require('../lib/i18n');
+const feed = require('../lib/feed');
 const { renderPage, renderMessage } = require('../lib/render');
 const domains = require('../services/domainService');
 const profiles = require('../services/profileService');
@@ -37,6 +39,7 @@ async function render(req, res, username) {
       description && meta('name="description"', description),
       meta('property="og:type"', 'profile'),
       meta('property="og:url"', data.profile.url),
+      `<link rel="alternate" type="application/atom+xml" title="${escapeHtml(data.profile.name)}" href="${escapeHtml(feedUrl(req, found.row.username, domain || settings.get('site.baseUrl')))}" />`,
       picture && meta('property="og:image"', picture),
       picture && meta('property="og:image:width"', String(avatars.SIZE)),
       picture && meta('property="og:image:height"', String(avatars.SIZE)),
@@ -48,6 +51,7 @@ async function render(req, res, username) {
       ...data,
       owner,
       custom: Boolean(req.customDomain),
+      feed: feedUrl(req, found.row.username, domain || settings.get('site.baseUrl')),
       report: settings.get('reports.enabled') ? { kind: 'profile', target: found.row.username } : null,
     },
     scheme: data.design.scheme,
@@ -60,6 +64,50 @@ router.get('/', async (req, res, next) => {
 });
 
 router.get('/u/:username', (req, res) => render(req, res, req.params.username));
+
+async function sendFeed(req, res, username) {
+  const found = await profiles.findPublic(username);
+  if (!found || found.profile.blocked || (req.customDomain && found.row.username !== req.customDomain.username)) throw notFound(MISSING);
+  const domain = domains.requestOrigin(req);
+  const origin = domain || settings.get('site.baseUrl');
+  const data = await profiles.publicData(found, { domain: req.customDomain ? domain : null });
+  const absolute = (url) => (/^https?:\/\//.test(url) ? url : `${origin}${url}`);
+  const t = (text, values) => tr(req, text, values);
+  const files = data.files ? data.files.items.filter((item) => !item.locked).map((item) => feed.fileEntry(item, { t, absolute })) : [];
+  const albumEntries = data.albums
+    .filter((album) => !album.locked)
+    .map((album) => ({
+      id: album.url,
+      title: t('Album: {title}', { title: album.title }),
+      link: album.url,
+      date: album.updatedAt,
+      summary: album.description || t('{count} Dateien', { count: album.files }),
+    }));
+  res.set('Cache-Control', 'public, max-age=300');
+  res.type('application/atom+xml; charset=utf-8');
+  res.send(
+    feed.atom({
+      title: data.profile.name,
+      subtitle: data.profile.bio ? data.profile.bio.replace(/\s+/g, ' ').slice(0, 300) : '',
+      link: data.profile.url,
+      self: feedUrl(req, found.row.username, origin),
+      author: data.profile.name,
+      icon: data.profile.avatar ? absolute(data.profile.avatar) : null,
+      generator: settings.get('site.title'),
+      entries: [...files, ...albumEntries],
+    })
+  );
+}
+
+const feedUrl = (req, username, origin) =>
+  req.customDomain ? `${origin}/feed.xml` : `${origin}/u/${encodeURIComponent(username)}/feed.xml`;
+
+router.get('/feed.xml', async (req, res, next) => {
+  if (!req.customDomain) return next();
+  return sendFeed(req, res, req.customDomain.username);
+});
+
+router.get('/u/:username/feed.xml', (req, res) => sendFeed(req, res, req.params.username));
 
 router.get('/u/:username/avatar', async (req, res) => {
   const found = avatars.assertFound(await avatars.read(req.params.username));

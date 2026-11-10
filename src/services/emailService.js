@@ -221,6 +221,58 @@ function notifySecurity(userId, event, params = {}) {
     .catch(() => false);
 }
 
+const METHOD_LABELS = {
+  password: 'Passwort',
+  totp: 'Passwort und Zwei-Faktor',
+  passkey: 'Passkey',
+  email: 'Link aus einer E-Mail',
+  link: 'Einmal-Link',
+  token: 'API-Token',
+  discord: 'Discord',
+  github: 'GitHub',
+  google: 'Google',
+  microsoft: 'Microsoft',
+  gitlab: 'GitLab',
+};
+
+function notifyNewDevice(userId, { device, method, ip, at }) {
+  return mail
+    .notifyUser(userId, 'security', (language, row) => {
+      const t = (text, values) => translate(language, text, values);
+      const how = method === 'oidc' ? settings.get('auth.oidc.name') || 'SSO' : METHOD_LABELS[method] ? t(METHOD_LABELS[method]) : method;
+      const when = new Intl.DateTimeFormat(language === 'en' ? 'en-GB' : 'de-DE', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZoneName: 'short',
+      }).format(new Date(at));
+      return {
+        subject: t('Neue Anmeldung bei {site}', { site: site() }),
+        title: t('Neue Anmeldung auf einem anderen Gerät'),
+        paragraphs: [
+          t('In dein Konto {username} bei {site} hat sich gerade jemand auf einem Gerät angemeldet, das bisher nicht dabei war.', {
+            username: row.username,
+            site: site(),
+          }),
+          `${t('Gerät')}: ${t(device)}`,
+          `${t('Zeit')}: ${when}`,
+          `${t('Angemeldet mit')}: ${how}`,
+          ...(ip ? [`${t('IP-Adresse')}: ${ip}`] : []),
+          settings.get('auth.passwordLogin')
+            ? t('Warst du das nicht? Melde dich sofort an, ändere dein Passwort und wende dich an einen Admin.')
+            : t('Warst du das nicht? Melde dich sofort an, prüfe deine Geräte und wende dich an einen Admin.'),
+        ],
+        button: { label: t('Geräte ansehen'), url: `${base()}/account#geraete` },
+      };
+    })
+    .catch((error) => {
+      log.warn('Hinweis auf eine neue Anmeldung fehlgeschlagen', { error });
+      return false;
+    });
+}
+
 const REASON_LABELS = {
   illegal: 'Rechtswidriger Inhalt',
   copyright: 'Urheberrecht',
@@ -300,6 +352,7 @@ module.exports = {
   peekReset,
   consumeReset,
   notifySecurity,
+  notifyNewDevice,
   notifyReport,
   notifyNewUser,
   sendInvite,

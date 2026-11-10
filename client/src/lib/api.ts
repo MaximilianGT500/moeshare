@@ -953,6 +953,20 @@ export const completeSetup = (payload: SetupPayload & { createToken: boolean }) 
 export const fetchUpdateInfo = () => api<UpdateInfo>('/api/admin/update');
 export const checkForUpdate = () => post<UpdateInfo>('/api/admin/update/check');
 
+export interface DiscordAppState {
+  enabled: boolean;
+  ready: boolean;
+  credentials: boolean;
+  login: boolean;
+  endpoint: string;
+  registeredAt: number | null;
+  commands: string[];
+  error: string | null;
+}
+
+export const fetchDiscordApp = () => api<DiscordAppState>('/api/admin/discord');
+export const registerDiscordCommands = () => post<DiscordAppState>('/api/admin/discord/commands');
+
 export const fetchVideoInfo = () => api<{ videos: number; running: string | null; ffmpeg: boolean }>('/api/admin/videos');
 export const repairVideos = () => post<{ job: Job }>('/api/admin/videos/repair');
 

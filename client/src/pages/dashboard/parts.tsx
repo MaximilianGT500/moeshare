@@ -14,6 +14,7 @@ import MenuItem from '@mui/material/MenuItem';
 import TextField from '@mui/material/TextField';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
+import ScreenshotMonitorRounded from '@mui/icons-material/ScreenshotMonitorRounded';
 import CloseRounded from '@mui/icons-material/CloseRounded';
 import DeleteOutlineRounded from '@mui/icons-material/DeleteOutlineRounded';
 import DoneAllRounded from '@mui/icons-material/DoneAllRounded';
@@ -684,6 +685,7 @@ export function EmptyState({
   onPick,
   onUrl,
   onText,
+  onCapture,
 }: {
   filtered: boolean;
   query: string;
@@ -691,6 +693,7 @@ export function EmptyState({
   onPick: () => void;
   onUrl?: () => void;
   onText?: () => void;
+  onCapture?: () => void;
 }) {
   return (
     <Box sx={{ textAlign: 'center', py: { xs: 8, md: 12 }, px: 2 }}>
@@ -737,6 +740,11 @@ export function EmptyState({
             {onUrl && (
               <Button variant="tonal" startIcon={<AddLinkRounded />} onClick={onUrl}>
                 {t('Von URL')}
+              </Button>
+            )}
+            {onCapture && (
+              <Button variant="tonal" startIcon={<ScreenshotMonitorRounded />} onClick={onCapture}>
+                {t('Bildschirm aufnehmen')}
               </Button>
             )}
           </>

@@ -384,6 +384,7 @@ function publicFile(file) {
     locked: Boolean(guarded),
     once: Boolean(file.maxViews),
     view: file.urls.view,
+    createdAt: file.createdAt || null,
     preview: guarded ? null : file.type === 'image' || file.type === 'video' ? file.urls.preview : null,
     direct: guarded ? null : file.urls.direct,
     playback: guarded ? null : file.urls.playback || null,

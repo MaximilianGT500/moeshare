@@ -38,7 +38,13 @@ function createApp() {
 
   const json = express.json({ limit: '1mb' });
   const form = express.urlencoded({ extended: false, limit: '1mb' });
-  const ownParser = new Set(['/api/texts', '/upload/text', '/api/account/watermark', '/api/account/watermark/preview']);
+  const ownParser = new Set([
+    '/api/texts',
+    '/upload/text',
+    '/api/account/watermark',
+    '/api/account/watermark/preview',
+    '/api/discord/interactions',
+  ]);
   app.use((req, res, next) => (ownParser.has(req.path) ? next() : json(req, res, next)));
   app.use((req, res, next) => (ownParser.has(req.path) ? next() : form(req, res, next)));
   app.use(cookieParser());
@@ -63,6 +69,7 @@ function createApp() {
   });
   app.use(require('./routes/metrics'));
   app.use(maintenance);
+  app.use(require('./routes/discord'));
 
   app.use(redirects.middleware);
   app.use(require('./routes/profiles'));

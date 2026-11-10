@@ -176,7 +176,9 @@ export function EmailSection({
           id="notify-security"
           icon={<ShieldOutlined />}
           label={t('Sicherheitshinweise')}
-          description={t('Eine E-Mail, wenn sich dein Passwort, deine Zwei-Faktor-Anmeldung oder deine Passkeys ändern.')}
+          description={t(
+            'Eine E-Mail bei einer Anmeldung auf einem neuen Gerät und wenn sich dein Passwort, deine Zwei-Faktor-Anmeldung oder deine Passkeys ändern.'
+          )}
           checked={notify.security}
           disabled={saving}
           onChange={(on) => toggle('security', on)}

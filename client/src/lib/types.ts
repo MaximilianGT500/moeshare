@@ -901,6 +901,11 @@ export interface LoginBoot extends BootBase {
   };
 }
 
+export interface UploadRules {
+  blocked: string[];
+  programs: boolean;
+}
+
 export interface DashboardBoot extends BootBase {
   page: 'dashboard';
   user: SessionUser;
@@ -908,6 +913,7 @@ export interface DashboardBoot extends BootBase {
   stats: UserStats;
   files: FileListResponse;
   maxUploadBytes: number | null;
+  uploadRules?: UploadRules;
   quota: QuotaInfo;
   urlFetch: boolean;
   options: UploadOptionsInfo;
@@ -1336,6 +1342,7 @@ export interface AlbumItem {
 export interface AlbumBoot extends BootBase, OwnerStyle {
   page: 'album';
   locked?: LockedInfo;
+  feed?: string | null;
   album?: {
     id: number;
     code: string;
@@ -1373,6 +1380,7 @@ export interface PublicFilePage {
 
 export interface ProfileBoot extends BootBase, OwnerStyle {
   page: 'profile';
+  feed?: string | null;
   profile: {
     id: number;
     username: string;

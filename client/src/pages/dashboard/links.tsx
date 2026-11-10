@@ -28,6 +28,8 @@ import { formatNumber, relativeMs } from '../../lib/format';
 import { t, tn } from '../../lib/i18n';
 import { useDebouncedValue, useInView } from '../../lib/hooks';
 import { CopyIconButton, CopyTextButton } from '../../components/CopyButton';
+import { QrDialog } from '../../components/QrDialog';
+import QrCode2Rounded from '@mui/icons-material/QrCode2Rounded';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { useToast } from '../../components/Toaster';
 import { SearchField } from '../../components/SearchField';
@@ -370,7 +372,19 @@ export function LinkDialog({
   );
 }
 
-function LinkRow({ link, onDelete, onEdit, onStats }: { link: ShortLink; onDelete: () => void; onEdit: () => void; onStats?: () => void }) {
+function LinkRow({
+  link,
+  onDelete,
+  onEdit,
+  onStats,
+  onQr,
+}: {
+  link: ShortLink;
+  onDelete: () => void;
+  onEdit: () => void;
+  onStats?: () => void;
+  onQr: () => void;
+}) {
   let host = '';
   try {
     host = new URL(link.url).host;
@@ -451,6 +465,11 @@ function LinkRow({ link, onDelete, onEdit, onStats }: { link: ShortLink; onDelet
             </IconButton>
           </Tooltip>
         )}
+        <Tooltip title={t('QR-Code')}>
+          <IconButton aria-label={t('QR-Code')} onClick={onQr}>
+            <QrCode2Rounded />
+          </IconButton>
+        </Tooltip>
         <CopyIconButton value={link.short} label={t('Kurzlink kopieren')} message={t('Kurzlink kopiert')} />
         <Tooltip title={t('Bearbeiten')}>
           <IconButton aria-label={t('Kurzlink bearbeiten')} onClick={onEdit}>
@@ -479,6 +498,7 @@ export function LinksView({ info, version }: { info: UploadOptionsInfo; version:
   const search = useDebouncedValue(query.trim(), 280);
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<ShortLink | null>(null);
+  const [qr, setQr] = useState<ShortLink | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
 
   const load = useCallback(async () => {
@@ -585,6 +605,7 @@ export function LinksView({ info, version }: { info: UploadOptionsInfo; version:
               link={link}
               onDelete={() => remove(link)}
               onEdit={() => setEditing(link)}
+              onQr={() => setQr(link)}
               onStats={
                 info.stats ? () => setStatsTarget({ kind: 'link', id: link.id, title: link.short.replace(/^https?:\/\//, '') }) : undefined
               }
@@ -592,6 +613,7 @@ export function LinksView({ info, version }: { info: UploadOptionsInfo; version:
           ))}
         </Box>
       )}
+      <QrDialog url={qr ? qr.short : null} title={qr ? qr.title || qr.url : undefined} onClose={() => setQr(null)} />
       <Box ref={sentinel} sx={{ height: '1px' }} />
       {loadingMore && (
         <Box sx={{ display: 'grid', placeItems: 'center', py: 2 }}>

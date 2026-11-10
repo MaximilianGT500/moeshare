@@ -13,6 +13,10 @@ import LockRounded from '@mui/icons-material/LockRounded';
 import LooksOneRounded from '@mui/icons-material/LooksOneRounded';
 import OpenInNewRounded from '@mui/icons-material/OpenInNewRounded';
 import PlayArrowRounded from '@mui/icons-material/PlayArrowRounded';
+import PauseRounded from '@mui/icons-material/PauseRounded';
+import SlideshowRounded from '@mui/icons-material/SlideshowRounded';
+import FullscreenRounded from '@mui/icons-material/FullscreenRounded';
+import FullscreenExitRounded from '@mui/icons-material/FullscreenExitRounded';
 import WarningAmberRounded from '@mui/icons-material/WarningAmberRounded';
 import Button from '@mui/material/Button';
 import type { AlbumItem } from '../lib/types';
@@ -79,12 +83,25 @@ function metrics(width: number) {
   return { target: 236, gap: 10 };
 }
 
-export function PublicGallery({ items }: { items: AlbumItem[] }) {
+export function PublicGallery({ items, play = 0 }: { items: AlbumItem[]; play?: number }) {
   const [ref, width] = useElementWidth<HTMLDivElement>();
   const { target, gap } = metrics(width);
   const media = useMemo(() => items.filter(viewable), [items]);
   const [open, setOpen] = useState<number | null>(null);
+  const [playing, setPlaying] = useState(false);
   const [revealed, setRevealed] = useState<Set<number>>(() => new Set());
+
+  useEffect(() => {
+    if (!play || !media.length) return;
+    setOpen(0);
+    setPlaying(true);
+  }, [play, media.length]);
+
+  const close = () => {
+    setOpen(null);
+    setPlaying(false);
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  };
   const rows = useMemo(() => justify(items, tileAspect, width, { targetHeight: target, gap }), [items, width, target, gap]);
 
   const openItem = (item: AlbumItem) => {
@@ -119,9 +136,11 @@ export function PublicGallery({ items }: { items: AlbumItem[] }) {
             items={media}
             index={open}
             onIndex={setOpen}
-            onClose={() => setOpen(null)}
+            onClose={close}
             veiled={veiled(media[open])}
             onReveal={() => reveal(media[open])}
+            playing={playing}
+            onPlaying={setPlaying}
           />
         )}
       </AnimatePresence>
@@ -282,6 +301,13 @@ function AlbumTile({
   );
 }
 
+export function enterFullscreen() {
+  const root = document.documentElement;
+  if (!document.fullscreenElement && root.requestFullscreen) root.requestFullscreen().catch(() => {});
+}
+
+const PACES = [3, 5, 10];
+
 function Lightbox({
   items,
   index,
@@ -289,6 +315,8 @@ function Lightbox({
   onClose,
   veiled,
   onReveal,
+  playing,
+  onPlaying,
 }: {
   items: AlbumItem[];
   index: number;
@@ -296,11 +324,19 @@ function Lightbox({
   onClose: () => void;
   veiled: boolean;
   onReveal: () => void;
+  playing: boolean;
+  onPlaying: (playing: boolean) => void;
 }) {
   const item = items[index];
   const [direction, setDirection] = useState(0);
+  const [pace, setPace] = useState(5);
+  const [idle, setIdle] = useState(false);
+  const [full, setFull] = useState(() => Boolean(document.fullscreenElement));
+  const idleTimer = useRef(0);
+  const hovering = useRef(false);
   const start = useRef<{ x: number; y: number } | null>(null);
   const many = items.length > 1;
+  const canFull = Boolean(document.fullscreenEnabled);
 
   const go = (step: number) => {
     if (!many) return;
@@ -308,10 +344,46 @@ function Lightbox({
     onIndex((index + step + items.length) % items.length);
   };
 
+  const wake = () => {
+    setIdle(false);
+    window.clearTimeout(idleTimer.current);
+    if (playing) idleTimer.current = window.setTimeout(() => !hovering.current && setIdle(true), 2500);
+  };
+
+  const toggleFull = () => {
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    else enterFullscreen();
+  };
+
+  useEffect(() => {
+    const onChange = () => setFull(Boolean(document.fullscreenElement));
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
+
+  useEffect(() => {
+    wake();
+    return () => window.clearTimeout(idleTimer.current);
+  }, [playing]);
+
+  useEffect(() => {
+    if (!playing || veiled || item.type !== 'image' || !many) return;
+    const timer = window.setTimeout(() => go(1), pace * 1000);
+    return () => window.clearTimeout(timer);
+  }, [playing, veiled, index, pace, many]);
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
+      wake();
       if (event.key === 'ArrowRight') go(1);
       if (event.key === 'ArrowLeft') go(-1);
+      const target = event.target as HTMLElement | null;
+      const control = target && (target.tagName === 'VIDEO' || target.tagName === 'BUTTON' || target.tagName === 'A');
+      if (event.key === ' ' && many && !control) {
+        event.preventDefault();
+        onPlaying(!playing);
+      }
+      if ((event.key === 'f' || event.key === 'F') && canFull) toggleFull();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -338,10 +410,21 @@ function Lightbox({
     if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) go(dx < 0 ? 1 : -1);
   };
 
+  const hold = {
+    onPointerEnter: (event: PointerEvent) => {
+      if (event.pointerType === 'mouse') hovering.current = true;
+    },
+    onPointerLeave: () => {
+      hovering.current = false;
+      wake();
+    },
+  };
+
   const arrow = (step: number) => (
     <IconButton
       aria-label={step < 0 ? t('Vorherige Datei') : t('Nächste Datei')}
       onClick={() => go(step)}
+      {...hold}
       sx={{
         position: 'absolute',
         top: '50%',
@@ -354,6 +437,8 @@ function Lightbox({
         bgcolor: 'rgb(255 255 255 / 0.1)',
         backdropFilter: 'blur(12px)',
         display: { xs: 'none', sm: 'inline-flex' },
+        opacity: idle ? 0 : 1,
+        transition: 'opacity 0.3s',
         '&:hover': { bgcolor: 'rgb(255 255 255 / 0.2)' },
       }}
     >
@@ -368,9 +453,50 @@ function Lightbox({
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={{ duration: 0.22 }}
-        style={{ position: 'fixed', inset: 0, background: 'rgb(8 8 10 / 0.94)', display: 'flex', flexDirection: 'column', outline: 'none' }}
+        onPointerMove={wake}
+        style={{
+          position: 'fixed',
+          inset: 0,
+          background: playing ? '#000' : 'rgb(8 8 10 / 0.94)',
+          display: 'flex',
+          flexDirection: 'column',
+          outline: 'none',
+          cursor: idle ? 'none' : undefined,
+        }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: { xs: 1.5, md: 2.5 }, height: 64, color: '#fff', flexShrink: 0 }}>
+        {playing && many && !veiled && item.type === 'image' && (
+          <m.div
+            key={`${item.id}-${pace}`}
+            aria-hidden
+            initial={{ scaleX: 0 }}
+            animate={{ scaleX: 1 }}
+            transition={{ duration: pace, ease: 'linear' }}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              height: 3,
+              background: 'rgb(255 255 255 / 0.75)',
+              transformOrigin: 'left',
+              zIndex: 3,
+            }}
+          />
+        )}
+        <Box
+          {...hold}
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1,
+            px: { xs: 1.5, md: 2.5 },
+            height: 64,
+            color: '#fff',
+            flexShrink: 0,
+            opacity: idle ? 0 : 1,
+            transition: 'opacity 0.3s',
+          }}
+        >
           <Box sx={{ minWidth: 0, flex: 1 }}>
             <Typography variant="body1" noWrap sx={{ fontWeight: 700 }}>
               {item.name}
@@ -381,6 +507,35 @@ function Lightbox({
               </Typography>
             )}
           </Box>
+          {many && (
+            <Tooltip title={playing ? t('Diashow anhalten (Leertaste)') : t('Diashow starten (Leertaste)')}>
+              <IconButton
+                onClick={() => onPlaying(!playing)}
+                sx={{ color: '#fff' }}
+                aria-label={playing ? t('Diashow anhalten') : t('Diashow starten')}
+              >
+                {playing ? <PauseRounded /> : <SlideshowRounded />}
+              </IconButton>
+            </Tooltip>
+          )}
+          {many && playing && (
+            <Tooltip title={t('Tempo: {seconds} Sekunden pro Bild', { seconds: pace })}>
+              <Button
+                onClick={() => setPace(PACES[(PACES.indexOf(pace) + 1) % PACES.length])}
+                sx={{ color: '#fff', minWidth: 0, px: 1.25, fontVariantNumeric: 'tabular-nums' }}
+                aria-label={t('Tempo ändern')}
+              >
+                {t('{seconds} s', { seconds: pace })}
+              </Button>
+            </Tooltip>
+          )}
+          {canFull && (
+            <Tooltip title={full ? t('Vollbild verlassen (F)') : t('Vollbild (F)')}>
+              <IconButton onClick={toggleFull} sx={{ color: '#fff' }} aria-label={full ? t('Vollbild verlassen') : t('Vollbild')}>
+                {full ? <FullscreenExitRounded /> : <FullscreenRounded />}
+              </IconButton>
+            </Tooltip>
+          )}
           {item.download && (
             <Tooltip title={t('Herunterladen')}>
               <IconButton href={item.download} sx={{ color: '#fff' }} aria-label={t('Herunterladen')}>
@@ -466,6 +621,8 @@ function Lightbox({
               ) : (
                 <VideoFrame
                   src={item.playback || item.direct!}
+                  autoPlay={playing}
+                  onEnded={() => playing && go(1)}
                   poster={item.preview}
                   width={item.width}
                   height={item.height}

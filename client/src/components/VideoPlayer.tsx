@@ -13,10 +13,11 @@ interface VideoPlayerProps {
   className?: string;
   tracks?: Subtitle[];
   onLoadedMetadata?: (video: HTMLVideoElement) => void;
+  onEnded?: () => void;
 }
 
 export const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(function VideoPlayer(
-  { src, hls, poster, autoPlay = false, style, className, tracks, onLoadedMetadata },
+  { src, hls, poster, autoPlay = false, style, className, tracks, onLoadedMetadata, onEnded },
   ref
 ) {
   const local = useRef<HTMLVideoElement | null>(null);
@@ -71,6 +72,7 @@ export const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(functi
       preload="metadata"
       style={style}
       onLoadedMetadata={(event) => onLoadedMetadata?.(event.currentTarget)}
+      onEnded={onEnded}
     >
       {(tracks || []).map((track) => (
         <track key={track.id} kind="subtitles" src={track.url} srcLang={track.language} label={track.label} default={track.default} />
@@ -91,6 +93,7 @@ interface VideoFrameProps {
   className?: string;
   tracks?: Subtitle[];
   sx?: SxProps<Theme>;
+  onEnded?: () => void;
 }
 
 const differs = (a: number, b: number) => !b || Math.abs(a - b) / b > 0.01;
@@ -107,6 +110,7 @@ export function VideoFrame({
   className,
   tracks,
   sx,
+  onEnded,
 }: VideoFrameProps) {
   const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
   const stored = width && height ? width / height : 0;
@@ -137,6 +141,7 @@ export function VideoFrame({
         poster={poster}
         autoPlay={autoPlay}
         tracks={tracks}
+        onEnded={onEnded}
         style={{ display: 'block', width: '100%', height: '100%', objectFit: 'contain' }}
         onLoadedMetadata={(video) => {
           if (video.videoWidth && video.videoHeight && differs(video.videoWidth / video.videoHeight, stored)) {

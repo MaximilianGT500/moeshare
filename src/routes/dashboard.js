@@ -5,6 +5,7 @@ const path = require('path');
 const express = require('express');
 const config = require('../config');
 const { badRequest, forbidden, notFound, tooLarge } = require('../lib/errors');
+const { qrSvg } = require('../lib/qr');
 const { greeting } = require('../lib/format');
 const { tr } = require('../lib/i18n');
 const { text } = require('../lib/input');
@@ -16,6 +17,7 @@ const files = require('../services/fileService');
 const preferences = require('../services/preferenceService');
 const protection = require('../services/protectionService');
 const quota = require('../services/quotaService');
+const rules = require('../services/uploadRules');
 const uploads = require('../services/uploadService');
 const viewer = require('../services/viewerService');
 const webhook = require('../services/webhookService');
@@ -104,6 +106,7 @@ router.get('/dashboard', requirePage(), async (req, res) => {
       stats: userStats,
       files: list,
       maxUploadBytes: limits.maxFileBytes || null,
+      uploadRules: rules.rulesFor(req.user),
       quota: quotaInfo(limits),
       urlFetch: settings.get('uploads.urlFetch'),
       options: uploadOptions(prefs, req.user, watermark),
@@ -111,6 +114,14 @@ router.get('/dashboard', requirePage(), async (req, res) => {
       domainNotices: notices,
     },
   });
+});
+
+router.get('/api/qr.svg', signedIn, (req, res) => {
+  const value = typeof req.query.text === 'string' ? req.query.text : '';
+  if (!value || value.length > 1000) throw badRequest('Für einen QR-Code braucht es einen Text mit höchstens 1000 Zeichen.');
+  res.set('Cache-Control', 'private, max-age=86400');
+  res.set('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'");
+  res.type('image/svg+xml').send(qrSvg(value, { quietZone: 4 }));
 });
 
 router.get('/api/files', signedIn, async (req, res) => {

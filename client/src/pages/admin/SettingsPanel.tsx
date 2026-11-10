@@ -45,6 +45,7 @@ import { WebhookTargets } from './WebhookTools';
 import { ImportTools } from './ImportTools';
 import { CaddyHint, DomainList } from './DomainTools';
 import { MetricsTools } from './MetricsTools';
+import { DiscordAppTools } from './DiscordAppTools';
 import { SaveBar, SettingRow, SettingsSection, SwitchRow } from '../../components/SettingsKit';
 import { BytesField, ColorField } from '../../components/Fields';
 import { formatNumber } from '../../lib/format';
@@ -117,6 +118,30 @@ const SECTIONS: Array<{ key: SectionKey; label: string; icon: ReactNode; prefixe
   { key: 'benachrichtigungen', label: t('Benachrichtigungen'), icon: <NotificationsRounded />, prefixes: ['webhook.'] },
   { key: 'import', label: t('Import'), icon: <MoveDownRounded />, prefixes: [] },
   { key: 'system', label: t('System'), icon: <DnsRounded />, prefixes: ['system.', 'metrics.'] },
+];
+
+const RECOMMENDED_BLOCKED = [
+  '.exe',
+  '.msi',
+  '.msix',
+  '.bat',
+  '.cmd',
+  '.com',
+  '.scr',
+  '.pif',
+  '.cpl',
+  '.vbs',
+  '.vbe',
+  '.jse',
+  '.wsf',
+  '.wsh',
+  '.ps1',
+  '.hta',
+  '.lnk',
+  '.reg',
+  '.dll',
+  '.jar',
+  '.apk',
 ];
 
 const sectionOf = (key: string) =>
@@ -649,6 +674,25 @@ export function SettingsPanel({
               )}
           </SettingsSection>
         )}
+        {key === 'discord' && (
+          <SettingsSection
+            title={t('Discord-App')}
+            description={t(
+              'Speichert Anhänge aus Discord dauerhaft: Rechtsklick auf eine Nachricht › Apps › „In {name} speichern“ oder /hochladen. Für Konten, die mit Discord verknüpft sind.',
+              { name: siteName() }
+            )}
+          >
+            {toggle(
+              'auth.discord.app',
+              t('Discord-App einschalten'),
+              t(
+                'Damit die App auch auf fremden Servern und in DMs geht, schalte im Developer Portal unter Installation „User Install“ ein.'
+              )
+            )}
+            {text('auth.discord.publicKey', t('Public Key'), t('Steht im Developer Portal unter General Information.'), { mono: true })}
+            <DiscordAppTools unsaved={changedKeys.some((name) => name.startsWith('auth.discord.'))} />
+          </SettingsSection>
+        )}
       </Stack>
     );
   };
@@ -963,6 +1007,35 @@ export function SettingsPanel({
           {list('uploads.formats.image', t('Bilder'), t('GIFs sind immer dabei.'), t('Endung, z. B. .avif'))}
           {list('uploads.formats.video', t('Videos'), undefined, t('Endung, z. B. .m4v'))}
           {list('uploads.formats.audio', t('Audio'), undefined, t('Endung, z. B. .opus'))}
+        </SettingsSection>
+        <SettingsSection
+          title={t('Gesperrte Dateitypen')}
+          description={t(
+            'Solche Dateien werden nicht angenommen, auch nicht über Datei-Anfragen oder die Discord-App. Admins dürfen sie trotzdem hochladen.'
+          )}
+        >
+          {list('uploads.blockedTypes', t('Gesperrte Endungen'), undefined, t('Endung, z. B. .exe'))}
+          <SettingRow
+            label={t('Empfohlene Liste')}
+            description={t('Programme und Skripte für Windows, Java und Android: {list}', { list: RECOMMENDED_BLOCKED.join(' ') })}
+          >
+            <Button
+              variant="tonal"
+              onClick={() =>
+                set(
+                  'uploads.blockedTypes',
+                  Array.from(new Set([...((v<string[]>('uploads.blockedTypes') || []) as string[]), ...RECOMMENDED_BLOCKED]))
+                )
+              }
+            >
+              {t('Übernehmen')}
+            </Button>
+          </SettingRow>
+          {toggle(
+            'uploads.blockPrograms',
+            t('Programme am Inhalt erkennen'),
+            t('Lehnt Programme für Windows, Linux und macOS auch dann ab, wenn sie umbenannt wurden, etwa von .exe in .png.')
+          )}
         </SettingsSection>
       </Stack>
     ),

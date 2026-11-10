@@ -51,6 +51,7 @@ import { Viewer, type ViewerState } from './Viewer';
 import { FilterBar, type TypeCounts } from './FilterBar';
 import { BulkDialog, EmptyState, FileMenu, SelectionBar, UrlUploadDialog, type BulkAction, type QuickAction } from './parts';
 import { ResumeNotice, UploadProvider, useUploads } from './uploads';
+import { ScreenCapture, canCapture } from './capture';
 import { FolderImportDialog, type FolderSource } from './folders';
 import { VersionsDialog } from './versions';
 import { ClipDialog } from './clip';
@@ -189,6 +190,8 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
   const [prefs, setPrefs] = useState<UploadPrefs>(EMPTY_PREFS);
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [textOpen, setTextOpen] = useState(false);
+  const [captureOpen, setCaptureOpen] = useState(false);
+  const capture = useMemo(() => canCapture(), []);
   const [textInitial, setTextInitial] = useState('');
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkInitial, setLinkInitial] = useState('');
@@ -880,6 +883,7 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
               counts={counts}
               onUrl={boot.urlFetch ? () => setUrlOpen(true) : undefined}
               onText={boot.options.texts ? () => setTextOpen(true) : undefined}
+              onCapture={capture ? () => setCaptureOpen(true) : undefined}
               onFolder={pickFolder}
               duplicates={stats.duplicates || 0}
               onDuplicates={() => setDuplicatesOpen(true)}
@@ -917,6 +921,7 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
               onPick={pick}
               onUrl={boot.urlFetch ? () => setUrlOpen(true) : undefined}
               onText={boot.options.texts ? () => setTextOpen(true) : undefined}
+              onCapture={capture ? () => setCaptureOpen(true) : undefined}
             />
           ) : (
             <Gallery
@@ -1047,6 +1052,8 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
         onChange={setPrefs}
       />
 
+      {capture && <ScreenCapture open={captureOpen} onClose={() => setCaptureOpen(false)} onFile={(file) => enqueue([file])} />}
+
       <TextDialog
         open={textOpen}
         info={boot.options}
@@ -1129,6 +1136,7 @@ export function DashboardPage() {
     <ConfirmProvider>
       <UploadProvider
         maxBytes={boot.maxUploadBytes}
+        rules={boot.uploadRules}
         chunked={boot.options.chunked}
         chunkSize={boot.options.chunkSize}
         albums={boot.options.albums}

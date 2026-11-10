@@ -400,6 +400,13 @@ const MIGRATIONS = [
       ]);
     },
   },
+  {
+    version: 11,
+    name: 'Bekannte Geräte für Hinweise bei neuen Anmeldungen',
+    async up(db) {
+      await createTable(db, 'user_devices');
+    },
+  },
 ];
 
 const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

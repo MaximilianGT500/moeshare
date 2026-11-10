@@ -10,6 +10,10 @@ import type { ProfileSettings, SessionUser, SiteLink } from '../../lib/types';
 import { ApiError, errorMessage, saveProfile } from '../../lib/api';
 import { tn, t } from '../../lib/i18n';
 import { CopyIconButton } from '../../components/CopyButton';
+import { QrDialog } from '../../components/QrDialog';
+import IconButton from '@mui/material/IconButton';
+import Tooltip from '@mui/material/Tooltip';
+import QrCode2Rounded from '@mui/icons-material/QrCode2Rounded';
 import { LinkListEditor } from '../../components/LinkListEditor';
 import { SaveBar, SettingRow, SettingsSection, SwitchRow } from '../../components/SettingsKit';
 import { AvatarButton, AvatarDialog, type AvatarLimits } from '../../components/AvatarEditor';
@@ -45,6 +49,7 @@ export function ProfileEditor({
 }) {
   const toast = useToast();
   const [editingAvatar, setEditingAvatar] = useState(false);
+  const [qr, setQr] = useState<string | null>(null);
   const [profile, setProfile] = useState(initial);
   const [draft, setDraft] = useState<Editable>(pick(initial));
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -171,10 +176,16 @@ export function ProfileEditor({
                   <Typography variant="body2" noWrap sx={{ flex: 1, fontFamily: fonts.mono, fontSize: '0.8125rem' }}>
                     {url}
                   </Typography>
+                  <Tooltip title={t('QR-Code')}>
+                    <IconButton size="small" aria-label={t('QR-Code')} onClick={() => setQr(url)}>
+                      <QrCode2Rounded fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
                   <CopyIconButton value={url} size="small" />
                 </Box>
               ))}
             </Box>
+            <QrDialog url={qr} title={draft.name || user.username} onClose={() => setQr(null)} />
           </SettingRow>
         </SettingsSection>
 

@@ -601,6 +601,18 @@ const TABLES = [
     indexes: [{ name: 'idx_announcements_ends', columns: ['ends_at'] }],
   },
   {
+    name: 'user_devices',
+    columns: [
+      id(),
+      userRef(),
+      col('device_hash', 'string', { length: 64, notNull: true }),
+      col('label', 'string', { length: 120 }),
+      col('created_at', 'bigint', { notNull: true }),
+      col('last_seen_at', 'bigint', { notNull: true }),
+    ],
+    indexes: [{ name: 'idx_user_devices_device', columns: ['user_id', 'device_hash'], unique: true }],
+  },
+  {
     name: 'file_subtitles',
     columns: [
       id(),

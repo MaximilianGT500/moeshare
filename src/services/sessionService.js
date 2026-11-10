@@ -6,6 +6,7 @@ const { storedIp, deviceLabel, isSecure, safeNext } = require('../lib/request');
 const settings = require('./settingsService');
 const { languageOf } = require('./preferenceService');
 const audit = require('./auditService');
+const log = require('../lib/logger').scope('auth');
 
 const COOKIE = 'ms_session';
 const SHORT_SESSION_MS = 24 * 60 * 60 * 1000;
@@ -154,6 +155,9 @@ async function start(req, res, row, { method, remember = true, next = '', detail
   const created = await create(row.id, { method, remember, req });
   res.cookie(COOKIE, created.token, cookieOptions(req, created));
   audit.log('login', { userId: row.id, req, details: { method, ...details } });
+  await require('./deviceService')
+    .signedIn(req, res, row, method)
+    .catch((error) => log.warn('Das Gerät konnte nicht gemerkt werden', { error }));
   const setup = pendingSetupFor(row);
   return setup ? `/account?setup=${setup}` : safeNext(next);
 }

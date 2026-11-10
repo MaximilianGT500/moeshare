@@ -40,6 +40,8 @@ import {
 } from '../../lib/api';
 import { formatBytes, formatDate, relativeMs } from '../../lib/format';
 import { CopyIconButton } from '../../components/CopyButton';
+import { QrDialog } from '../../components/QrDialog';
+import QrCode2Rounded from '@mui/icons-material/QrCode2Rounded';
 import { useConfirm } from '../../components/ConfirmDialog';
 import { useToast } from '../../components/Toaster';
 import { ExpirySelect } from '../../components/ShareOptions';
@@ -363,6 +365,7 @@ function RequestCard({
   onFiles,
   onToggle,
   onDelete,
+  onQr,
   busy,
 }: {
   item: UploadRequest;
@@ -370,6 +373,7 @@ function RequestCard({
   onFiles: () => void;
   onToggle: () => void;
   onDelete: () => void;
+  onQr: () => void;
   busy: boolean;
 }) {
   const state = STATE[item.state];
@@ -436,6 +440,11 @@ function RequestCard({
         >
           {item.url}
         </Typography>
+        <Tooltip title={t('QR-Code und Aushang')}>
+          <IconButton size="small" onClick={onQr} aria-label={t('QR-Code')}>
+            <QrCode2Rounded fontSize="small" />
+          </IconButton>
+        </Tooltip>
         <CopyIconButton value={item.url} size="small" label={t('Link kopieren')} />
       </Box>
       <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -468,6 +477,7 @@ export function RequestsView() {
   const toast = useToast();
   const confirm = useConfirm();
   const [items, setItems] = useState<UploadRequest[] | null>(null);
+  const [qr, setQr] = useState<UploadRequest | null>(null);
   const [enabled, setEnabled] = useState(true);
   const [albums, setAlbums] = useState<Album[]>([]);
   const [editing, setEditing] = useState<{ item: UploadRequest | null; key: number } | null>(null);
@@ -596,10 +606,18 @@ export function RequestsView() {
               onFiles={() => setViewing(item)}
               onToggle={() => toggle(item)}
               onDelete={() => remove(item)}
+              onQr={() => setQr(item)}
             />
           </m.div>
         ))}
       </AnimatePresence>
+
+      <QrDialog
+        url={qr ? qr.url : null}
+        title={qr ? qr.title : undefined}
+        poster={qr ? { heading: qr.title, text: qr.message || t('Hier kannst du deine Dateien hochladen.') } : undefined}
+        onClose={() => setQr(null)}
+      />
 
       {editing && (
         <RequestDialog

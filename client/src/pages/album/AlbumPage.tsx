@@ -1,7 +1,11 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { m } from 'motion/react';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
+import IconButton from '@mui/material/IconButton';
+import Tooltip from '@mui/material/Tooltip';
+import RssFeedRounded from '@mui/icons-material/RssFeedRounded';
+import SlideshowRounded from '@mui/icons-material/SlideshowRounded';
 import Typography from '@mui/material/Typography';
 import CollectionsOutlined from '@mui/icons-material/CollectionsOutlined';
 import EditRounded from '@mui/icons-material/EditRounded';
@@ -16,7 +20,7 @@ import { t, tn } from '../../lib/i18n';
 import { CopyTextButton } from '../../components/CopyButton';
 import { LockedScreen } from '../../components/LockedScreen';
 import { OwnerPage } from '../../components/OwnerPage';
-import { PublicGallery } from '../../components/PublicGallery';
+import { PublicGallery, enterFullscreen, viewable } from '../../components/PublicGallery';
 import { UserAvatar } from '../../components/UserAvatar';
 import { c, ease, radius } from '../../theme/tokens';
 
@@ -33,7 +37,7 @@ export function AlbumPage() {
   const accent = accentOf(design, meaningfulColor(items.find((item) => item.color)?.color), boot.site.seedColor);
   return (
     <OwnerPage site={boot.site} design={design} css={boot.css} accent={accent} cover={cover} page="album" report={boot.report}>
-      <AlbumView album={boot.album} items={items} owner={!!boot.owner} dashboard={boot.dashboard || null} />
+      <AlbumView album={boot.album} items={items} owner={!!boot.owner} dashboard={boot.dashboard || null} feed={boot.feed || null} />
     </OwnerPage>
   );
 }
@@ -62,8 +66,22 @@ function contributorText(names: string[]) {
   });
 }
 
-function AlbumView({ album, items, owner, dashboard }: { album: AlbumData; items: AlbumItem[]; owner: boolean; dashboard: string | null }) {
+function AlbumView({
+  album,
+  items,
+  owner,
+  dashboard,
+  feed,
+}: {
+  album: AlbumData;
+  items: AlbumItem[];
+  owner: boolean;
+  dashboard: string | null;
+  feed: string | null;
+}) {
   const { shows, r } = useDesign();
+  const [play, setPlay] = useState(0);
+  const slides = items.filter(viewable).length;
   const totalBytes = items.reduce((sum, item) => sum + (item.sizeBytes || 0), 0);
   const link = album.url || `${window.location.origin}${window.location.pathname}`;
 
@@ -133,6 +151,19 @@ function AlbumView({ album, items, owner, dashboard }: { album: AlbumData; items
               {t('Link kopieren')}
             </CopyTextButton>
           )}
+          {slides > 1 && (
+            <Button
+              variant="tonal"
+              startIcon={<SlideshowRounded />}
+              onClick={() => {
+                enterFullscreen();
+                setPlay((count) => count + 1);
+              }}
+              sx={{ borderRadius: `${r(radius.full)}px` }}
+            >
+              {t('Diashow')}
+            </Button>
+          )}
           {album.zip && shows('download') && (
             <Button
               variant="tonal"
@@ -153,10 +184,17 @@ function AlbumView({ album, items, owner, dashboard }: { album: AlbumData; items
               {t('Im Dashboard bearbeiten')}
             </Button>
           )}
+          {feed && (
+            <Tooltip title={t('RSS-Feed abonnieren')}>
+              <IconButton component="a" href={feed} aria-label={t('RSS-Feed')} sx={{ color: 'text.secondary' }}>
+                <RssFeedRounded />
+              </IconButton>
+            </Tooltip>
+          )}
         </Box>
       </m.section>
 
-      <PublicGallery items={items} />
+      <PublicGallery items={items} play={play} />
 
       {!items.length && (
         <Box sx={{ textAlign: 'center', py: 10, color: 'text.secondary' }}>

@@ -23,6 +23,7 @@ const protection = require('./protectionService');
 const storage = require('./storageService');
 const webhook = require('./webhookService');
 const scans = require('./scanService');
+const rules = require('./uploadRules');
 const dedupe = require('./dedupeService');
 const versions = require('./versionService');
 const search = require('./searchService');
@@ -302,6 +303,7 @@ const renamed = (name, ext) => (name && extensionOf(name) ? `${name.slice(0, -ex
 async function prepare(user, filename, { chosen = {}, originalName = null, via = 'upload', process = true } = {}) {
   const username = user.username;
   const { file } = filePaths(username, filename);
+  await rules.assertFile(user, file, [originalName, filename], { via });
   const { size } = await fsp.stat(file);
   const scanStatus = await scans.assertClean(file, { user, name: originalName || filename, size, via });
   const { type } = files.typeOf(filename, chosen.syntax);
@@ -522,7 +524,7 @@ function parseRemoteUrl(value) {
   return url.href;
 }
 
-async function fetchRemote(user, value, { limit, message }, raw = {}) {
+async function fetchRemote(user, value, { limit, message }, raw = {}, { via = 'link', originalName = null } = {}) {
   const username = user.username;
   const options = await resolveOptions(user, raw);
   const url = parseRemoteUrl(value);
@@ -557,8 +559,8 @@ async function fetchRemote(user, value, { limit, message }, raw = {}) {
     });
     await pipeline(response.data, fs.createWriteStream(target));
     return await accept(user, filename, {
-      via: 'link',
-      originalName: decodeURIComponent(new URL(url).pathname.split('/').pop() || '') || null,
+      via,
+      originalName: originalName || decodeURIComponent(new URL(url).pathname.split('/').pop() || '') || null,
       options,
     });
   } catch (error) {

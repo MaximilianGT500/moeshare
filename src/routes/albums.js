@@ -3,6 +3,8 @@
 const express = require('express');
 const { HttpError, forbidden, notFound } = require('../lib/errors');
 const { escapeHtml } = require('../lib/format');
+const { tr } = require('../lib/i18n');
+const feed = require('../lib/feed');
 const { limiter } = require('../lib/limiter');
 const { renderPage, renderMessage } = require('../lib/render');
 const { requireApi, sameOriginOnly } = require('../middleware/auth');
@@ -28,6 +30,8 @@ const enabled = (req, res, next) => {
   if (!settings.get('albums.enabled')) throw notFound('Alben sind auf diesem Server abgeschaltet.');
   next();
 };
+
+const feedable = (row) => row.visibility !== 'private' && !row.password_hash && !row.blocked_at;
 
 async function publicAlbum(req) {
   const row = settings.get('albums.enabled') ? await albums.findByCode(req.params.code) : null;
@@ -71,7 +75,12 @@ router.get('/a/:code', async (req, res) => {
       `<meta property="og:title" content="${escapeHtml(view.album.title)}" />`,
       '<meta property="og:type" content="website" />',
       '<meta name="robots" content="noindex" />',
-    ].join('\n  '),
+      feedable(row)
+        ? `<link rel="alternate" type="application/atom+xml" title="${escapeHtml(view.album.title)}" href="${escapeHtml(`${view.album.url}/feed.xml`)}" />`
+        : '',
+    ]
+      .filter(Boolean)
+      .join('\n  '),
     data: {
       ...view,
       owner: Boolean(access.owner),
@@ -79,9 +88,34 @@ router.get('/a/:code', async (req, res) => {
       design: style.design,
       css: style.css,
       report: settings.get('reports.enabled') ? { kind: 'album', target: row.code } : null,
+      feed: feedable(row) ? `${view.album.url}/feed.xml` : null,
     },
     scheme: style.design.scheme,
   });
+});
+
+router.get('/a/:code/feed.xml', async (req, res) => {
+  const row = await publicAlbum(req);
+  if (!row || row.visibility === 'private' || row.password_hash || row.blocked_at) throw notFound(MISSING);
+  const domain = domains.requestOrigin(req);
+  const origin = domain || settings.get('site.baseUrl');
+  const view = await albums.publicView(req, row, { domain });
+  const absolute = (url) => (/^https?:\/\//.test(url) ? url : `${origin}${url}`);
+  const t = (text, values) => tr(req, text, values);
+  res.set('Cache-Control', 'public, max-age=300');
+  res.set('X-Robots-Tag', 'noindex');
+  res.type('application/atom+xml; charset=utf-8');
+  res.send(
+    feed.atom({
+      title: view.album.title,
+      subtitle: view.album.description,
+      link: view.album.url,
+      self: `${view.album.url}/feed.xml`,
+      author: view.album.owner,
+      generator: settings.get('site.title'),
+      entries: view.items.filter((item) => !item.locked).map((item) => feed.fileEntry(item, { t, absolute })),
+    })
+  );
 });
 
 router.get('/a/:code/zip', async (req, res) => {

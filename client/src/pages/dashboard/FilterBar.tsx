@@ -8,6 +8,7 @@ import ListItemIcon from '@mui/material/ListItemIcon';
 import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import Tooltip from '@mui/material/Tooltip';
+import ScreenshotMonitorRounded from '@mui/icons-material/ScreenshotMonitorRounded';
 import CheckRounded from '@mui/icons-material/CheckRounded';
 import ExpandMoreRounded from '@mui/icons-material/ExpandMoreRounded';
 import SortRounded from '@mui/icons-material/SortRounded';
@@ -114,6 +115,7 @@ export function FilterBar({
   onSort,
   counts,
   onUrl,
+  onCapture,
   onText,
   onFolder,
   duplicates = 0,
@@ -132,6 +134,7 @@ export function FilterBar({
   onSort: (sort: SortKey) => void;
   counts: TypeCounts;
   onUrl?: () => void;
+  onCapture?: () => void;
   onText?: () => void;
   onFolder?: () => void;
   duplicates?: number;
@@ -291,6 +294,13 @@ export function FilterBar({
         <Tooltip title={t('Ordner hochladen')}>
           <IconButton aria-label={t('Ordner hochladen')} onClick={onFolder} sx={{ display: { xs: 'none', sm: 'inline-flex' } }}>
             <DriveFolderUploadOutlined />
+          </IconButton>
+        </Tooltip>
+      )}
+      {onCapture && (
+        <Tooltip title={t('Bildschirm aufnehmen')}>
+          <IconButton aria-label={t('Bildschirm aufnehmen')} onClick={onCapture} sx={{ display: { xs: 'none', sm: 'inline-flex' } }}>
+            <ScreenshotMonitorRounded />
           </IconButton>
         </Tooltip>
       )}

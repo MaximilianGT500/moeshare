@@ -31,6 +31,8 @@ import VisibilityOffOutlined from '@mui/icons-material/VisibilityOffOutlined';
 import RemoveCircleOutlineRounded from '@mui/icons-material/RemoveCircleOutlineRounded';
 import WallpaperRounded from '@mui/icons-material/WallpaperRounded';
 import OpenInNewRounded from '@mui/icons-material/OpenInNewRounded';
+import QrCode2Rounded from '@mui/icons-material/QrCode2Rounded';
+import { QrDialog } from '../../components/QrDialog';
 import DragIndicatorRounded from '@mui/icons-material/DragIndicatorRounded';
 import LinkRounded from '@mui/icons-material/LinkRounded';
 import BarChartRounded from '@mui/icons-material/BarChartRounded';
@@ -731,6 +733,7 @@ function AlbumDetail({
   const [album, setAlbum] = useState<Album | null>(null);
   const [statsTarget, setStatsTarget] = useState<StatsTarget | null>(null);
   const [editing, setEditing] = useState(false);
+  const [qrOpen, setQrOpen] = useState(false);
   const [dragging, setDragging] = useState<number | null>(null);
   const picker = useRef<HTMLInputElement>(null);
 
@@ -876,6 +879,10 @@ function AlbumDetail({
               <Button component="a" href={album.url} target="_blank" rel="noopener" startIcon={<OpenInNewRounded />}>
                 {t('Ansehen')}
               </Button>
+              <Button startIcon={<QrCode2Rounded />} onClick={() => setQrOpen(true)}>
+                {t('QR-Code')}
+              </Button>
+              <QrDialog url={qrOpen ? album.url : null} title={album.title} onClose={() => setQrOpen(false)} />
             </>
           )}
           <Button startIcon={<CloudUploadRounded />} onClick={() => picker.current?.click()}>

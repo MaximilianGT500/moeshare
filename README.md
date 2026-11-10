@@ -30,8 +30,11 @@ Offizielle Instance: [v3.moeshare.eu](https://v3.moeshare.eu).
 - [Erster Start und Einrichtung](#erster-start-und-einrichtung)
 - [ShareX verbinden](#sharex-verbinden)
 - [Andere Programme](#andere-programme)
+- [Bildschirm aufnehmen](#bildschirm-aufnehmen)
+- [Discord-App](#discord-app)
 - [Texte, Kurzlinks und Alben](#texte-kurzlinks-und-alben)
 - [Datei-Anfragen](#datei-anfragen)
+- [QR-Codes](#qr-codes)
 - [Eigene Adressen und eigener Pfad](#eigene-adressen-und-eigener-pfad)
 - [Papierkorb, Statistiken und ZIP](#papierkorb-statistiken-und-zip)
 - [Große Dateien, Ordner und Versionen](#große-dateien-ordner-und-versionen)
@@ -46,12 +49,14 @@ Offizielle Instance: [v3.moeshare.eu](https://v3.moeshare.eu).
 - [Vorschauseiten gestalten](#vorschauseiten-gestalten)
 - [Profilseiten](#profilseiten)
 - [Profilbilder](#profilbilder)
+- [Diashow und RSS-Feeds](#diashow-und-rss-feeds)
 - [Eigene Domains](#eigene-domains)
 - [Impressum und Datenschutz für eigene Domains](#impressum-und-datenschutz-für-eigene-domains)
 - [Melden und Moderation](#melden-und-moderation)
 - [E-Mail](#e-mail)
 - [Benachrichtigungen](#benachrichtigungen)
 - [Virenscan mit ClamAV](#virenscan-mit-clamav)
+- [Gesperrte Dateitypen](#gesperrte-dateitypen)
 - [Datenexport](#datenexport)
 - [Import aus anderen Uploadern](#import-aus-anderen-uploadern)
 - [Datenbank](#datenbank)
@@ -61,6 +66,7 @@ Offizielle Instance: [v3.moeshare.eu](https://v3.moeshare.eu).
 - [Anmelden über andere Dienste](#anmelden-über-andere-dienste)
 - [Anmeldung ohne Passwort](#anmeldung-ohne-passwort)
 - [Einmal-Links](#einmal-links)
+- [Hinweis bei neuen Anmeldungen](#hinweis-bei-neuen-anmeldungen)
 - [Startseite, Impressum und Links](#startseite-impressum-und-links)
 - [Eigener Name und Versionshinweise](#eigener-name-und-versionshinweise)
 - [Ankündigungen und Wartungsmodus](#ankündigungen-und-wartungsmodus)
@@ -80,6 +86,8 @@ Offizielle Instance: [v3.moeshare.eu](https://v3.moeshare.eu).
 ## Funktionen
 
 - **Hochladen** per ShareX, Drag & Drop, Zwischenablage oder Link, mit Vorschaubildern, Video-Standbildern und optionalem HLS-Streaming
+- **Bildschirm aufnehmen** im Browser: Bildschirmfoto oder Bildschirmvideo mit Ton, direkt hochgeladen, auch auf dem Mac und unter Linux
+- **Discord-App**: Anhänge aus Discord per Rechtsklick dauerhaft speichern statt mit Links, die nach einem Tag ablaufen, dazu `/hochladen` und `/kürzen`, auf jedem Server und in DMs
 - **Große Dateien** gehen im Browser in Teilen hoch und laufen nach einem Abbruch an derselben Stelle weiter, auch nach dem Neuladen der Seite
 - **Ordner und ZIP-Archive** als Album hochladen, entpackt wird im Browser
 - **Texte und Code** wie in einem Pastebin, mit Syntaxhervorhebung, aus ShareX oder direkt im Browser
@@ -97,6 +105,7 @@ Offizielle Instance: [v3.moeshare.eu](https://v3.moeshare.eu).
 - **Embed Builder** mit Live-Vorschau: eine Standardvorlage für alle und auf Wunsch eigene Vorlagen pro Benutzer, mit Platzhaltern wie `{dateiname}` oder `{größe}`
 - **Profilseiten** mit Beschreibung, Links, ausgewählten Dateien und öffentlichen Alben
 - **Profilbilder** mit Zuschnitt im Browser, aus einer Datei oder den eigenen Uploads, bewegte GIFs bleiben bewegt
+- **Diashow** für Alben im Vollbild, mit Tastatur und Wischen, und **RSS-Feeds** für Profile und Alben
 - **Eigene Adressen** für Dateien, Kurzlinks und Alben wie `/view/urlaub`, dazu ein **eigener Pfad** statt `/view/`, etwa `/max/JrinQR99`. Alte Adressen leiten weiter
 - **Eigene Domains pro Konto**, bestätigt über einen TXT-Eintrag im DNS, mit kurzen Links wie `bilder.deinname.de/JrinQR99`, die Zertifikate holt Caddy von selbst
 - **Impressum und Datenschutz pro Domain**: aus einer Vorlage, als eigener Text oder als Link, damit jede eigene Domain rechtlich sauber ist
@@ -108,8 +117,10 @@ Offizielle Instance: [v3.moeshare.eu](https://v3.moeshare.eu).
 - **Videos für alle Browser**: HEVC, 10 Bit, MKV oder AVI bekommen im Hintergrund eine H.264-Fassung, hochkant gefilmte und anamorphe Videos erscheinen im richtigen Format
 - **Untertitel** als SRT oder WebVTT für jedes Video, mehrere Sprachen pro Video
 - **Datei-Anfragen**: ein Link, über den andere dir Dateien schicken, ohne Konto, mit Passwort, Ablaufzeit und Grenzen
+- **QR-Codes** für Dateien, Kurzlinks, Alben, Profile und Datei-Anfragen, für Anfragen mit einem Aushang zum Ausdrucken
 - **Melden und Moderation**: Besucher melden Inhalte, Admins sperren oder löschen sie
 - **Virenscan** mit ClamAV für jeden Upload
+- **Gesperrte Dateitypen** wie `.exe` oder `.bat`, auf Wunsch erkennt MoeShare Programme auch dann, wenn sie umbenannt wurden
 - **E-Mail über SMTP** für „Passwort vergessen“, Anmeldelinks, Einladungen und Hinweise zum Konto
 - **Startseite** mit Statistiken und Upload-Verlauf, im Browser anpassbar oder abschaltbar
 - **Dein Name**: Überall steht der Name deiner Instanz, auch in DNS-Einträgen, Dateinamen und Webhooks. „Läuft mit MoeShare“ und die Versionsnummer lassen sich abschalten
@@ -117,6 +128,7 @@ Offizielle Instance: [v3.moeshare.eu](https://v3.moeshare.eu).
 - **Update-Hinweis**: Admins sehen, wenn eine neue Version erschienen ist, auf Wunsch abschaltbar
 - **Anmeldung** mit Passwort, Zwei-Faktor per Authenticator-App und Passkeys, dazu über Discord, GitHub, Google, Microsoft, GitLab oder jeden OpenID-Connect-Anbieter wie Authentik, Keycloak oder Authelia, dort auch mit Rollen aus Gruppen
 - **Ohne Passwort**: Die Anmeldung mit Passwort lässt sich ganz abschalten, dann geht es nur noch mit Passkey, über einen verknüpften Dienst oder mit einem Einmal-Link
+- **Hinweis bei neuen Anmeldungen**: eine E-Mail, sobald sich jemand auf einem Gerät anmeldet, das bisher nicht dabei war
 - **Einmal-Links**, die genau einmal anmelden und von selbst ablaufen: von Admins erstellt, per E-Mail angefordert oder von anderen Systemen über die API, auf Wunsch erst nach Freigabe durch einen Admin
 - **Benutzerverwaltung** mit Rollen, Speicherlimits, Einladungslinks, Sperren und Aktivitätsprotokoll
 - **API-Tokens** für ShareX und Skripte, mehrere pro Konto und einzeln widerrufbar, die `.sxcu`-Dateien für Dateien, Texte und Kurzlinks gibt es per Klick
@@ -300,6 +312,32 @@ Unter **Konto › API › Andere Programme** gibt es fertige Einstellungen für 
 
 Die Skripte brauchen nur `curl`, für die Zwischenablage unter Linux `wl-clipboard` oder `xclip`. Du speicherst sie etwa als `~/.local/bin/…`, machst sie mit `chmod +x` ausführbar und legst in den Systemeinstellungen ein Tastenkürzel dafür an.
 
+## Bildschirm aufnehmen
+
+Im Dashboard nimmt der Knopf **Bildschirm aufnehmen** neben „Von URL hochladen“ direkt im Browser auf, ganz ohne ShareX:
+
+- **Bildschirmfoto**: Du wählst einen Bildschirm, ein Fenster oder einen Tab, MoeShare macht ein Bild davon und lädt es sofort hoch.
+- **Bildschirmvideo**: Die Aufnahme läuft, bis du in der Leiste unten auf **Stopp** klickst, pausieren und verwerfen geht dort auch. Danach siehst du das Video noch einmal und lädst es hoch oder speicherst es nur auf dem Rechner. Auf Wunsch kommen der Ton vom Bildschirm und dein Mikrofon mit ins Video.
+
+Videos landen als WebM (in Safari als MP4) in der normalen Warteschlange, große Aufnahmen gehen in Teilen hoch. Die Aufnahme braucht einen aktuellen Browser am Rechner, auf Handys gibt es den Knopf nicht, weil dort kein Browser den Bildschirm freigibt.
+
+## Discord-App
+
+Anhänge in Discord bekommen Links, die nach rund einem Tag ablaufen. Mit der Discord-App landen sie dauerhaft in MoeShare:
+
+- **Rechtsklick auf eine Nachricht › Apps › „In MoeShare speichern“**, mit dem Namen deiner Instanz, speichert alle Anhänge der Nachricht, bis zu zehn auf einmal.
+- **`/hochladen`** (englisch `/upload`) speichert eine angehängte Datei.
+- **`/kürzen`** (englisch `/shorten`) kürzt einen Link, wenn der Link-Kürzer an ist.
+
+Die Antwort mit den Links sieht nur, wer den Befehl benutzt hat. Mit der Option `öffentlich` zeigen `/hochladen` und `/kürzen` den Link allen im Kanal. Die App erkennt Konten am verknüpften Discord, wer sie nutzen will, meldet sich einmal mit Discord an oder verknüpft Discord unter **Konto › Sicherheit**. Es gelten dieselben Regeln wie beim Hochladen: Speicherlimits, gesperrte Dateitypen und der Virenscan.
+
+Einrichten, mit derselben Anwendung wie für die [Anmeldung über Discord](#anmelden-über-andere-dienste):
+
+1. Im [Developer Portal](https://discord.com/developers/applications) unter **General Information** den **Public Key** kopieren und unter **Admin › Einstellungen › Anmeldedienste › Discord › Discord-App** eintragen, die App einschalten und speichern.
+2. Die dort angezeigte Adresse `https://share.example.com/api/discord/interactions` im Developer Portal als **Interactions Endpoint URL** eintragen. Discord prüft sie beim Speichern.
+3. Unter **Installation** „User Install“ einschalten, damit die App auf jedem Server und in DMs geht, und die App über den Installationslink zu deinem Discord-Konto hinzufügen.
+4. In MoeShare auf **Befehle bei Discord eintragen** klicken. Nach einer Namensänderung deiner Instanz das noch einmal tun, damit der Rechtsklick-Befehl den neuen Namen trägt.
+
 ## Texte, Kurzlinks und Alben
 
 **Texte** lädst du aus ShareX, über die API oder im Dashboard mit „Neuer Text“ hoch. MoeShare zeigt sie mit Syntaxhervorhebung, erkennt die Sprache auf Wunsch selbst und bietet die Rohfassung und einen Download an. Wie groß ein Text sein darf, legst du unter **Admin › Einstellungen › Uploads** fest.
@@ -325,6 +363,10 @@ Pro Anfrage stellst du ein:
 - ob du per E-Mail Bescheid bekommst. Weitere Uploads innerhalb von 15 Minuten fasst MoeShare zusammen
 
 Die Dateien landen in deinem Konto und zählen zu deinem Speicher, im Dashboard siehst du, wer was geschickt hat. Eine Anfrage lässt sich jederzeit schließen und wieder öffnen. Admins schalten die Funktion unter **Admin › Einstellungen › Funktionen** ab und legen fest, wie viele offene Anfragen ein Konto haben darf (Standard 20).
+
+## QR-Codes
+
+Bei Dateien (im Teilen-Menü der Dateiansicht), Kurzlinks, Alben, deinem Profil und Datei-Anfragen gibt es einen QR-Code, zum Abscannen mit dem Handy oder zum Speichern als PNG oder SVG. Für Datei-Anfragen druckst du daraus einen **Aushang** mit Titel, Nachricht, großem QR-Code und Adresse, etwa für eine Feier, auf der alle ihre Fotos hochladen sollen.
 
 ## Eigene Adressen und eigener Pfad
 
@@ -428,6 +470,12 @@ Unter **Admin › Einstellungen › Funktionen** lassen sich Profilseiten für a
 Ein Klick auf das Bild oben unter **Konto** öffnet den Editor: ein Bild auswählen, hineinziehen oder aus den eigenen Uploads nehmen, dann den runden Ausschnitt verschieben und zoomen. MoeShare speichert das Ergebnis als WebP mit 256 × 256 Pixeln in der Datenbank, so steckt es in jeder Sicherung. Bewegte GIFs und animierte WebP-Bilder bleiben bewegt. Das Bild erscheint auf der Profilseite samt ihrer Linkvorschau, auf den Vorschauseiten deiner Dateien, in Alben und überall in der Oberfläche. Erlaubt sind Bilder bis 15 MB und ab 32 Pixeln Kantenlänge.
 
 Unter **Admin › Einstellungen › Funktionen** schaltest du Profilbilder ab oder lässt nur unbewegte zu. Ein unpassendes Bild entfernen Admins unter **Admin › Benutzer**.
+
+## Diashow und RSS-Feeds
+
+Auf jeder Albumseite startet **Diashow** die Bilder und Videos im Vollbild. Bilder wechseln alle 3, 5 oder 10 Sekunden, Videos laufen bis zum Ende. Die Leertaste hält an, die Pfeiltasten und Wischen blättern, `F` schaltet das Vollbild um. Dateien mit Inhaltswarnung zeigt die Diashow erst nach einem Klick und wartet so lange.
+
+Profile und Alben haben einen Atom-Feed für jeden Feed-Reader: `/u/<name>/feed.xml` mit den Dateien und Alben, die auf dem Profil stehen, und `/a/<code>/feed.xml` mit den Dateien eines Albums. Auf eigenen Domains liegt der Feed des Profils unter `/feed.xml`. Alben mit Passwort und private Alben haben keinen Feed, Bilder mit Inhaltswarnung erscheinen im Feed ohne Vorschau.
 
 ## Eigene Domains
 
@@ -534,6 +582,12 @@ Unter **Admin › Einstellungen › Virenscan** trägst du Host und Port ein (im
 
 - **Größte geprüfte Datei**: Größere Dateien nimmt MoeShare ungeprüft an (Standard 25 MB). Soll ClamAV mehr prüfen, erhöhst du dort auch `StreamMaxLength` in der `clamd.conf`.
 - **Wenn ClamAV nicht antwortet**: den Upload abweisen (Standard) oder ungeprüft annehmen.
+
+## Gesperrte Dateitypen
+
+Unter **Admin › Einstellungen › Uploads › Gesperrte Dateitypen** trägst du Endungen ein, die MoeShare nicht annimmt, etwa `.exe` oder `.bat`. **Empfohlene Liste** übernimmt mit einem Klick gängige Programme und Skripte für Windows, Java und Android. Mit **Programme am Inhalt erkennen** lehnt MoeShare Programme für Windows, Linux und macOS auch dann ab, wenn sie umbenannt wurden.
+
+Die Sperre gilt für alle Upload-Wege, auch für Datei-Anfragen, Links und die Discord-App. Admins dürfen solche Dateien weiter hochladen, außer über Datei-Anfragen, dort laden ja Gäste hoch. Große Uploads lehnt MoeShare schon beim Start ab, im Dashboard sogar, bevor überhaupt etwas übertragen wird.
 
 ## Datenexport
 
@@ -688,6 +742,12 @@ So entstehen Einmal-Links:
 Unter **Admin › Einstellungen › Anmeldung** legst du fest, ob Einmal-Links erlaubt sind, wie lange ein neuer Link üblicherweise gilt (Standard 15 Minuten), wie lange höchstens (Standard 24 Stunden) und ob man sich einen Link per E-Mail schicken lassen kann. Unter **Admin › Zugänge** stehen alle Links der letzten 30 Tage mit ihrem Stand. Dort holst du einen gültigen Link noch einmal hervor, schickst ihn per E-Mail oder ziehst ihn zurück. Gesperrte Konten bekommen keine Links, beim Sperren verfallen ihre offenen Links.
 
 Jede Anmeldung mit einem Einmal-Link steht im Aktivitätsprotokoll. Stammt der Link von einem Admin, einer Integration oder der Kommandozeile, bekommt die Person eine E-Mail dazu und die [Benachrichtigungen](#benachrichtigungen) melden die Anmeldung als Sicherheitsereignis. Im Link steckt ein zufälliger Schlüssel mit 256 Bit. MoeShare speichert davon nur einen Hash und, solange der Link gilt, eine verschlüsselte Kopie, damit Admins und Integrationen ihn abholen können.
+
+## Hinweis bei neuen Anmeldungen
+
+Meldet sich jemand auf einem Gerät an, das für dieses Konto noch nicht dabei war, bekommt die Person eine E-Mail mit Gerät, Uhrzeit, Art der Anmeldung und, wenn MoeShare IP-Adressen protokolliert, der IP-Adresse. Wiedererkannt wird ein Gerät am Cookie `ms_device`, einer Zufallszahl, die MoeShare nur dafür nutzt und 400 Tage behält. Für deine Datenschutzerklärung: Das Cookie gehört zur Anmeldung und ist technisch notwendig. Die erste Anmeldung eines Kontos löst keine E-Mail aus, und wer schon angemeldet ist, wenn du auf 3.5 aktualisierst, bekommt keine.
+
+Die E-Mail gehört zu den Sicherheitshinweisen, abschalten lässt sie sich unter **Konto › Einstellungen › E-Mail**. Sie braucht eine eingerichtete [E-Mail](#e-mail) und eine bestätigte Adresse im Konto.
 
 ## Startseite, Impressum und Links
 
@@ -854,13 +914,13 @@ Abschalten lässt sich die Prüfung dort oder unter **Admin › Einstellungen �
 
 ```json
 {
-  "version": "3.4.1",
-  "date": "2026-11-07",
-  "changelog": "https://moeshare.moestudio.net/changelog.html#v3.4.1",
+  "version": "3.5.0",
+  "date": "2026-11-10",
+  "changelog": "https://moeshare.moestudio.net/changelog.html#v3.5.0",
   "security": false,
   "notes": {
-    "de": ["Versionsprüfung mit Hinweis im Dashboard"],
-    "en": ["Version check with a notice in the dashboard"]
+    "de": ["Discord-App: Anhänge per Rechtsklick dauerhaft speichern"],
+    "en": ["Discord app: keep attachments for good with a right-click"]
   }
 }
 ```
@@ -875,6 +935,8 @@ Was neu ist und worauf du beim Update achten musst, steht im [Changelog](https:/
 4. MoeShare starten.
 
 Beim ersten Start sichert MoeShare die Datenbank automatisch nach `db/backups/` und bringt sie auf den neuen Stand. Bestehende Discord-Verknüpfungen bleiben dabei erhalten. Werte aus einer alten `.env` (zum Beispiel `SITE_TITLE` oder `MAX_FILE_SIZE_MB`) werden einmalig übernommen, danach meldet das Log, welche Variablen du entfernen kannst. Bisherige ShareX-Tokens funktionieren weiter. Für Konten aus älteren Versionen ist zunächst auch die Anmeldung mit dem Token möglich, damit sich alle ein Passwort setzen können. Unter **Admin › Einstellungen › Anmeldung** schaltest du das ab.
+
+Beim Update auf 3.5 legt MoeShare eine Tabelle für bekannte Geräte an, die für den [Hinweis bei neuen Anmeldungen](#hinweis-bei-neuen-anmeldungen) gebraucht wird. Wer angemeldet bleibt, bekommt dabei keine E-Mail. Gesperrte Dateitypen gibt es erst, wenn du welche einträgst, und die [Discord-App](#discord-app) ist aus, bis du sie einschaltest.
 
 Beim Update auf 3.4 legt MoeShare die Tabellen für Datei-Anfragen, Ankündigungen, Untertitel und Zertifikate an. Eigene Domains brauchen ab jetzt ein [Impressum und eine Datenschutzerklärung](#impressum-und-datenschutz-für-eigene-domains), Domains, die schon verbunden sind, haben dafür 14 Tage Zeit und laufen so lange weiter. TXT-Einträge mit `_moeshare` gelten weiter, auch wenn deine Instanz anders heißt. Eigene Webhooks bekommen die Header `X-Webhook-Event` und `X-Webhook-Signature` und bis zum Abschalten zusätzlich die alten `X-MoeShare-…`. Zeigte das Logo auf das alte Logo von moeshare.eu, nutzt MoeShare jetzt sein eingebautes Symbol. Für Videos aus älteren Versionen startest du unter **Admin › System › Videos** „Alle Videos prüfen“ oder `node cli.js videos`. Wer eine eigene Caddyfile nutzt, gibt für **Admin › Caddy** die Admin-API frei, siehe [Caddy verwalten](#caddy-verwalten). Ab 3.4.1 fragt die [Versionsprüfung](#versionsprüfung) bei moeshare.moestudio.net statt bei GitHub nach, eine abgeschaltete Prüfung bleibt aus.
 
@@ -941,7 +1003,7 @@ Skripte und Uploader melden sich mit einem API-Token im Header `Authorization` a
 | `GET` | `/files` | Dateinamen des eigenen Kontos, neueste zuerst |
 | `DELETE` | `/file/:dateiname` | Eigene Datei in den Papierkorb legen, ohne Papierkorb sofort löschen. Antwort: `{ ok, trashed }` |
 
-Öffentlich erreichbar sind `/view/:dateiname` (Ansichtsseite), `/download/:dateiname`, `/uploads/:benutzer/:dateiname` (die Datei selbst), `/s/:code` (Kurzlinks), `/a/:code` (Alben), `/a/:code/zip` (Album als ZIP), `/u/:benutzer` (Profilseiten), `/r/:code` ([Datei-Anfragen](#datei-anfragen)), `/report` (Inhalt melden), `/oembed/:dateiname`, `/api/home` (Statistiken der Startseite), `/api/domains/tls` (Abfrage für Caddy), `/impressum`, `/datenschutz` und `/healthz` für Health-Checks. `/metrics` antwortet nur mit dem Token aus [Metriken für Prometheus](#metriken-für-prometheus). Geschützte Dateien liefert MoeShare erst nach Eingabe des Passworts auf der Ansichtsseite aus.
+Öffentlich erreichbar sind `/view/:dateiname` (Ansichtsseite), `/download/:dateiname`, `/uploads/:benutzer/:dateiname` (die Datei selbst), `/s/:code` (Kurzlinks), `/a/:code` (Alben), `/a/:code/zip` (Album als ZIP), `/u/:benutzer` (Profilseiten), `/a/:code/feed.xml` und `/u/:benutzer/feed.xml` ([RSS-Feeds](#diashow-und-rss-feeds)), `/r/:code` ([Datei-Anfragen](#datei-anfragen)), `/api/discord/interactions` (nur mit Signatur von Discord, siehe [Discord-App](#discord-app)), `/report` (Inhalt melden), `/oembed/:dateiname`, `/api/home` (Statistiken der Startseite), `/api/domains/tls` (Abfrage für Caddy), `/impressum`, `/datenschutz` und `/healthz` für Health-Checks. `/metrics` antwortet nur mit dem Token aus [Metriken für Prometheus](#metriken-für-prometheus). Geschützte Dateien liefert MoeShare erst nach Eingabe des Passworts auf der Ansichtsseite aus.
 
 ```bash
 curl -H "Authorization: ms_…" -F "file=@bild.png" https://share.example.com/upload

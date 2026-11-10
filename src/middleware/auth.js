@@ -4,6 +4,7 @@ const logger = require('../lib/logger');
 const { HttpError, forbidden, unauthorized } = require('../lib/errors');
 const { isSameOrigin } = require('../lib/request');
 const sessions = require('../services/sessionService');
+const devices = require('../services/deviceService');
 const tokens = require('../services/tokenService');
 const settings = require('../services/settingsService');
 const i18n = require('../lib/i18n');
@@ -27,6 +28,7 @@ async function loadSession(req, res, next) {
     req.user = resolved.user;
     req.session = resolved.session;
     req.sessionToken = token;
+    await devices.seen(req, res, resolved.user).catch(() => {});
     if (resolved.session.refreshed && resolved.session.persistent) {
       res.cookie(sessions.COOKIE, token, sessions.cookieOptions(req, resolved.session));
     }

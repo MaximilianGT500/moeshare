@@ -2,6 +2,9 @@ import { useState } from 'react';
 import { m } from 'motion/react';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
+import IconButton from '@mui/material/IconButton';
+import Tooltip from '@mui/material/Tooltip';
+import RssFeedRounded from '@mui/icons-material/RssFeedRounded';
 import CircularProgress from '@mui/material/CircularProgress';
 import Typography from '@mui/material/Typography';
 import ArrowOutwardRounded from '@mui/icons-material/ArrowOutwardRounded';
@@ -181,6 +184,13 @@ function Profile({ boot }: { boot: ProfileBoot }) {
           <CopyTextButton value={profile.url} variant="outlined" message={t('Link kopiert')} sx={{ borderRadius: `${r(radius.full)}px` }}>
             {t('Profil-Link kopieren')}
           </CopyTextButton>
+          {boot.feed && (
+            <Tooltip title={t('RSS-Feed abonnieren')}>
+              <IconButton component="a" href={boot.feed} aria-label={t('RSS-Feed')} sx={{ color: 'text.secondary' }}>
+                <RssFeedRounded />
+              </IconButton>
+            </Tooltip>
+          )}
         </Box>
       </m.section>
 

@@ -24,6 +24,8 @@ import ContentCutRounded from '@mui/icons-material/ContentCutRounded';
 import SubtitlesOutlined from '@mui/icons-material/SubtitlesOutlined';
 import WarningAmberRounded from '@mui/icons-material/WarningAmberRounded';
 import ListItemIcon from '@mui/material/ListItemIcon';
+import QrCode2Rounded from '@mui/icons-material/QrCode2Rounded';
+import { QrDialog } from '../../components/QrDialog';
 import MenuItem from '@mui/material/MenuItem';
 import type { FileItem, Subtitle } from '../../lib/types';
 import { extensionOf, formatBytes, formatDateTime, formatNumber, parseServerDate, relativeFromServer } from '../../lib/format';
@@ -309,6 +311,7 @@ export function Viewer({
   const [natural, setNatural] = useState<Record<string, { w: number; h: number }>>({});
   const [fullLoaded, setFullLoaded] = useState<Record<string, boolean>>({});
   const [shareAnchor, setShareAnchor] = useState<HTMLElement | null>(null);
+  const [qrOpen, setQrOpen] = useState(false);
   const [moreAnchor, setMoreAnchor] = useState<HTMLElement | null>(null);
   const [tracks, setTracks] = useState<Record<number, Subtitle[]>>({});
   const videoId = file && file.type === 'video' ? file.id : null;
@@ -616,7 +619,24 @@ export function Viewer({
           slotProps={{ root: { sx: { zIndex: 1500 } } }}
         >
           <ShareMenuItems file={file} onDone={() => setShareAnchor(null)} />
+          <MenuItem
+            onClick={() => {
+              setShareAnchor(null);
+              setQrOpen(true);
+            }}
+          >
+            <ListItemIcon>
+              <QrCode2Rounded />
+            </ListItemIcon>
+            {t('QR-Code')}
+          </MenuItem>
         </Menu>
+        <QrDialog
+          url={qrOpen ? file.urls.view : null}
+          title={file.title || file.originalName || file.filename}
+          zIndex={1600}
+          onClose={() => setQrOpen(false)}
+        />
 
         <Menu
           anchorEl={moreAnchor}

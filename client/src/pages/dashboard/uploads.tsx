@@ -28,7 +28,7 @@ import {
   type UploadOptions,
   type UploadResponse,
 } from '../../lib/api';
-import type { UploadSession } from '../../lib/types';
+import type { UploadRules, UploadSession } from '../../lib/types';
 import { t, tn } from '../../lib/i18n';
 import { formatBytes } from '../../lib/format';
 import { isTypingTarget } from '../../lib/hooks';
@@ -94,6 +94,7 @@ export function UploadProvider({
   children,
   onUploaded,
   maxBytes,
+  rules,
   chunked,
   chunkSize,
   albums,
@@ -103,6 +104,7 @@ export function UploadProvider({
   children: ReactNode;
   onUploaded: (names: string[], results: UploadResponse[]) => void;
   maxBytes: number | null;
+  rules?: UploadRules;
   chunked: boolean;
   chunkSize: number;
   albums: boolean;
@@ -152,20 +154,26 @@ export function UploadProvider({
         ...list,
         ...files.map((file) => {
           const tooBig = maxBytes !== null && file.size > maxBytes;
+          const extension = /\.[a-z0-9]{1,10}$/i.exec(file.name)?.[0].toLowerCase() || '';
+          const blocked = Boolean(extension && rules?.blocked.includes(extension));
           return {
             id: nextId.current++,
             file,
             options: { ...optionsRef.current, ...overrides },
             progress: 0,
             resumable: chunked && file.size > chunkSize,
-            status: tooBig ? ('error' as const) : ('queued' as const),
-            error: tooBig ? t('Zu groß – erlaubt sind bis zu {max}.', { max: formatBytes(maxBytes!) }) : undefined,
+            status: tooBig || blocked ? ('error' as const) : ('queued' as const),
+            error: blocked
+              ? t('Dateien vom Typ {ext} sind auf diesem Server nicht erlaubt.', { ext: extension })
+              : tooBig
+                ? t('Zu groß – erlaubt sind bis zu {max}.', { max: formatBytes(maxBytes!) })
+                : undefined,
             thumb: guessType(file) === 'image' && file.size < 25 * 1024 * 1024 ? URL.createObjectURL(file) : undefined,
           };
         }),
       ]);
     },
-    [maxBytes, chunked, chunkSize]
+    [maxBytes, rules, chunked, chunkSize]
   );
 
   const route = useCallback(
