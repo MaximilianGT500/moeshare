@@ -29,6 +29,9 @@ const avatars = require('../services/avatarService');
 const paths = require('../services/pathService');
 const storage = require('../services/storageService');
 const legalService = require('../services/legalService');
+const push = require('../services/pushService');
+const { deviceLabel } = require('../lib/request');
+const { limiter } = require('../lib/limiter');
 const { filePaths } = require('../lib/storage');
 const { STYLES } = require('../lib/slugs');
 const { EXPIRY_CHOICES } = require('../lib/expiry');
@@ -37,6 +40,7 @@ const router = express.Router();
 
 const signedIn = requireApi({ allowSetup: true });
 const sudo = [signedIn, requireRecentAuth];
+const pushTestLimiter = limiter({ windowMs: 60 * 1000, limit: 6 });
 
 const OWN_ACTIVITY = [
   'login',
@@ -402,6 +406,26 @@ router.delete('/api/account/domains/:id', signedIn, async (req, res) => {
   audit.log('domain_removed', { userId: req.user.id, req, details: { domain: removed.domain } });
   res.json({ ok: true, domains: await domainInfo(req) });
 });
+
+router.get('/api/account/push', signedIn, async (req, res) => res.json(await push.state(req.user, req.language)));
+
+router.post('/api/account/push', signedIn, async (req, res) => {
+  const device = await push.subscribe(req.user, req.body, { label: deviceLabel(req.get('user-agent')), language: req.language });
+  res.status(201).json({ device });
+});
+
+router.patch('/api/account/push/:id', signedIn, async (req, res) =>
+  res.json({ device: await push.update(req.user, req.params.id, req.body, req.language) })
+);
+
+router.delete('/api/account/push/:id', signedIn, async (req, res) => {
+  await push.remove(req.user, req.params.id);
+  res.json({ ok: true });
+});
+
+router.post('/api/account/push/:id/test', signedIn, pushTestLimiter, async (req, res) =>
+  res.json(await push.test(req.user, req.params.id, req.language))
+);
 
 router.get('/api/account/activity', signedIn, async (req, res) => {
   const events = await audit.list({

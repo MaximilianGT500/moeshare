@@ -26,6 +26,7 @@ import type {
   UploadRequest,
   UploadRequestInput,
   LoginLink,
+  NotifyKey,
   UploadSession,
   WatermarkConfig,
   WebhookTarget,
@@ -63,6 +64,7 @@ import type {
   UserStats,
 } from './types';
 import { t } from './i18n';
+import { withSavedKey } from './sealedKeys';
 
 export class ApiError extends Error {
   readonly status: number;
@@ -153,6 +155,7 @@ export interface UploadResponse {
   protected: { password: boolean; maxViews: number | null };
   warning?: string | null;
   duplicateOf?: { id: number; slug: string; view: string; stored: boolean };
+  sealed?: { key: string; name: string };
 }
 
 export interface UploadOptions {
@@ -170,6 +173,7 @@ export interface UploadOptions {
   watermark?: boolean;
   slug?: string;
   code?: string;
+  encrypt?: boolean;
 }
 
 function optionFields(options: UploadOptions): Array<[string, string]> {
@@ -495,7 +499,7 @@ export function listFiles(params: {
   });
   if (params.tag) query.set('tag', params.tag);
   if (params.album) query.set('album', String(params.album));
-  return api<FileListResponse>(`/api/files?${query}`);
+  return api<FileListResponse>(`/api/files?${query}`).then((res) => ({ ...res, files: res.files.map(withSavedKey) }));
 }
 
 export interface FilePatch {
@@ -520,6 +524,20 @@ export const bulkFiles = (data: {
   password?: string;
   warning?: string | boolean;
 }) => post<{ ok: boolean; count: number; trashed: boolean }>('/api/files/bulk', data);
+export type CleanupKind = 'large' | 'unseen' | 'stale';
+
+export interface CleanupResponse extends FileListResponse {
+  kind: CleanupKind;
+  summary: { count: number; bytes: number };
+  stats: boolean;
+  trash: boolean;
+}
+
+export const fetchCleanup = (kind: CleanupKind, page = 1, limit = 50) =>
+  api<CleanupResponse>(`/api/files/cleanup?kind=${kind}&page=${page}&limit=${limit}`).then((res) => ({
+    ...res,
+    files: res.files.map(withSavedKey),
+  }));
 export const fetchTags = () => api<{ tags: TagCount[] }>('/api/tags');
 
 export const listTrash = (page = 1, limit = 60) =>
@@ -963,6 +981,30 @@ export interface DiscordAppState {
   commands: string[];
   error: string | null;
 }
+
+export interface PushDevice {
+  id: number;
+  label: string;
+  endpointHash: string;
+  events: Partial<Record<NotifyKey, boolean>>;
+  createdAt: number;
+  lastSuccessAt: number | null;
+  lastError: string | null;
+}
+
+export interface PushState {
+  enabled: boolean;
+  publicKey: string | null;
+  devices: PushDevice[];
+}
+
+export const fetchPush = () => api<PushState>('/api/account/push');
+export const savePushSubscription = (subscription: PushSubscriptionJSON, events?: Partial<Record<NotifyKey, boolean>>) =>
+  post<{ device: PushDevice }>('/api/account/push', { subscription, events });
+export const updatePushDevice = (id: number, events: Partial<Record<NotifyKey, boolean>>) =>
+  patch<{ device: PushDevice }>(`/api/account/push/${id}`, { events });
+export const removePushDevice = (id: number) => del<{ ok: boolean }>(`/api/account/push/${id}`);
+export const testPushDevice = (id: number) => post<{ ok: boolean; removed?: boolean; error?: string }>(`/api/account/push/${id}/test`);
 
 export const fetchDiscordApp = () => api<DiscordAppState>('/api/admin/discord');
 export const registerDiscordCommands = () => post<DiscordAppState>('/api/admin/discord/commands');

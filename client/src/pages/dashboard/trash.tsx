@@ -184,7 +184,7 @@ export function TrashView({ onChanged }: { onChanged: () => void }) {
         </Alert>
       )}
 
-      <Box component="ul" sx={{ listStyle: 'none', p: 0, m: 0, display: 'grid', gap: 1 }}>
+      <Box component="ul" sx={{ listStyle: 'none', p: 0, m: 0, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 1 }}>
         <AnimatePresence initial={false}>
           {files.map((file) => (
             <m.li

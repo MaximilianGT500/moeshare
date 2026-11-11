@@ -265,6 +265,12 @@ function notifyNewDevice(userId, { device, method, ip, at }) {
             : t('Warst du das nicht? Melde dich sofort an, prüfe deine Geräte und wende dich an einen Admin.'),
         ],
         button: { label: t('Geräte ansehen'), url: `${base()}/account#geraete` },
+        push: {
+          body: t('{device}, angemeldet mit {method}. Warst du das nicht? Dann prüf sofort deine Geräte.', {
+            device: t(device),
+            method: how,
+          }),
+        },
       };
     })
     .catch((error) => {

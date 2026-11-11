@@ -18,6 +18,12 @@ const i18n = require('./lib/i18n');
 
 const trustProxy = () => (settings.get('system.trustProxy') ? 1 : false);
 
+function worthCompressing(req, res) {
+  if (res.statusCode === 206 || res.getHeader('Content-Range')) return false;
+  if (/^application\/octet-stream\b/i.test(String(res.getHeader('Content-Type') || ''))) return false;
+  return compression.filter(req, res);
+}
+
 function createApp() {
   const app = express();
   app.disable('x-powered-by');
@@ -27,7 +33,7 @@ function createApp() {
   app.use(requestLog);
   app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
   app.use(ownDomainHeaders);
-  app.use(compression());
+  app.use(compression({ filter: worthCompressing }));
 
   app.use('/app/assets', express.static(path.join(config.paths.ui, 'assets'), { maxAge: '365d', immutable: true }), (req, res) =>
     res.status(404).end()

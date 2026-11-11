@@ -7,6 +7,7 @@ const tpl = require('../lib/embedTemplate');
 const { escapeHtml, formatBytes, splitBerlinDate } = require('../lib/format');
 const { displayPath } = require('../lib/slugs');
 const { extensionOf } = require('../lib/storage');
+const { isSealedName } = require('../lib/sealed');
 const { isCrawler } = require('../lib/crawlers');
 const settings = require('./settingsService');
 const files = require('./fileService');
@@ -127,11 +128,26 @@ function warningTags(record, embed, urls, type, locale) {
   return tags.join('\n  ');
 }
 
+function sealedTags(urls, locale) {
+  const tag = (attr, key, value) => `<meta ${attr}="${key}" content="${escapeHtml(value)}" />`;
+  const language = settings.get('site.language');
+  return [
+    tag('property', 'og:url', urls.view),
+    tag('property', 'og:locale', locale),
+    tag('property', 'og:type', 'website'),
+    tag('property', 'og:title', i18n.translate(language, 'Verschlüsselte Datei')),
+    tag('property', 'og:description', i18n.translate(language, 'Wird erst im Browser entschlüsselt. Den Schlüssel enthält nur der Link.')),
+    tag('property', 'og:site_name', settings.get('site.title')),
+    tag('name', 'robots', 'noindex'),
+  ].join('\n  ');
+}
+
 function metaTags(record, embed, { domain = null, locale = 'de_DE' } = {}) {
   const { type } = files.typeOf(record.filename, record.syntax);
   const ext = extensionOf(record.filename);
   const urls = files.urlsFor(record, { domain });
   if (record.password_hash || record.max_views) return lockedTags(record, urls, locale);
+  if (isSealedName(record.filename)) return sealedTags(urls, locale);
   if (hasWarning(record)) return warningTags(record, embed, urls, type, locale);
   const width = record.resolution_width || 0;
   const height = record.resolution_height || 0;

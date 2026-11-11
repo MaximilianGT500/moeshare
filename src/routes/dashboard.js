@@ -75,6 +75,7 @@ function uploadOptions(prefs, user, watermark) {
     customAddresses: settings.get('links.customAddresses'),
     linkPath: paths.currentFor(user.username),
     requests: settings.get('requests.enabled'),
+    encrypted: settings.get('uploads.encrypted'),
   };
 }
 
@@ -139,6 +140,18 @@ router.get('/api/files', signedIn, async (req, res) => {
       domain: displayDomain(prefs, req.user.username),
     })
   );
+});
+
+router.get('/api/files/cleanup', signedIn, async (req, res) => {
+  const kind = files.CLEANUP_KINDS.includes(req.query.kind) ? req.query.kind : 'large';
+  const prefs = await preferences.get(req.user.id);
+  const result = await files.cleanupFor(req.user.username, {
+    kind,
+    page: req.query.page,
+    limit: req.query.limit,
+    domain: displayDomain(prefs, req.user.username),
+  });
+  res.json({ ...result, kind, stats: settings.get('stats.enabled'), trash: files.trashEnabled() });
 });
 
 function idList(raw) {

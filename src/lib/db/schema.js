@@ -625,6 +625,27 @@ const TABLES = [
     ],
     indexes: [{ name: 'idx_file_subtitles_file', columns: ['file_id'] }],
   },
+  {
+    name: 'push_subscriptions',
+    columns: [
+      id(),
+      userRef(),
+      col('endpoint_hash', 'string', { length: 64, notNull: true }),
+      col('endpoint', 'text', { notNull: true }),
+      col('p256dh', 'string', { length: 128, notNull: true }),
+      col('auth', 'string', { length: 64, notNull: true }),
+      col('label', 'string', { length: 120 }),
+      col('events', 'text'),
+      col('created_at', 'bigint', { notNull: true }),
+      col('last_success_at', 'bigint'),
+      col('last_error', 'string', { length: 200 }),
+      col('failures', 'int', { notNull: true, default: 0 }),
+    ],
+    indexes: [
+      { name: 'idx_push_subscriptions_endpoint', columns: ['endpoint_hash'], unique: true },
+      { name: 'idx_push_subscriptions_user', columns: ['user_id'] },
+    ],
+  },
 ];
 
 const TABLE = Object.fromEntries(TABLES.map((table) => [table.name, table]));

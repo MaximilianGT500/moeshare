@@ -11,7 +11,12 @@ const log = logger.scope('http');
 
 const API_PREFIXES = ['/api/', '/upload', '/file/', '/files', '/oembed/'];
 
-const wantsJson = (req) => req.method !== 'GET' || API_PREFIXES.some((prefix) => req.path.startsWith(prefix));
+const JSON_PATHS = [/^\/view\/[^/]+\/zip$/];
+
+const wantsJson = (req) =>
+  req.method !== 'GET' ||
+  API_PREFIXES.some((prefix) => req.path.startsWith(prefix)) ||
+  JSON_PATHS.some((pattern) => pattern.test(req.path));
 
 function normalize(error) {
   if (error instanceof HttpError) return error;

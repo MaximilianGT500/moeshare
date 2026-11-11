@@ -19,6 +19,14 @@ const summary = (user) => ({
     settings.get('view.allowUserDesigns') ||
     settings.get('profiles.enabled') ||
     settings.get('images.watermarks'),
+  features: {
+    albums: settings.get('albums.enabled'),
+    links: settings.get('links.enabled'),
+    requests: settings.get('requests.enabled'),
+    stats: settings.get('stats.enabled'),
+    trash: settings.get('trash.enabled'),
+    texts: settings.get('uploads.texts'),
+  },
 });
 
 async function confirmMethods(user) {

@@ -6,6 +6,8 @@ const db = require('../lib/db');
 const { escapeHtml } = require('../lib/format');
 const { displayPath } = require('../lib/slugs');
 const { baseNameOf, filePaths } = require('../lib/storage');
+const { isSealedName } = require('../lib/sealed');
+const i18n = require('../lib/i18n');
 const imaging = require('../lib/imaging');
 const settings = require('./settingsService');
 const files = require('./fileService');
@@ -110,6 +112,7 @@ async function fileView(record, { access = { state: 'open' }, domain = null } = 
       blocked: record.blocked_at ? { reason: record.blocked_reason || '' } : null,
       warning: record.warning === null || record.warning === undefined ? null : record.warning,
       version: Number(record.version) || 1,
+      sealed: isSealedName(filename),
     },
     urls: {
       view: urls.view,
@@ -136,7 +139,11 @@ async function viewPage(record, { access = { state: 'open' }, domain = null, loc
   if (access.state === 'locked' || access.state === 'once') return lockedPage(record, access, { domain, locale });
   const { type } = files.typeOf(record.filename, record.syntax);
   const embed = await embeds.embedFor(record);
-  const label = record.title || record.original_name || record.filename;
+  const label =
+    record.title ||
+    (isSealedName(record.filename) ? i18n.translate(locale === 'en_GB' ? 'en' : 'de', 'Verschlüsselte Datei') : null) ||
+    record.original_name ||
+    record.filename;
   const local = `/uploads/${record.username}/${record.filename}`;
   return {
     type,

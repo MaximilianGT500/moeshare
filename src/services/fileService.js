@@ -4,7 +4,7 @@ const db = require('../lib/db');
 const cache = require('../lib/cache');
 const logger = require('../lib/logger');
 const { notFound } = require('../lib/errors');
-const { berlinDate } = require('../lib/format');
+const { berlinDate, berlinDay } = require('../lib/format');
 const { displayPath } = require('../lib/slugs');
 const { extensionOf, baseNameOf, userDirs, isSafeFilename } = require('../lib/storage');
 const settings = require('./settingsService');
@@ -66,6 +66,7 @@ const TEXT_SYNTAX = {
   '.diff': 'diff',
   '.patch': 'diff',
   '.csv': 'plaintext',
+  '.tsv': 'plaintext',
 };
 
 const SORTS = {
@@ -329,6 +330,30 @@ function listForUser(
         )
     : null;
   return paginate({ conditions, params, order, page, limit, maxLimit: 100, domain, decorate });
+}
+
+const CLEANUP_KINDS = ['large', 'unseen', 'stale'];
+const UNSEEN_AFTER_MS = 14 * 24 * 60 * 60 * 1000;
+const STALE_AFTER_MS = 180 * 24 * 60 * 60 * 1000;
+const ACTIVITY =
+  "SELECT 1 FROM stats_daily s WHERE s.kind = 'f' AND s.ref_id = file_data.id AND (s.views > 0 OR s.downloads > 0 OR s.direct > 0)";
+
+async function cleanupFor(username, { kind = 'large', page = 1, limit = 50, domain = null, now = Date.now() } = {}) {
+  const conditions = ['file_data.username = ?', 'file_data.deleted_at IS NULL'];
+  const params = [username];
+  let order = SORTS.size;
+  if (kind === 'unseen') {
+    conditions.push('file_data.views = 0', 'file_data.created_at < ?', `NOT EXISTS (${ACTIVITY})`);
+    params.push(now - UNSEEN_AFTER_MS);
+  } else if (kind === 'stale') {
+    conditions.push('file_data.created_at < ?', `NOT EXISTS (${ACTIVITY} AND s.day >= ?)`);
+    params.push(now - STALE_AFTER_MS, berlinDay(new Date(now - STALE_AFTER_MS)));
+    order = 'created_at ASC, id ASC';
+  }
+  const where = conditions.join(' AND ');
+  const summary = await db.get(`SELECT COUNT(*) AS count, COALESCE(SUM(size_bytes), 0) AS bytes FROM file_data WHERE ${where}`, params);
+  const list = await paginate({ conditions, params, order, page, limit, maxLimit: 100, domain });
+  return { ...list, summary: { count: Number(summary.count) || 0, bytes: Number(summary.bytes) || 0 } };
 }
 
 function listAll({ page = 1, limit = 50, search = '', trash = false } = {}) {
@@ -832,6 +857,8 @@ module.exports = {
   toFile,
   withTags,
   listForUser,
+  cleanupFor,
+  CLEANUP_KINDS,
   listAll,
   listListed,
   findByFilename,

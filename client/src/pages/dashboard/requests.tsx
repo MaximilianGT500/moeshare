@@ -262,7 +262,7 @@ function RequestDialog({
             />
             <FormControlLabel
               control={<Switch checked={notify} onChange={(event) => setNotify(event.target.checked)} />}
-              label={t('Mich per E-Mail benachrichtigen')}
+              label={t('Mich bei neuen Dateien benachrichtigen')}
             />
           </Box>
         </Box>

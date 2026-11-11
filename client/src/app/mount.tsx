@@ -58,7 +58,8 @@ function Root({
 }
 
 function registerServiceWorker() {
-  if (!readBoot().site.pwa || !('serviceWorker' in navigator) || !window.isSecureContext) return;
+  const { site } = readBoot();
+  if (!(site.pwa || site.push) || !('serviceWorker' in navigator) || !window.isSecureContext) return;
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
   });

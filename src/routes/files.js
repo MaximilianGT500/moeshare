@@ -8,6 +8,7 @@ const cache = require('../lib/cache');
 const db = require('../lib/db');
 const { HttpError, notFound, gone, forbidden } = require('../lib/errors');
 const { limiter } = require('../lib/limiter');
+const { tr } = require('../lib/i18n');
 const { renderPage, renderMessage } = require('../lib/render');
 const { isSafeFilename, isValidUsername, baseNameOf } = require('../lib/storage');
 const { isCrawler } = require('../lib/crawlers');
@@ -24,6 +25,9 @@ const redirects = require('../services/redirectService');
 const paths = require('../services/pathService');
 const profiles = require('../services/profileService');
 const subtitles = require('../services/subtitleService');
+const archives = require('../services/archiveService');
+const { isSealedName } = require('../lib/sealed');
+const hotlink = require('../services/hotlinkService');
 const { displayPath } = require('../lib/slugs');
 
 const router = express.Router();
@@ -147,7 +151,8 @@ router.post('/view/:slug/open', sameOriginOnly, unlockLimiter, async (req, res) 
 router.get('/oembed/:slug', async (req, res) => {
   const record = await existing(req, req.params.slug);
   if (!record) throw notFound('Datei nicht gefunden');
-  if (protection.isProtected(record) || record.blocked_at) return res.json({ version: '1.0', type: 'link' });
+  if (protection.isProtected(record) || record.blocked_at || isSealedName(record.filename))
+    return res.json({ version: '1.0', type: 'link' });
   if (embeds.hasWarning(record)) return res.json({ version: '1.0', type: 'link', title: embeds.warningTitle(record) });
   return res.json(embeds.oembedFor(await embeds.embedFor(record)));
 });
@@ -156,6 +161,11 @@ function downloadName(record) {
   if (record.original_name) return record.original_name;
   if (record.title) return `${record.title.replace(/[\\/:*?"<>|]+/g, '-')}${path.extname(record.filename)}`;
   return record.filename;
+}
+
+function inlineDisposition(name) {
+  const fallback = name.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
+  return `inline; filename="${fallback}"; filename*=UTF-8''${encodeURIComponent(name).replace(/['()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`)}`;
 }
 
 router.get('/download/:slug', async (req, res) => {
@@ -175,6 +185,30 @@ router.get('/download/:slug', async (req, res) => {
     return storage.sendRemote(req, res, relative, { cacheControl: 'private, no-store', downloadName: downloadName(record) });
   }
   return res.download(local, downloadName(record));
+});
+
+async function openArchive(req, slug) {
+  const record = await existing(req, slug);
+  if (!record || !archives.isZip(record)) throw notFound('Datei nicht gefunden');
+  const access = protection.fileAccess(req, record);
+  if (access.state === 'expired') throw gone(EXPIRED);
+  if (access.state === 'blocked') throw new HttpError(451, BLOCKED);
+  if (access.state !== 'open') throw forbidden('Diese Datei ist geschützt. Öffne sie über ihre Ansichtsseite.', { code: 'protected' });
+  return { record, access };
+}
+
+router.get('/view/:slug/zip', async (req, res) => {
+  const { record } = await openArchive(req, req.params.slug);
+  res.set('Cache-Control', 'private, no-store');
+  res.json(await archives.listing(record));
+});
+
+router.get('/view/:slug/zip/:index', async (req, res) => {
+  const { record, access } = await openArchive(req, req.params.slug);
+  const index = /^\d{1,6}$/.test(req.params.index) ? Number(req.params.index) : -1;
+  if (index < 0) throw notFound('Diese Datei gibt es im Archiv nicht.');
+  if (!access.owner) stats.track(req, 'f', record.id, 'downloads');
+  return archives.sendEntry(res, record, index);
 });
 
 router.get('/delete/:slug', async (req, res) => {
@@ -251,6 +285,15 @@ function serveUpload(kind) {
     if (access.state === 'missing') throw notFound('Datei nicht gefunden');
     if (access.state === 'blocked') throw new HttpError(451, BLOCKED);
     if (access.state !== 'open') throw forbidden('Diese Datei ist geschützt. Öffne sie über ihre Ansichtsseite.', { code: 'protected' });
+    if (hotlink.enabled()) res.vary('Referer');
+    if (!access.owner && !hotlink.allowed(req)) {
+      res.set('Cache-Control', 'no-store');
+      if (hotlink.isNavigation(req)) return res.redirect(302, files.viewPathOf(record, domains.requestOrigin(req)));
+      return res
+        .status(403)
+        .type('text/plain; charset=utf-8')
+        .send(tr(req, 'Diese Datei darf nicht auf anderen Seiten eingebunden werden.'));
+    }
 
     const guarded = protection.isProtected(record) || Boolean(record.expires_at) || Boolean(record.deleted_at);
     const cacheControl = guarded ? 'private, no-store' : name.endsWith('.m3u8') ? 'no-cache' : storage.IMMUTABLE;
@@ -260,6 +303,7 @@ function serveUpload(kind) {
     res.removeHeader('Content-Security-Policy');
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     protectUpload(res, name);
+    if (kind === 'original' && /\.pdf$/i.test(name)) res.setHeader('Content-Disposition', inlineDisposition(downloadName(record)));
     if (record.storage === 's3' && !fs.existsSync(file)) return storage.sendRemote(req, res, relative, { cacheControl });
     if (!fs.existsSync(file)) {
       const original = path.join(config.paths.uploads, user, record.filename);

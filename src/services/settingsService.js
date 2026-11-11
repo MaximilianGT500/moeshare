@@ -25,6 +25,20 @@ const extension = (item) => {
   const ext = `.${String(item).trim().toLowerCase().replace(/^\.+/, '')}`;
   return /^\.[a-z0-9]{1,10}$/.test(ext) ? ext : null;
 };
+const hostPattern = (item) => {
+  let text = String(item).trim().toLowerCase();
+  if (/^https?:\/\//.test(text)) {
+    try {
+      text = new URL(text).hostname;
+    } catch {
+      return null;
+    }
+  }
+  text = text.replace(/\/.*$/, '').replace(/\.$/, '');
+  return /^(\*\.)?([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(text) && text.length <= 253
+    ? text
+    : null;
+};
 const snowflake = (item) => (/^\d{5,25}$/.test(String(item).trim()) ? String(item).trim() : null);
 const oidcGroup = (item) => {
   const text = String(item).trim();
@@ -54,6 +68,7 @@ const DEFINITIONS = {
   'site.detectLanguage': { type: 'bool', default: true },
   'site.domains': { type: 'domains', default: [], max: 10 },
   'site.pwa': { type: 'bool', default: true },
+  'push.enabled': { type: 'bool', default: true },
   'site.poweredBy': { type: 'bool', default: true },
   'site.showVersion': { type: 'bool', default: true },
 
@@ -98,6 +113,10 @@ const DEFINITIONS = {
   'uploads.formats.audio': { type: 'list', item: extension, max: 40, default: ['.mp3', '.wav', '.ogg', '.aac', '.flac', '.m4a', '.opus'] },
   'uploads.blockedTypes': { type: 'list', item: extension, max: 100, default: [] },
   'uploads.blockPrograms': { type: 'bool', default: false },
+  'uploads.encrypted': { type: 'bool', default: true },
+  'hotlink.enabled': { type: 'bool', default: false },
+  'hotlink.allowed': { type: 'list', item: hostPattern, max: 100, default: [] },
+  'hotlink.allowEmpty': { type: 'bool', default: true },
   'uploads.chunked': { type: 'bool', default: true },
   'uploads.resumeHours': { type: 'int', min: 1, max: 168, default: 24 },
   'uploads.deduplicate': { type: 'bool', default: true },

@@ -266,12 +266,27 @@ function MediaCard({ file }: { file: FileItem }) {
         <Box component="audio" src={file.urls.direct} controls autoPlay sx={{ width: '100%', mt: 3 }} />
       ) : (
         <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center', mt: 3, flexWrap: 'wrap' }}>
-          <Button variant="contained" startIcon={<DownloadRounded />} href={file.urls.download}>
-            {t('Herunterladen')}
-          </Button>
-          <Button variant="tonal" startIcon={<OpenInNewRounded />} href={file.urls.view} target="_blank" rel="noopener">
-            {t('Ansichtsseite')}
-          </Button>
+          {file.sealedKey !== undefined ? (
+            <Button
+              variant="contained"
+              startIcon={<OpenInNewRounded />}
+              href={file.urls.view}
+              target="_blank"
+              rel="noopener"
+              disabled={!file.sealedKey}
+            >
+              {file.sealedKey ? t('Entschlüsselt ansehen') : t('Schlüssel nicht in diesem Browser')}
+            </Button>
+          ) : (
+            <>
+              <Button variant="contained" startIcon={<DownloadRounded />} href={file.urls.download}>
+                {t('Herunterladen')}
+              </Button>
+              <Button variant="tonal" startIcon={<OpenInNewRounded />} href={file.urls.view} target="_blank" rel="noopener">
+                {t('Ansichtsseite')}
+              </Button>
+            </>
+          )}
         </Box>
       )}
     </Box>

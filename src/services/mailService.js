@@ -7,6 +7,7 @@ const { escapeHtml } = require('../lib/format');
 const { translate } = require('../lib/i18n');
 const settings = require('./settingsService');
 const { languageOf, notifyOf } = require('./preferenceService');
+const push = require('./pushService');
 
 const log = logger.scope('mail');
 
@@ -114,25 +115,42 @@ async function sendSafely(to, language, message) {
 
 const languageFor = (row) => languageOf(row && row.preferences) || settings.get('site.language');
 
-async function notifyUser(userId, category, build) {
-  if (!ready()) return false;
-  const row = await db.get('SELECT username, email, email_verified_at, preferences, status FROM users WHERE id = ?', [userId]);
-  if (!row || !row.email || !row.email_verified_at || row.status !== 'active') return false;
-  if (!notifyOf(row.preferences)[category]) return false;
+function composer(row, build) {
   const language = languageFor(row);
-  return sendSafely(row.email, language, build(language, row));
+  let message = null;
+  return {
+    language,
+    compose: () => {
+      if (!message) message = build(language, row);
+      return message;
+    },
+  };
+}
+
+function pushTo(row, category, compose) {
+  push.notify(row.id, category, compose).catch((error) => log.warn('Push-Benachrichtigung fehlgeschlagen', { error }));
+}
+
+const wantsMail = (row, category) => Boolean(ready() && row.email && row.email_verified_at && notifyOf(row.preferences)[category]);
+
+async function notifyUser(userId, category, build) {
+  const row = await db.get('SELECT id, username, email, email_verified_at, preferences, status FROM users WHERE id = ?', [userId]);
+  if (!row || row.status !== 'active') return false;
+  const { language, compose } = composer(row, build);
+  pushTo(row, category, compose);
+  if (!wantsMail(row, category)) return false;
+  return sendSafely(row.email, language, compose());
 }
 
 async function notifyAdmins(category, build) {
-  if (!ready()) return 0;
   const rows = await db.all(
-    "SELECT id, username, email, email_verified_at, preferences FROM users WHERE role = 'admin' AND status = 'active' AND email IS NOT NULL AND email_verified_at IS NOT NULL"
+    "SELECT id, username, email, email_verified_at, preferences FROM users WHERE role = 'admin' AND status = 'active'"
   );
   let sent = 0;
   for (const row of rows) {
-    if (!notifyOf(row.preferences)[category]) continue;
-    const language = languageFor(row);
-    if (await sendSafely(row.email, language, build(language, row))) sent += 1;
+    const { language, compose } = composer(row, build);
+    pushTo(row, category, compose);
+    if (wantsMail(row, category) && (await sendSafely(row.email, language, compose()))) sent += 1;
   }
   return sent;
 }

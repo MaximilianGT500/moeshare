@@ -78,11 +78,13 @@ export function ReportForm({
     setBusy(true);
     setError('');
     setField('');
+    const written = message.current?.value || '';
+    const keyLink = target?.link && (written.trim() || !needsMessage(reason)) ? `${t('Link mit Schlüssel')}: ${target.link}` : '';
     try {
       await sendReport({
         ...(askUrl ? { url: url.current?.value || '' } : { kind: target?.kind, target: target?.target }),
         reason,
-        message: message.current?.value || '',
+        message: [written, keyLink].filter(Boolean).join('\n\n'),
         contact: contact.current?.value || '',
         website: trap.current?.value || '',
       });
@@ -170,7 +172,12 @@ export function ReportForm({
           minRows={3}
           fullWidth
           error={field === 'message'}
-          slotProps={{ htmlInput: { maxLength: 2000 } }}
+          helperText={
+            target?.link
+              ? t('Der Link mit Schlüssel wird mitgeschickt, damit die Admins den verschlüsselten Inhalt prüfen können.')
+              : undefined
+          }
+          slotProps={{ htmlInput: { maxLength: 1800 } }}
         />
         <TextField
           inputRef={contact}

@@ -47,6 +47,7 @@ export interface FileItem {
   twins?: number;
   match?: SearchMatch;
   mine?: boolean;
+  sealedKey?: string | null;
   urls: FileUrls;
 }
 
@@ -319,6 +320,7 @@ export interface SiteInfo {
   links: SiteLink[];
   legal: SiteLink[];
   pwa?: boolean;
+  push?: boolean;
   language?: 'de' | 'en';
   report?: boolean;
   poweredBy?: boolean;
@@ -356,6 +358,7 @@ export interface UploadOptionsInfo {
   customAddresses: boolean;
   linkPath: string | null;
   requests?: boolean;
+  encrypted?: boolean;
 }
 
 export interface TagCount {
@@ -454,6 +457,7 @@ export interface SessionUser {
   avatar: string | null;
   canCustomizeEmbed: boolean;
   canDesign: boolean;
+  features?: { albums: boolean; links: boolean; requests: boolean; stats: boolean; trash: boolean; texts: boolean };
 }
 
 export interface SessionInfo {
@@ -767,6 +771,7 @@ export type ReportKind = 'file' | 'album' | 'link' | 'profile';
 export interface ReportTarget {
   kind: ReportKind;
   target: string;
+  link?: string;
 }
 
 export interface ReportDetails {
@@ -1282,6 +1287,7 @@ export interface ViewFile {
   blocked?: { reason: string } | null;
   warning?: string | null;
   version?: number;
+  sealed?: boolean;
 }
 
 export interface ViewUrls {

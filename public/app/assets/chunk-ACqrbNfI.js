@@ -1,0 +1,1 @@
+import{Ar as e,Kn as t,Un as n,Yn as r}from"./chunk-Bt9wD2Ud.js";function i(t){return e(t)&&`ownerSVGElement`in t}function a(e,i,a){let o=n(e)?e:r(e);return o.start(t(``,o,i,a)),o.animation}export{i as n,a as t};

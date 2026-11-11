@@ -44,6 +44,7 @@ const siteInfo = (language = settings.get('site.language'), custom = false, admi
   links: domain && domain.legal ? [] : settings.get('site.links'),
   legal: legalLinks(language, domain),
   pwa: settings.get('site.pwa') && !custom,
+  push: settings.get('push.enabled') && !custom,
   language: settings.get('site.language'),
   report: settings.get('reports.enabled'),
   poweredBy: settings.get('site.poweredBy'),

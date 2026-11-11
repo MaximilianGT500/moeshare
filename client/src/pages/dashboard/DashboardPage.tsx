@@ -11,6 +11,12 @@ import Typography from '@mui/material/Typography';
 import Tab from '@mui/material/Tab';
 import useScrollTrigger from '@mui/material/useScrollTrigger';
 import CloudUploadRounded from '@mui/icons-material/CloudUploadRounded';
+import DriveFolderUploadRounded from '@mui/icons-material/DriveFolderUploadRounded';
+import NoteAddRounded from '@mui/icons-material/NoteAddRounded';
+import AddLinkRounded from '@mui/icons-material/AddLinkRounded';
+import CloudDownloadRounded from '@mui/icons-material/CloudDownloadRounded';
+import ScreenshotMonitorRounded from '@mui/icons-material/ScreenshotMonitorRounded';
+import TuneRounded from '@mui/icons-material/TuneRounded';
 import { readBoot, siteName } from '../../lib/boot';
 import { RequestsView } from './requests';
 import { SubtitlesDialog } from './subtitles';
@@ -32,6 +38,9 @@ import {
 import type { DropContents } from '../../lib/folders';
 import { extensionOf, formatBytes, formatDate, formatNumber, relativeFromServer } from '../../lib/format';
 import { t, tn } from '../../lib/i18n';
+import { copyText } from '../../lib/clipboard';
+import { withSavedKey } from '../../lib/sealedKeys';
+import { usePaletteCommands, type PaletteCommand } from '../../lib/palette';
 import { sharedUrl, takeSharedItems } from '../../lib/shareTarget';
 import { ScrollTabs } from '../../components/ScrollTabs';
 import { EditFileDialog } from './EditFileDialog';
@@ -57,6 +66,7 @@ import { VersionsDialog } from './versions';
 import { ClipDialog } from './clip';
 import { DuplicatesDialog } from './duplicates';
 import { TrashView } from './trash';
+import { CleanupView } from './cleanup';
 import { InsightsView } from './insights';
 import { ImageEditor } from './editor/ImageEditor';
 import { StatsDialog, type StatsTarget } from '../../components/StatsView';
@@ -94,7 +104,7 @@ function summaryText(stats: UserStats, quotaBytes: number | null) {
   return `${parts.join(', ')}.${latest}`;
 }
 
-type Section = 'files' | 'albums' | 'links' | 'requests' | 'stats' | 'trash';
+type Section = 'files' | 'albums' | 'links' | 'requests' | 'stats' | 'trash' | 'cleanup';
 
 const SECTION_HASH: Record<Section, string> = {
   files: '',
@@ -103,6 +113,7 @@ const SECTION_HASH: Record<Section, string> = {
   requests: '#anfragen',
   stats: '#statistik',
   trash: '#papierkorb',
+  cleanup: '#aufraeumen',
 };
 
 function sectionFromHash(boot: DashboardBoot): { section: Section; album: number | null } {
@@ -114,6 +125,7 @@ function sectionFromHash(boot: DashboardBoot): { section: Section; album: number
   if (hash === '#anfragen' && boot.options.requests) return { section: 'requests', album: null };
   if (hash === '#statistik' && boot.options.stats) return { section: 'stats', album: null };
   if (hash === '#papierkorb' && boot.options.trash) return { section: 'trash', album: null };
+  if (hash === '#aufraeumen') return { section: 'cleanup', album: null };
   return { section: 'files', album: null };
 }
 
@@ -246,7 +258,7 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
       .catch(() => {});
   }, [optionsOpen, boot.options.albums]);
 
-  const [files, setFiles] = useState<FileItem[]>(boot.files.files);
+  const [files, setFiles] = useState<FileItem[]>(() => boot.files.files.map(withSavedKey));
   const [page, setPage] = useState(boot.files.page || 1);
   const [hasMore, setHasMore] = useState(boot.files.hasNext);
   const [total, setTotal] = useState(boot.files.total);
@@ -377,6 +389,22 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
         refreshStats();
         setUploadRound((value) => value + 1);
         if (prefs.tags.length) refreshTags();
+        const sealed = results.filter((result) => result.sealed);
+        if (sealed.length) {
+          toast(
+            sealed.length === 1
+              ? t('Verschlüsselt hochgeladen. Den Schlüssel kennt nur dieser Browser, kopier dir den Link.')
+              : t('{count} Dateien verschlüsselt hochgeladen. Die Links mit Schlüssel findest du an den Dateien.', {
+                  count: sealed.length,
+                }),
+            {
+              variant: 'success',
+              duration: 9000,
+              action: sealed.length === 1 ? { label: t('Link kopieren'), onClick: () => void copyText(sealed[0].view) } : undefined,
+            }
+          );
+          return;
+        }
         const twins = results.filter((result) => result.duplicateOf).length;
         if (!twins) {
           toast(tn(names.length, 'Datei hochgeladen', '{count} Dateien hochgeladen'), { variant: 'success', duration: 2600 });
@@ -611,6 +639,73 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
     searchRef.current?.focus();
   });
   useHotkey('u', () => !overlay && section === 'files' && pick());
+
+  const paletteCommands = useMemo<PaletteCommand[]>(() => {
+    const list: Array<PaletteCommand | false> = [
+      {
+        id: 'upload',
+        group: 'actions',
+        label: t('Dateien hochladen'),
+        icon: <CloudUploadRounded />,
+        keywords: 'upload',
+        hint: 'U',
+        run: pick,
+      },
+      {
+        id: 'upload-folder',
+        group: 'actions',
+        label: t('Ordner hochladen'),
+        icon: <DriveFolderUploadRounded />,
+        keywords: 'upload verzeichnis',
+        run: pickFolder,
+      },
+      boot.options.texts && {
+        id: 'text',
+        group: 'actions',
+        label: t('Neuer Text'),
+        icon: <NoteAddRounded />,
+        keywords: 'paste code notiz',
+        run: () => setTextOpen(true),
+      },
+      boot.options.links && {
+        id: 'link',
+        group: 'actions',
+        label: t('Link kürzen'),
+        icon: <AddLinkRounded />,
+        keywords: 'kurzlink url',
+        run: () => {
+          setLinkInitial('');
+          setLinkOpen(true);
+        },
+      },
+      boot.urlFetch && {
+        id: 'url',
+        group: 'actions',
+        label: t('Von URL hochladen'),
+        icon: <CloudDownloadRounded />,
+        keywords: 'internet adresse',
+        run: () => setUrlOpen(true),
+      },
+      capture && {
+        id: 'capture',
+        group: 'actions',
+        label: t('Bildschirm aufnehmen'),
+        icon: <ScreenshotMonitorRounded />,
+        keywords: 'screenshot video aufnahme',
+        run: () => setCaptureOpen(true),
+      },
+      {
+        id: 'options',
+        group: 'actions',
+        label: t('Upload-Optionen'),
+        icon: <TuneRounded />,
+        keywords: 'ablauf passwort verschlüsseln',
+        run: () => setOptionsOpen(true),
+      },
+    ];
+    return list.filter(Boolean) as PaletteCommand[];
+  }, [pick, pickFolder, boot.options.texts, boot.options.links, boot.urlFetch, capture]);
+  usePaletteCommands(paletteCommands);
   useHotkey('Escape', () => !overlay && selecting && clearSelection(), { enabled: selecting });
   useEffect(() => {
     if (!selecting) return undefined;
@@ -636,7 +731,8 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
   };
 
   const replaceFile = useCallback((updated: FileItem) => {
-    setFiles((prev) => prev.map((file) => (file.id === updated.id ? updated : file)));
+    const next = withSavedKey(updated);
+    setFiles((prev) => prev.map((file) => (file.id === next.id ? next : file)));
   }, []);
 
   const toggleWarning = useCallback(
@@ -815,45 +911,44 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
         </Box>
       )}
 
-      {(boot.options.albums || boot.options.links || boot.options.requests || boot.options.stats || trashOn) && (
-        <Box sx={{ mb: 2.5, mt: -1 }}>
-          <ScrollTabs value={section} onChange={(next) => goSection(next)} label={t('Bereiche')}>
-            <Tab value="files" label={t('Dateien')} />
-            {boot.options.albums && <Tab value="albums" label={t('Alben')} />}
-            {boot.options.links && <Tab value="links" label={t('Links')} />}
-            {boot.options.requests && <Tab value="requests" label={t('Anfragen')} />}
-            {boot.options.stats && <Tab value="stats" label={t('Statistik')} />}
-            {trashOn && (
-              <Tab
-                value="trash"
-                label={
-                  stats.trash?.files ? (
-                    <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
-                      {t('Papierkorb')}
-                      <Box
-                        component="span"
-                        aria-label={tn(stats.trash.files, '1 Datei', '{count} Dateien')}
-                        sx={{
-                          minWidth: 20,
-                          px: 0.75,
-                          borderRadius: '10px',
-                          bgcolor: c.surfaceContainerHighest,
-                          fontSize: '0.75rem',
-                          lineHeight: '20px',
-                        }}
-                      >
-                        {formatNumber(stats.trash.files)}
-                      </Box>
+      <Box sx={{ mb: 2.5, mt: -1 }}>
+        <ScrollTabs value={section} onChange={(next) => goSection(next)} label={t('Bereiche')}>
+          <Tab value="files" label={t('Dateien')} />
+          {boot.options.albums && <Tab value="albums" label={t('Alben')} />}
+          {boot.options.links && <Tab value="links" label={t('Links')} />}
+          {boot.options.requests && <Tab value="requests" label={t('Anfragen')} />}
+          {boot.options.stats && <Tab value="stats" label={t('Statistik')} />}
+          <Tab value="cleanup" label={t('Aufräumen')} />
+          {trashOn && (
+            <Tab
+              value="trash"
+              label={
+                stats.trash?.files ? (
+                  <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
+                    {t('Papierkorb')}
+                    <Box
+                      component="span"
+                      aria-label={tn(stats.trash.files, '1 Datei', '{count} Dateien')}
+                      sx={{
+                        minWidth: 20,
+                        px: 0.75,
+                        borderRadius: '10px',
+                        bgcolor: c.surfaceContainerHighest,
+                        fontSize: '0.75rem',
+                        lineHeight: '20px',
+                      }}
+                    >
+                      {formatNumber(stats.trash.files)}
                     </Box>
-                  ) : (
-                    t('Papierkorb')
-                  )
-                }
-              />
-            )}
-          </ScrollTabs>
-        </Box>
-      )}
+                  </Box>
+                ) : (
+                  t('Papierkorb')
+                )
+              }
+            />
+          )}
+        </ScrollTabs>
+      </Box>
 
       {section === 'albums' && (
         <AlbumsView openId={albumOpen} onOpen={(id) => goSection('albums', id)} info={boot.options} refreshKey={uploadRound} />
@@ -861,6 +956,15 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
       {section === 'links' && <LinksView info={boot.options} version={linksVersion} />}
       {section === 'requests' && <RequestsView />}
       {section === 'stats' && <InsightsView onOpen={openStats} />}
+      {section === 'cleanup' && (
+        <CleanupView
+          onChanged={() => {
+            reload();
+            refreshStats();
+            setTrashVersion((value) => value + 1);
+          }}
+        />
+      )}
       {section === 'trash' && (
         <TrashView
           key={trashVersion}
@@ -922,6 +1026,7 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
               onUrl={boot.urlFetch ? () => setUrlOpen(true) : undefined}
               onText={boot.options.texts ? () => setTextOpen(true) : undefined}
               onCapture={capture ? () => setCaptureOpen(true) : undefined}
+              onOptions={() => setOptionsOpen(true)}
             />
           ) : (
             <Gallery
@@ -1064,10 +1169,18 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
           setTextInitial('');
         }}
         onDone={(result) => {
-          toast(t('Text gespeichert'), {
-            variant: 'success',
-            action: { label: t('Öffnen'), onClick: () => window.open(result.view, '_blank', 'noopener') },
-          });
+          toast(
+            result.sealed
+              ? t('Text verschlüsselt gespeichert. Den Schlüssel kennt nur dieser Browser, kopier dir den Link.')
+              : t('Text gespeichert'),
+            {
+              variant: 'success',
+              duration: result.sealed ? 9000 : undefined,
+              action: result.sealed
+                ? { label: t('Link kopieren'), onClick: () => void copyText(result.view) }
+                : { label: t('Öffnen'), onClick: () => window.open(result.view, '_blank', 'noopener') },
+            }
+          );
           reload([result.filename]);
           refreshStats();
           refreshTags();
@@ -1088,7 +1201,8 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
         tags={tags}
         onClose={() => setEditing(null)}
         onSaved={(updated) => {
-          setFiles((prev) => prev.map((file) => (file.id === updated.id ? updated : file)));
+          const next = withSavedKey(updated);
+          setFiles((prev) => prev.map((file) => (file.id === next.id ? next : file)));
           refreshTags();
           toast(t('Änderungen gespeichert'), { variant: 'success' });
         }}

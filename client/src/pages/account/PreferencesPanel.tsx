@@ -20,6 +20,8 @@ import { SettingRow, SettingsSection } from '../../components/SettingsKit';
 import { DomainSelect, ExpirySelect, UrlStyleSelect, expiryLabel, urlStyleExample, urlStyleLabel } from '../../components/ShareOptions';
 import { useToast } from '../../components/Toaster';
 import { EmailSection } from './EmailSection';
+import { PushSection } from './PushSection';
+import { readBoot } from '../../lib/boot';
 import { fonts } from '../../theme/tokens';
 
 const LANGUAGE_NAMES: Record<'de' | 'en', string> = { de: 'Deutsch', en: 'English' };
@@ -156,6 +158,7 @@ export function PreferencesPanel({ account, onSaved }: { account: AccountOvervie
           onNotify={(next) => save('notify', next)}
         />
       )}
+      {readBoot().site.push && <PushSection isAdmin={account.user.isAdmin} />}
       <SettingsSection id="sprache" title={t('Sprache')} description={t('Gilt für dich auf allen Geräten, auf denen du angemeldet bist.')}>
         <SettingRow icon={<TranslateRounded />} label={t('Sprache der Oberfläche')} htmlFor="pref-language">
           <Box sx={{ width: { xs: '100%', sm: 280 } }}>

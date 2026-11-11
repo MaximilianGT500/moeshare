@@ -100,4 +100,4 @@ async function update(userId, patch) {
   return next;
 }
 
-module.exports = { LANGUAGES, NOTIFY_KEYS, get, update, languageOf, notifyOf };
+module.exports = { LANGUAGES, NOTIFY_KEYS, cleanNotify, get, update, languageOf, notifyOf };

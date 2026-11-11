@@ -33,13 +33,17 @@ Offizielle Instance: [v3.moeshare.eu](https://v3.moeshare.eu).
 - [Bildschirm aufnehmen](#bildschirm-aufnehmen)
 - [Discord-App](#discord-app)
 - [Texte, Kurzlinks und Alben](#texte-kurzlinks-und-alben)
+- [Vorschau für PDF, Markdown, CSV und ZIP](#vorschau-für-pdf-markdown-csv-und-zip)
 - [Datei-Anfragen](#datei-anfragen)
 - [QR-Codes](#qr-codes)
 - [Eigene Adressen und eigener Pfad](#eigene-adressen-und-eigener-pfad)
+- [Ende-zu-Ende verschlüsselt teilen](#ende-zu-ende-verschlüsselt-teilen)
 - [Papierkorb, Statistiken und ZIP](#papierkorb-statistiken-und-zip)
 - [Große Dateien, Ordner und Versionen](#große-dateien-ordner-und-versionen)
 - [Gemeinsame Alben](#gemeinsame-alben)
 - [Duplikate und Volltextsuche](#duplikate-und-volltextsuche)
+- [Aufräumen](#aufräumen)
+- [Befehlspalette](#befehlspalette)
 - [Bilder bearbeiten](#bilder-bearbeiten)
 - [Bilder optimieren und Wasserzeichen](#bilder-optimieren-und-wasserzeichen)
 - [Videos kürzen und GIFs](#videos-kürzen-und-gifs)
@@ -54,9 +58,11 @@ Offizielle Instance: [v3.moeshare.eu](https://v3.moeshare.eu).
 - [Impressum und Datenschutz für eigene Domains](#impressum-und-datenschutz-für-eigene-domains)
 - [Melden und Moderation](#melden-und-moderation)
 - [E-Mail](#e-mail)
+- [Push-Benachrichtigungen](#push-benachrichtigungen)
 - [Benachrichtigungen](#benachrichtigungen)
 - [Virenscan mit ClamAV](#virenscan-mit-clamav)
 - [Gesperrte Dateitypen](#gesperrte-dateitypen)
+- [Hotlink-Schutz](#hotlink-schutz)
 - [Datenexport](#datenexport)
 - [Import aus anderen Uploadern](#import-aus-anderen-uploadern)
 - [Datenbank](#datenbank)
@@ -91,14 +97,17 @@ Offizielle Instance: [v3.moeshare.eu](https://v3.moeshare.eu).
 - **Große Dateien** gehen im Browser in Teilen hoch und laufen nach einem Abbruch an derselben Stelle weiter, auch nach dem Neuladen der Seite
 - **Ordner und ZIP-Archive** als Album hochladen, entpackt wird im Browser
 - **Texte und Code** wie in einem Pastebin, mit Syntaxhervorhebung, aus ShareX oder direkt im Browser
+- **Vorschau für PDF, Markdown, CSV und ZIP**: PDFs im Browser, Markdown formatiert, Tabellen als Tabelle und ZIP-Archive mit ihrem Inhalt, aus dem sich einzelne Dateien herunterladen lassen
 - **Kurzlinks** für lange Adressen, auch direkt aus ShareX
 - **Schutz pro Upload**: Ablaufzeit, Passwort oder nur ein einziger Abruf, für Dateien, Texte und Kurzlinks
+- **Ende-zu-Ende verschlüsselt teilen**: Dateien und Texte werden schon im Browser verschlüsselt, den Schlüssel enthält nur der Link, der Server kennt weder Inhalt noch Namen
 - **Inhaltswarnungen**: Bilder und Videos erscheinen erst nach einem Klick, auch die Vorschau in Discord bleibt verschwommen
 - **Alben und Tags**: Dateien ordnen und als Album mit eigener Seite teilen, als ZIP herunterladen und gemeinsam mit anderen Konten füllen
 - **Versionen**: eine Datei durch eine neue Fassung ersetzen, ohne dass sich ihr Link ändert, und jederzeit zu einer älteren zurück
 - **Duplikate**: Mehrfach hochgeladene Dateien zeigt das Dashboard an, auf der Festplatte liegen sie nur einmal
 - **Volltextsuche** in Texten, Code und anderen Textdateien
 - **Papierkorb**: Gelöschtes lässt sich 30 Tage lang zurückholen
+- **Aufräumen**: große, nie aufgerufene und lange nicht mehr aufgerufene Dateien auf einen Blick, gesammelt löschen oder ablaufen lassen
 - **Statistiken** pro Datei, Kurzlink und Album: Aufrufe, Vorschauen in Discord und Co., Downloads und woher die Besucher kommen, ganz ohne IP-Adressen
 - **Adressen nach Wahl**: lange ID, kurze Zeichenfolge, Wörter, Emojis, unsichtbare Zeichen oder der Originalname, auf Wunsch über mehrere Domains
 - **Ansichtsseiten** mit Bild-, Video- und Audioplayer in sechs Designs, mit Farben aus der Datei oder eigener Akzentfarbe, wählbarer Schrift, ein- und ausblendbaren Angaben und auf Wunsch eigenem CSS
@@ -121,14 +130,16 @@ Offizielle Instance: [v3.moeshare.eu](https://v3.moeshare.eu).
 - **Melden und Moderation**: Besucher melden Inhalte, Admins sperren oder löschen sie
 - **Virenscan** mit ClamAV für jeden Upload
 - **Gesperrte Dateitypen** wie `.exe` oder `.bat`, auf Wunsch erkennt MoeShare Programme auch dann, wenn sie umbenannt wurden
+- **Hotlink-Schutz**: Fremde Seiten binden deine Bilder und Videos nicht mehr direkt ein, Vorschauen in Discord, Telegram und Co. funktionieren weiter
 - **E-Mail über SMTP** für „Passwort vergessen“, Anmeldelinks, Einladungen und Hinweise zum Konto
+- **Push-Benachrichtigungen** aufs Handy oder den Rechner, etwa bei neuen Dateien in Datei-Anfragen oder einer Anmeldung auf einem neuen Gerät, auch ganz ohne E-Mail-Server
 - **Startseite** mit Statistiken und Upload-Verlauf, im Browser anpassbar oder abschaltbar
 - **Dein Name**: Überall steht der Name deiner Instanz, auch in DNS-Einträgen, Dateinamen und Webhooks. „Läuft mit MoeShare“ und die Versionsnummer lassen sich abschalten
 - **Ankündigungen und Wartungsmodus**: Hinweise für alle oder nur Angemeldete, mit Zeitraum, und eine Wartungsseite, während du am Server arbeitest
 - **Update-Hinweis**: Admins sehen, wenn eine neue Version erschienen ist, auf Wunsch abschaltbar
 - **Anmeldung** mit Passwort, Zwei-Faktor per Authenticator-App und Passkeys, dazu über Discord, GitHub, Google, Microsoft, GitLab oder jeden OpenID-Connect-Anbieter wie Authentik, Keycloak oder Authelia, dort auch mit Rollen aus Gruppen
 - **Ohne Passwort**: Die Anmeldung mit Passwort lässt sich ganz abschalten, dann geht es nur noch mit Passkey, über einen verknüpften Dienst oder mit einem Einmal-Link
-- **Hinweis bei neuen Anmeldungen**: eine E-Mail, sobald sich jemand auf einem Gerät anmeldet, das bisher nicht dabei war
+- **Hinweis bei neuen Anmeldungen**: eine E-Mail oder Push-Benachrichtigung, sobald sich jemand auf einem Gerät anmeldet, das bisher nicht dabei war
 - **Einmal-Links**, die genau einmal anmelden und von selbst ablaufen: von Admins erstellt, per E-Mail angefordert oder von anderen Systemen über die API, auf Wunsch erst nach Freigabe durch einen Admin
 - **Benutzerverwaltung** mit Rollen, Speicherlimits, Einladungslinks, Sperren und Aktivitätsprotokoll
 - **API-Tokens** für ShareX und Skripte, mehrere pro Konto und einzeln widerrufbar, die `.sxcu`-Dateien für Dateien, Texte und Kurzlinks gibt es per Klick
@@ -145,6 +156,7 @@ Offizielle Instance: [v3.moeshare.eu](https://v3.moeshare.eu).
 - **Benachrichtigungen** an Discord, Slack, Matrix, Telegram, ntfy oder einen eigenen Webhook, für jedes Ziel mit eigener Auswahl an Ereignissen
 - **Metriken für Prometheus** unter `/metrics`, geschützt mit einem Token
 - **Installationsskript**, das Docker oder Node.js, Caddy und die Datenbank in einem Rutsch einrichtet
+- **Befehlspalette** mit Strg+K: hochladen, einen Text anlegen, zu jedem Bereich springen oder Dateien finden, alles mit der Tastatur
 - **Weboberfläche** mit Material You: Farben aus einer Grundfarbe, helles und dunkles Design, auf dem Handy genauso gut wie am PC
 
 Für Linux, macOS und das iPhone gibt es fertige Einstellungen unter Konto › API, siehe [Andere Programme](#andere-programme). [MagicCap](https://magiccap.me/) funktioniert ebenfalls.
@@ -350,6 +362,17 @@ Ein Passwort, eine Ablaufzeit oder ein einmaliger Abruf lässt sich bei jedem Up
 
 Kurzlinks und Alben lassen sich unter **Admin › Einstellungen › Funktionen** abschalten.
 
+## Vorschau für PDF, Markdown, CSV und ZIP
+
+Viele Dateien zeigt die Ansichtsseite direkt an, statt nur einen Download anzubieten:
+
+- **PDF** im eingebauten PDF-Viewer des Browsers. Auf Handys, die PDFs nicht innerhalb einer Seite anzeigen, öffnet „PDF öffnen“ die Datei im Viewer des Geräts.
+- **Markdown** formatiert, mit Überschriften, Listen, Aufgabenlisten, Tabellen, Zitaten und Code mit Syntaxhervorhebung. HTML im Text bleibt Text, und Bilder von fremden Seiten erscheinen nur als Link. Über „Quelltext“ siehst du die Datei, wie sie ist.
+- **CSV und TSV** als Tabelle mit fester Kopfzeile, Zahlen stehen rechtsbündig. Ob Komma, Semikolon, Tabulator oder senkrechter Strich die Spalten trennt, erkennt MoeShare selbst. Die Tabelle zeigt die ersten 1.000 Zeilen, „Text“ die Rohfassung.
+- **ZIP-Archive** mit ihrem Inhalt als Ordnerbaum, mit Größe und Datum jeder Datei. Einzelne Dateien lädst du direkt herunter, ohne das ganze Archiv zu laden. Bei verschlüsselten Einträgen und seltenen Packverfahren bleibt nur der Download des ganzen Archivs. Angezeigt werden bis zu 10.000 Einträge.
+
+Markdown und CSV kommen wie andere Texte bis 512 KB in die Vorschau, größere Dateien gibt es als Download.
+
 ## Datei-Anfragen
 
 Mit einer Datei-Anfrage schicken dir andere Dateien, ohne ein Konto zu brauchen. Unter **Dashboard › Anfragen** legst du eine an und verschickst den Link, etwa `share.example.com/r/Xk3…`. Die Seite dahinter zeigt Titel und Nachricht, nimmt Dateien per Drag & Drop an und zeigt den Fortschritt jeder Datei.
@@ -360,7 +383,7 @@ Pro Anfrage stellst du ein:
 - welche Dateien sie annimmt: alle, nur Bilder, nur Videos, Medien oder Dokumente
 - wie viele Dateien höchstens, wie groß jede sein darf und wie viel zusammen
 - ob nach dem Namen gefragt wird und in welches Album die Dateien kommen
-- ob du per E-Mail Bescheid bekommst. Weitere Uploads innerhalb von 15 Minuten fasst MoeShare zusammen
+- ob du per E-Mail oder [Push](#push-benachrichtigungen) Bescheid bekommst. Weitere Uploads innerhalb von 15 Minuten fasst MoeShare zusammen
 
 Die Dateien landen in deinem Konto und zählen zu deinem Speicher, im Dashboard siehst du, wer was geschickt hat. Eine Anfrage lässt sich jederzeit schließen und wieder öffnen. Admins schalten die Funktion unter **Admin › Einstellungen › Funktionen** ab und legen fest, wie viele offene Anfragen ein Konto haben darf (Standard 20).
 
@@ -377,6 +400,20 @@ Statt einer zufälligen Adresse bekommt eine Datei auf Wunsch eine selbst gewäh
 Mit einem **eigenen Pfad** steht in deinen Links dein Name statt `/view/`, etwa `https://share.example.com/max/JrinQR99`. Den Pfad legst du unter **Konto › Einstellungen** fest: 2 bis 32 Kleinbuchstaben, Ziffern, Binde- und Unterstriche. Namen, die der Server selbst braucht, wie `admin` oder `api`, und die Benutzernamen anderer Konten gehen nicht. Links mit `/view/` funktionieren weiter, und `/max` allein öffnet deine [Profilseite](#profilseiten), sofern sie eingeschaltet ist. Änderst du den Pfad, leiten alte Links weiter und der alte Pfad bleibt für andere gesperrt. Admins geben den Pfad eines Kontos unter **Admin › Benutzer** wieder frei.
 
 Beides schaltest du unter **Admin › Einstellungen › Funktionen** ab. Ohne eigene Pfade leiten solche Links wieder auf `/view/` weiter.
+
+## Ende-zu-Ende verschlüsselt teilen
+
+Dateien und Texte lassen sich schon im Browser verschlüsseln, bevor sie hochgeladen werden. Schalte dafür im Dashboard unter **Upload-Optionen** „Ende-zu-Ende verschlüsseln“ ein, beim neuen Text steht derselbe Schalter unter „Ablauf, Schutz und Adresse“. Der Schlüssel steht nur im Link, hinter `#k=`. Diesen Teil einer Adresse schicken Browser nie an den Server. MoeShare speichert also nur verschlüsselte Daten und kennt weder Inhalt noch Dateinamen, auch Admins nicht.
+
+Wer den Link öffnet, lädt die Datei und entschlüsselt sie im Browser. Danach zeigt die Ansichtsseite sie wie gewohnt: Bilder, Videos, Audio, PDFs, Markdown und Code mit Syntaxhervorhebung. Fehlt der Schlüssel im Link, lässt er sich auf der Seite einfügen. Passwort, Ablaufzeit und einmaliger Abruf funktionieren zusätzlich wie bei jeder anderen Datei.
+
+Das Dashboard merkt sich die Schlüssel deiner Uploads in diesem Browser (im `localStorage`), so kopierst du den vollständigen Link auch später noch. In einem anderen Browser oder nach dem Löschen der Browserdaten hast du ihn nur noch, wenn du ihn selbst aufgehoben hast. Ohne Schlüssel lässt sich die Datei nicht mehr öffnen, von niemandem.
+
+Weil der Server den Inhalt nicht kennt, gibt es für verschlüsselte Dateien keine Vorschaubilder, keine Volltextsuche und keine Bildbearbeitung, und ClamAV kann sie nicht prüfen. In Discord und anderen Diensten erscheint nur „Verschlüsselte Datei“. Eine Datei darf bis zu 1 GB groß sein, weil der Browser sie zum Anzeigen ganz in den Arbeitsspeicher lädt. Wer eine verschlüsselte Datei [meldet](#melden-und-moderation), schickt den Link mit Schlüssel mit, damit Admins sie prüfen können.
+
+Unter **Admin › Einstellungen › Uploads › Ende-zu-Ende-Verschlüsselung** schaltest du die Funktion ab. Dann nimmt der Server keine verschlüsselten Dateien mehr an, schon hochgeladene bleiben erreichbar.
+
+Technisch: AES-256-GCM in Blöcken zu 1 MB, Dateiname und Typ liegen verschlüsselt mit in der Datei. Die Dateien enden auf `.mse`, beim Hochladen prüft der Server nur ihren Aufbau. ShareX lädt weiter unverschlüsselt hoch.
 
 ## Papierkorb, Statistiken und ZIP
 
@@ -407,6 +444,20 @@ Ein Album lässt sich mit bis zu 20 anderen Konten teilen. Öffne es unter **Alb
 **Volltextsuche**: Die Suche im Dashboard findet Wörter auch im Inhalt von Texten, Code und anderen Textdateien, bei großen Dateien in den ersten 512 KB, und zeigt die Fundstelle direkt an der Datei. Unter **Admin › Einstellungen › Funktionen** lässt sie sich auf Dateinamen und Titel beschränken.
 
 Nach dem Update auf 3.2 berechnet MoeShare für vorhandene Dateien im Hintergrund Prüfsummen und nimmt bestehende Texte in den Suchindex auf, ein paar Dutzend Dateien pro Minute.
+
+## Aufräumen
+
+Unter **Dashboard › Aufräumen** findest du Dateien, die viel Platz brauchen oder die niemand mehr ansieht. Drei Listen stehen zur Wahl:
+
+- **Groß**: die größten Dateien zuerst, hier lässt sich am meisten Platz schaffen
+- **Nie aufgerufen**: älter als zwei Wochen und noch kein einziges Mal geöffnet, auch nicht über den Direktlink
+- **Lange nicht aufgerufen**: seit einem halben Jahr nicht mehr geöffnet, die ältesten zuerst. Ist die [Statistik](#papierkorb-statistiken-und-zip) abgeschaltet, weiß MoeShare nicht, wann eine Datei zuletzt aufgerufen wurde, und zeigt alle Dateien, die älter als ein halbes Jahr sind.
+
+Über jeder Liste steht, wie viele Dateien es sind und wie viel Platz sie zusammen belegen. Markierte Dateien legst du gesammelt in den [Papierkorb](#papierkorb-statistiken-und-zip) oder lässt sie in einem Tag, einer Woche oder 30 Tagen ablaufen. Über die [API](#api) liefert `GET /api/files/cleanup` dieselben Listen.
+
+## Befehlspalette
+
+Mit Strg+K, auf dem Mac mit ⌘K, öffnet sich im Dashboard, im Konto und im Admin-Bereich ein Suchfeld für alles Wichtige: Dateien hochladen, einen Text anlegen, einen Link kürzen, den Bildschirm aufnehmen, zu jedem Bereich wechseln oder zwischen hellem und dunklem Design umschalten. Ab zwei Buchstaben findet es auch deine Dateien. Mit den Pfeiltasten wählst du aus, Enter führt aus. Auf dem Handy stehen die Befehle im Menü deines Kontos.
 
 ## Bilder bearbeiten
 
@@ -524,7 +575,21 @@ Unter **Admin › Einstellungen › E-Mail** trägst du einen SMTP-Server ein, e
 - **Hinweise zum Konto** verschicken, etwa wenn sich das Passwort oder die Zwei-Faktor-Anmeldung ändert, ein Passkey dazukommt oder sich jemand mit einem Einmal-Link anmeldet.
 - **Admins benachrichtigen** bei neuen Meldungen, neuen Konten und Anfragen für Einmal-Links.
 
-Jede Person trägt ihre Adresse unter **Konto › Einstellungen** ein und bestätigt sie über einen Link. Dort wählt sie auch, welche Hinweise sie per Mail bekommt. E-Mails kommen in der Sprache der Empfänger.
+Jede Person trägt ihre Adresse unter **Konto › Einstellungen** ein und bestätigt sie über einen Link. Dort wählt sie auch, welche Hinweise sie per Mail bekommt. E-Mails kommen in der Sprache der Empfänger. Ohne E-Mail-Server kommen die wichtigsten Hinweise auf Wunsch als [Push-Benachrichtigung](#push-benachrichtigungen).
+
+## Push-Benachrichtigungen
+
+Hinweise kommen auf Wunsch direkt aufs Handy oder den Rechner, auch wenn MoeShare gerade nicht offen ist. Einen E-Mail-Server braucht es dafür nicht, nur HTTPS. Unter **Konto › Einstellungen › Push-Benachrichtigungen** schaltet jede Person Push für das Gerät ein, an dem sie gerade sitzt, und wählt, was dort ankommt:
+
+- **Sicherheitshinweise**: eine Anmeldung auf einem neuen Gerät und Änderungen an Passwort, Zwei-Faktor-Anmeldung oder Passkeys
+- **Uploads über Datei-Anfragen**, sofern bei der Anfrage „Mich bei neuen Dateien benachrichtigen“ eingeschaltet ist
+- für Admins außerdem **neue Meldungen**, **neue Benutzer** und **Systemmeldungen** wie ablaufende Zertifikate, Probleme mit Caddy oder eine neue Version
+
+Ein Tipp auf den Hinweis öffnet die passende Seite. „Test senden“ prüft die Zustellung, und Geräte, an denen du gerade nicht bist, schaltest du in derselben Liste ab. Auf iPhone und iPad klappt Push erst, wenn MoeShare als [App](#app-fürs-handy) auf dem Home-Bildschirm liegt, ab iOS 16.4. Pro Konto merkt sich MoeShare bis zu 20 Geräte, kommt ein weiteres dazu, fällt das am längsten unbenutzte heraus.
+
+Zugestellt wird über den Push-Dienst des Browsers, also über Google, Mozilla, Apple oder Microsoft, andere Adressen nimmt MoeShare nicht an. Die Nachrichten sind verschlüsselt (RFC 8291), der Push-Dienst sieht nur, dass eine kommt. Die Schlüssel des Servers (VAPID) erzeugt MoeShare selbst und speichert sie verschlüsselt. Für deine Datenschutzerklärung: Pro Gerät speichert MoeShare die Adresse beim Push-Dienst, die Schlüssel des Browsers und einen Gerätenamen wie „Chrome auf Android“. Das bleibt, bis Push dort ausgeschaltet wird, der Push-Dienst die Adresse aufgibt oder zehn Zustellungen nacheinander scheitern.
+
+Unter **Admin › Einstellungen › Allgemein › App** schaltest du Push für alle ab.
 
 ## Benachrichtigungen
 
@@ -588,6 +653,18 @@ Unter **Admin › Einstellungen › Virenscan** trägst du Host und Port ein (im
 Unter **Admin › Einstellungen › Uploads › Gesperrte Dateitypen** trägst du Endungen ein, die MoeShare nicht annimmt, etwa `.exe` oder `.bat`. **Empfohlene Liste** übernimmt mit einem Klick gängige Programme und Skripte für Windows, Java und Android. Mit **Programme am Inhalt erkennen** lehnt MoeShare Programme für Windows, Linux und macOS auch dann ab, wenn sie umbenannt wurden.
 
 Die Sperre gilt für alle Upload-Wege, auch für Datei-Anfragen, Links und die Discord-App. Admins dürfen solche Dateien weiter hochladen, außer über Datei-Anfragen, dort laden ja Gäste hoch. Große Uploads lehnt MoeShare schon beim Start ab, im Dashboard sogar, bevor überhaupt etwas übertragen wird.
+
+## Hotlink-Schutz
+
+Mit dem Hotlink-Schutz binden andere Seiten deine Bilder, Videos und Dateien nicht mehr direkt von deinem Server ein und verbrauchen so keinen Traffic auf deine Kosten. Du schaltest ihn unter **Admin › Einstellungen › Uploads › Hotlink-Schutz** ein. Er gilt für die Direktlinks unter `/uploads/…`, Ansichtsseiten, Alben, Profile und der Download-Link bleiben für alle erreichbar.
+
+- Deine eigenen Seiten, alle Domains der Instanz und die [eigenen Domains](#eigene-domains) der Konten dürfen immer einbinden. Weitere Seiten trägst du unter „Erlaubte Seiten“ ein, mit `*.example.org` gehören alle Subdomains dazu.
+- Link-Vorschauen von Discord, Telegram, WhatsApp, Slack, Mastodon und anderen Diensten funktionieren weiter.
+- Wer auf einer fremden Seite einen Direktlink anklickt, landet auf der Ansichtsseite. Eingebundene Bilder und Videos bleiben dort leer.
+- Angemeldet siehst du deine eigenen Dateien überall.
+- Apps, Feed-Reader und manche Browser verraten nicht, woher sie kommen. Solche Abrufe sind erlaubt, solange „Abrufe ohne Herkunft erlauben“ eingeschaltet ist.
+
+MoeShare erkennt die Herkunft an den Headern `Sec-Fetch-Site` und `Referer`. Das hält Seiten ab, die deine Dateien einbinden, aber niemanden, der eine Datei gezielt mit gefälschten Headern abruft. Liegt ein CDN mit Cache davor, beachtet es den Header `Vary: Referer` oft nicht. Nimm `/uploads/` dann vom Cache aus, sonst liefert das CDN zwischengespeicherte Dateien auch an fremde Seiten.
 
 ## Datenexport
 
@@ -747,7 +824,7 @@ Jede Anmeldung mit einem Einmal-Link steht im Aktivitätsprotokoll. Stammt der L
 
 Meldet sich jemand auf einem Gerät an, das für dieses Konto noch nicht dabei war, bekommt die Person eine E-Mail mit Gerät, Uhrzeit, Art der Anmeldung und, wenn MoeShare IP-Adressen protokolliert, der IP-Adresse. Wiedererkannt wird ein Gerät am Cookie `ms_device`, einer Zufallszahl, die MoeShare nur dafür nutzt und 400 Tage behält. Für deine Datenschutzerklärung: Das Cookie gehört zur Anmeldung und ist technisch notwendig. Die erste Anmeldung eines Kontos löst keine E-Mail aus, und wer schon angemeldet ist, wenn du auf 3.5 aktualisierst, bekommt keine.
 
-Die E-Mail gehört zu den Sicherheitshinweisen, abschalten lässt sie sich unter **Konto › Einstellungen › E-Mail**. Sie braucht eine eingerichtete [E-Mail](#e-mail) und eine bestätigte Adresse im Konto.
+Die E-Mail gehört zu den Sicherheitshinweisen, abschalten lässt sie sich unter **Konto › Einstellungen › E-Mail**. Sie braucht eine eingerichtete [E-Mail](#e-mail) und eine bestätigte Adresse im Konto. Als [Push-Benachrichtigung](#push-benachrichtigungen) kommt der Hinweis auch ohne E-Mail aufs Handy.
 
 ## Startseite, Impressum und Links
 
@@ -773,7 +850,7 @@ Der Wartungsmodus zeigt allen außer Admins eine Wartungsseite mit deiner Nachri
 
 MoeShare lässt sich auf dem Handy und am PC wie eine App installieren: In Chrome und Edge über „App installieren“, in Safari über „Zum Home-Bildschirm“. Die App öffnet direkt das Dashboard und hat Abkürzungen für „Hochladen“, „Neuer Text“ und „Link kürzen“. Auf Android taucht MoeShare danach im „Teilen“-Menü auf, so schickst du Fotos, Videos, Texte und Links aus jeder App direkt hin. Das App-Symbol entsteht aus dem Symbol der Seite.
 
-Unter **Admin › Einstellungen › Allgemein** lässt sich das abschalten. Für die Installation braucht MoeShare HTTPS.
+Mit [Push-Benachrichtigungen](#push-benachrichtigungen) meldet sich die App auch, wenn sie geschlossen ist. Unter **Admin › Einstellungen › Allgemein** lässt sich die Installation abschalten. Dafür braucht MoeShare HTTPS.
 
 ## Protokoll und Fehlerberichte
 
@@ -914,13 +991,13 @@ Abschalten lässt sich die Prüfung dort oder unter **Admin › Einstellungen �
 
 ```json
 {
-  "version": "3.5.0",
-  "date": "2026-11-10",
-  "changelog": "https://moeshare.moestudio.net/changelog.html#v3.5.0",
+  "version": "3.6.0",
+  "date": "2026-11-11",
+  "changelog": "https://moeshare.moestudio.net/changelog.html#v3.6.0",
   "security": false,
   "notes": {
-    "de": ["Discord-App: Anhänge per Rechtsklick dauerhaft speichern"],
-    "en": ["Discord app: keep attachments for good with a right-click"]
+    "de": ["Push-Benachrichtigungen aufs Handy, auch ohne E-Mail-Server"],
+    "en": ["Push notifications to your phone, even without an email server"]
   }
 }
 ```
@@ -935,6 +1012,8 @@ Was neu ist und worauf du beim Update achten musst, steht im [Changelog](https:/
 4. MoeShare starten.
 
 Beim ersten Start sichert MoeShare die Datenbank automatisch nach `db/backups/` und bringt sie auf den neuen Stand. Bestehende Discord-Verknüpfungen bleiben dabei erhalten. Werte aus einer alten `.env` (zum Beispiel `SITE_TITLE` oder `MAX_FILE_SIZE_MB`) werden einmalig übernommen, danach meldet das Log, welche Variablen du entfernen kannst. Bisherige ShareX-Tokens funktionieren weiter. Für Konten aus älteren Versionen ist zunächst auch die Anmeldung mit dem Token möglich, damit sich alle ein Passwort setzen können. Unter **Admin › Einstellungen › Anmeldung** schaltest du das ab.
+
+Beim Update auf 3.6 legt MoeShare eine Tabelle für Geräte mit [Push-Benachrichtigungen](#push-benachrichtigungen) an. Push ist danach erlaubt, einschalten muss es jede Person selbst auf ihren Geräten. [Verschlüsselte Uploads](#ende-zu-ende-verschlüsselt-teilen) sind ebenfalls erlaubt, der [Hotlink-Schutz](#hotlink-schutz) bleibt aus, bis du ihn einschaltest. Wer im Reverse-Proxy eine eigene Content Security Policy setzt, ergänzt `blob:` bei `connect-src` und `frame-src`, sonst bleiben entschlüsselte Dateien und PDFs in der Vorschau leer.
 
 Beim Update auf 3.5 legt MoeShare eine Tabelle für bekannte Geräte an, die für den [Hinweis bei neuen Anmeldungen](#hinweis-bei-neuen-anmeldungen) gebraucht wird. Wer angemeldet bleibt, bekommt dabei keine E-Mail. Gesperrte Dateitypen gibt es erst, wenn du welche einträgst, und die [Discord-App](#discord-app) ist aus, bis du sie einschaltest.
 
@@ -1001,9 +1080,10 @@ Skripte und Uploader melden sich mit einem API-Token im Header `Authorization` a
 | `POST` | `/api/uploads` | Großen Upload in Teilen beginnen, siehe unten |
 | `GET` | `/api/uploads` | Unfertige Uploads des eigenen Kontos |
 | `GET` | `/files` | Dateinamen des eigenen Kontos, neueste zuerst |
+| `GET` | `/api/files/cleanup` | Dateien zum [Aufräumen](#aufräumen), mit `kind=large`, `unseen` oder `stale` und `page`. Antwort: `{ files, total, summary: { count, bytes }, … }` |
 | `DELETE` | `/file/:dateiname` | Eigene Datei in den Papierkorb legen, ohne Papierkorb sofort löschen. Antwort: `{ ok, trashed }` |
 
-Öffentlich erreichbar sind `/view/:dateiname` (Ansichtsseite), `/download/:dateiname`, `/uploads/:benutzer/:dateiname` (die Datei selbst), `/s/:code` (Kurzlinks), `/a/:code` (Alben), `/a/:code/zip` (Album als ZIP), `/u/:benutzer` (Profilseiten), `/a/:code/feed.xml` und `/u/:benutzer/feed.xml` ([RSS-Feeds](#diashow-und-rss-feeds)), `/r/:code` ([Datei-Anfragen](#datei-anfragen)), `/api/discord/interactions` (nur mit Signatur von Discord, siehe [Discord-App](#discord-app)), `/report` (Inhalt melden), `/oembed/:dateiname`, `/api/home` (Statistiken der Startseite), `/api/domains/tls` (Abfrage für Caddy), `/impressum`, `/datenschutz` und `/healthz` für Health-Checks. `/metrics` antwortet nur mit dem Token aus [Metriken für Prometheus](#metriken-für-prometheus). Geschützte Dateien liefert MoeShare erst nach Eingabe des Passworts auf der Ansichtsseite aus.
+Öffentlich erreichbar sind `/view/:dateiname` (Ansichtsseite), `/download/:dateiname`, `/view/:dateiname/zip` und `/view/:dateiname/zip/:nr` ([Inhalt von ZIP-Archiven](#vorschau-für-pdf-markdown-csv-und-zip) und einzelne Dateien daraus), `/uploads/:benutzer/:dateiname` (die Datei selbst), `/s/:code` (Kurzlinks), `/a/:code` (Alben), `/a/:code/zip` (Album als ZIP), `/u/:benutzer` (Profilseiten), `/a/:code/feed.xml` und `/u/:benutzer/feed.xml` ([RSS-Feeds](#diashow-und-rss-feeds)), `/r/:code` ([Datei-Anfragen](#datei-anfragen)), `/api/discord/interactions` (nur mit Signatur von Discord, siehe [Discord-App](#discord-app)), `/report` (Inhalt melden), `/oembed/:dateiname`, `/api/home` (Statistiken der Startseite), `/api/domains/tls` (Abfrage für Caddy), `/impressum`, `/datenschutz` und `/healthz` für Health-Checks. `/metrics` antwortet nur mit dem Token aus [Metriken für Prometheus](#metriken-für-prometheus). Geschützte Dateien liefert MoeShare erst nach Eingabe des Passworts auf der Ansichtsseite aus.
 
 ```bash
 curl -H "Authorization: ms_…" -F "file=@bild.png" https://share.example.com/upload

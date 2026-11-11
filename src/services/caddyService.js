@@ -477,6 +477,9 @@ async function warn() {
           ...fresh.map((row) => `${row.domain}: ${t(row.error || row.status)}`),
         ],
         button: { label: t('Caddy öffnen'), url: `${settings.get('site.baseUrl')}/admin#caddy` },
+        push: {
+          body: t('Bei {domains} stimmt mit dem HTTPS-Zertifikat etwas nicht.', { domains: fresh.map((row) => row.domain).join(', ') }),
+        },
       };
     })
     .catch(() => 0);

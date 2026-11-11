@@ -275,6 +275,7 @@ async function remove(userId) {
     'user_paths',
     'login_links',
     'user_devices',
+    'push_subscriptions',
   ]) {
     await db.run(`DELETE FROM ${table} WHERE user_id = ?`, [user.id]);
   }

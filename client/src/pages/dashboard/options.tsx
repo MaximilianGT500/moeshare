@@ -39,6 +39,7 @@ export interface UploadPrefs {
   warning: string | null;
   optimize: boolean | null;
   watermark: boolean | null;
+  encrypt: boolean;
 }
 
 export const EMPTY_PREFS: UploadPrefs = {
@@ -53,6 +54,7 @@ export const EMPTY_PREFS: UploadPrefs = {
   warning: null,
   optimize: null,
   watermark: null,
+  encrypt: false,
 };
 
 export const prefsActive = (prefs: UploadPrefs) =>
@@ -66,7 +68,8 @@ export const prefsActive = (prefs: UploadPrefs) =>
     prefs.album ||
     prefs.warning !== null ||
     prefs.optimize !== null ||
-    prefs.watermark !== null
+    prefs.watermark !== null ||
+    prefs.encrypt
   );
 
 export function toUploadOptions(prefs: UploadPrefs): UploadOptions {
@@ -81,6 +84,7 @@ export function toUploadOptions(prefs: UploadPrefs): UploadOptions {
     warning: prefs.warning ?? undefined,
     optimize: prefs.optimize ?? undefined,
     watermark: prefs.watermark ?? undefined,
+    encrypt: prefs.encrypt || undefined,
   };
 }
 
@@ -96,6 +100,7 @@ export function describePrefs(prefs: UploadPrefs, albums: Album[] = []) {
   if (prefs.warning !== null) parts.push(prefs.warning ? t('Inhaltswarnung: {label}', { label: prefs.warning }) : t('Inhaltswarnung'));
   if (prefs.optimize !== null) parts.push(prefs.optimize ? t('Bilder optimieren') : t('Bilder nicht optimieren'));
   if (prefs.watermark === false) parts.push(t('Ohne Wasserzeichen'));
+  if (prefs.encrypt) parts.push(t('Ende-zu-Ende verschlüsselt'));
   return parts.join(' · ');
 }
 
@@ -209,6 +214,22 @@ export function UploadOptionsDialog({
                 />
               )}
             </Box>
+          )}
+          {info.encrypted && (
+            <FormControlLabel
+              control={<Switch checked={draft.encrypt} onChange={(event) => setDraft({ ...draft, encrypt: event.target.checked })} />}
+              label={
+                <Box>
+                  {t('Ende-zu-Ende verschlüsseln')}
+                  <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+                    {t(
+                      'Dateien werden schon im Browser verschlüsselt. Der Schlüssel steckt nur im Link, der Server sieht weder Inhalt noch Namen. Vorschaubilder gibt es dann nicht.'
+                    )}
+                  </Typography>
+                </Box>
+              }
+              sx={{ alignItems: 'flex-start', '& .MuiSwitch-root': { mt: -0.5 } }}
+            />
           )}
           {info.albums && albums.length > 0 && (
             <TextField

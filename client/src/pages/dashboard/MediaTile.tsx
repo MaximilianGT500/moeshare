@@ -335,7 +335,8 @@ function StatusBadges({ file, compact, onMedia }: { file: FileItem; compact: boo
 }
 
 function FileArt({ file, compact }: { file: FileItem; compact: boolean }) {
-  const ext = extensionOf(file.filename);
+  const sealed = file.sealedKey !== undefined;
+  const ext = sealed && file.sealedKey && file.originalName ? extensionOf(file.originalName) : extensionOf(file.filename);
   return (
     <Box
       sx={{
@@ -371,7 +372,11 @@ function FileArt({ file, compact }: { file: FileItem; compact: boolean }) {
         .{ext || 'datei'}
       </Typography>
       <Typography variant="caption" component="p" sx={{ color: c.onSurfaceVariant }} noWrap>
-        {formatBytes(file.sizeBytes)}
+        {sealed
+          ? file.sealedKey
+            ? t('Verschlüsselt, {size}', { size: formatBytes(file.sizeBytes) })
+            : t('Verschlüsselt, Schlüssel fehlt')
+          : formatBytes(file.sizeBytes)}
       </Typography>
     </Box>
   );

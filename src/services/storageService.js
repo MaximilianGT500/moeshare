@@ -301,6 +301,44 @@ async function openRead(record) {
   return { stream: response, size: Number.isFinite(declared) ? declared : Number(record.size_bytes) || 0, modified: null };
 }
 
+async function collect(stream) {
+  const chunks = [];
+  for await (const chunk of stream) chunks.push(chunk);
+  return Buffer.concat(chunks);
+}
+
+async function openRange(record) {
+  const { file } = filePaths(record.username, record.filename);
+  if (record.storage !== 's3' || fs.existsSync(file)) {
+    const handle = await fsp.open(file, 'r');
+    const { size } = await handle.stat();
+    return {
+      size,
+      async read(start, length) {
+        const buffer = Buffer.alloc(Math.max(0, Math.min(length, size - start)));
+        if (!buffer.length) return buffer;
+        const { bytesRead } = await handle.read(buffer, 0, buffer.length, start);
+        return buffer.subarray(0, bytesRead);
+      },
+      stream: async (start, end) => fs.createReadStream(file, { start, end }),
+      close: () => handle.close().catch(() => {}),
+    };
+  }
+  const key = prefixed(`${record.username}/${record.filename}`);
+  const size = Number(record.size_bytes) || 0;
+  const range = (start, end) => bucket().get(key, { range: `bytes=${start}-${end}` });
+  return {
+    size,
+    async read(start, length) {
+      const end = Math.min(size, start + length) - 1;
+      if (end < start) return Buffer.alloc(0);
+      return collect(await range(start, end));
+    },
+    stream: (start, end) => range(start, end),
+    close: async () => {},
+  };
+}
+
 async function readRemote(relative) {
   const response = await bucket().get(prefixed(relative));
   const chunks = [];
@@ -355,6 +393,7 @@ module.exports = {
   hasVariant,
   exists,
   openRead,
+  openRange,
   readRemote,
   sendRemote,
   cleanupLocalCopies,

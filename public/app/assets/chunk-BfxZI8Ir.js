@@ -1,0 +1,1 @@
+function e(){return/iPhone|iPad|iPod/.test(navigator.userAgent)||navigator.platform===`MacIntel`&&navigator.maxTouchPoints>1}function t(){return window.matchMedia(`(display-mode: standalone)`).matches||navigator.standalone===!0}function n(){return e()||/Android|Mobile/i.test(navigator.userAgent)?!1:navigator.pdfViewerEnabled!==!1}export{e as n,t as r,n as t};

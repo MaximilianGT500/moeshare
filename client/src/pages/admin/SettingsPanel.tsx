@@ -78,8 +78,8 @@ type SectionKey =
   | 'system';
 
 const SECTIONS: Array<{ key: SectionKey; label: string; icon: ReactNode; prefixes: string[] }> = [
-  { key: 'allgemein', label: t('Allgemein'), icon: <TuneRounded />, prefixes: ['site.'] },
-  { key: 'uploads', label: t('Uploads'), icon: <CloudUploadRounded />, prefixes: ['uploads.'] },
+  { key: 'allgemein', label: t('Allgemein'), icon: <TuneRounded />, prefixes: ['site.', 'push.'] },
+  { key: 'uploads', label: t('Uploads'), icon: <CloudUploadRounded />, prefixes: ['uploads.', 'hotlink.'] },
   { key: 'bilder', label: t('Bilder'), icon: <PhotoSizeSelectLargeRounded />, prefixes: ['images.'] },
   {
     key: 'funktionen',
@@ -842,6 +842,13 @@ export function SettingsPanel({
               name: siteName(),
             })
           )}
+          {toggle(
+            'push.enabled',
+            t('Push-Benachrichtigungen'),
+            t(
+              'Jeder kann sich Hinweise aufs Handy oder den Rechner schicken lassen, zum Beispiel bei neuen Dateien in Datei-Anfragen. Klappt auch ohne E-Mail-Server, braucht aber HTTPS.'
+            )
+          )}
         </SettingsSection>
         <SettingsSection
           title={t('Versionshinweise')}
@@ -1035,6 +1042,39 @@ export function SettingsPanel({
             'uploads.blockPrograms',
             t('Programme am Inhalt erkennen'),
             t('Lehnt Programme für Windows, Linux und macOS auch dann ab, wenn sie umbenannt wurden, etwa von .exe in .png.')
+          )}
+        </SettingsSection>
+        <SettingsSection
+          title={t('Ende-zu-Ende-Verschlüsselung')}
+          description={t(
+            'Dateien und Texte lassen sich schon im Browser verschlüsseln. Den Schlüssel enthält nur der Link, auch Admins sehen den Inhalt nicht. Bei Meldungen wird der Link mit Schlüssel mitgeschickt.'
+          )}
+        >
+          {toggle(
+            'uploads.encrypted',
+            t('Verschlüsselte Uploads erlauben'),
+            t('Ausgeschaltet nimmt der Server keine verschlüsselten Dateien mehr an.')
+          )}
+        </SettingsSection>
+        <SettingsSection
+          title={t('Hotlink-Schutz')}
+          description={t(
+            'Verhindert, dass andere Seiten Bilder und Videos direkt von diesem Server einbinden. Vorschauen in Discord, Telegram und ähnlichen Diensten funktionieren weiter, wer einen Direktlink anklickt, landet auf der Ansichtsseite.'
+          )}
+        >
+          {toggle('hotlink.enabled', t('Hotlink-Schutz einschalten'), t('Gilt für alle direkten Dateilinks.'))}
+          {list(
+            'hotlink.allowed',
+            t('Erlaubte Seiten'),
+            t('Diese Seiten dürfen trotzdem einbinden. Mit *.example.org sind alle Subdomains erlaubt. Eigene Domains sind immer erlaubt.'),
+            'forum.example.org'
+          )}
+          {toggle(
+            'hotlink.allowEmpty',
+            t('Abrufe ohne Herkunft erlauben'),
+            t(
+              'Apps, Feed-Reader und manche Browser schicken nicht mit, von welcher Seite sie kommen. Ausgeschaltet bekommen sie keine Dateien mehr, Link-Vorschauen von Discord, Telegram und Co. gehen trotzdem.'
+            )
           )}
         </SettingsSection>
       </Stack>

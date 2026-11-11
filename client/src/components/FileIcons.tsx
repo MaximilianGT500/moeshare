@@ -9,6 +9,7 @@ import DescriptionRounded from '@mui/icons-material/DescriptionRounded';
 import CodeRounded from '@mui/icons-material/CodeRounded';
 import InsertDriveFileRounded from '@mui/icons-material/InsertDriveFileRounded';
 import NotesRounded from '@mui/icons-material/NotesRounded';
+import EnhancedEncryptionRounded from '@mui/icons-material/EnhancedEncryptionRounded';
 import type { FileType } from '../lib/types';
 import { extensionOf } from '../lib/format';
 import { t } from '../lib/i18n';
@@ -41,6 +42,7 @@ export function fileIcon(filename: string, type: FileType, fontSize: 'small' | '
   if (type === 'video') return <MovieRounded fontSize={fontSize} />;
   if (type === 'audio') return <MusicNoteRounded fontSize={fontSize} />;
   const ext = extensionOf(filename);
+  if (ext === 'mse') return <EnhancedEncryptionRounded fontSize={fontSize} />;
   if (type === 'text' && !CODE.has(ext) && ext !== 'json') return <NotesRounded fontSize={fontSize} />;
   if (ext === 'pdf') return <PictureAsPdfRounded fontSize={fontSize} />;
   if (ARCHIVES.has(ext)) return <FolderZipRounded fontSize={fontSize} />;

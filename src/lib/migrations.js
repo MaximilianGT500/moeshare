@@ -407,6 +407,13 @@ const MIGRATIONS = [
       await createTable(db, 'user_devices');
     },
   },
+  {
+    version: 12,
+    name: 'Push-Benachrichtigungen',
+    async up(db) {
+      await createTable(db, 'push_subscriptions');
+    },
+  },
 ];
 
 const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

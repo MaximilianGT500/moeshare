@@ -111,6 +111,17 @@ router.get('/favicon.ico', async (req, res) => {
   return res.type('image/x-icon').send(await renderFavicon());
 });
 
+let badgePng = null;
+
+router.get('/icons/badge-96.png', async (req, res) => {
+  if (!badgePng)
+    badgePng = await sharp(Buffer.from(appIcon.badge(96)))
+      .png()
+      .toBuffer();
+  res.set('Cache-Control', 'public, max-age=86400');
+  return res.type('image/png').send(badgePng);
+});
+
 router.get('/icons/:name', async (req, res, next) => {
   if (!VARIANTS[req.params.name]) return next();
   res.set('Cache-Control', 'public, max-age=3600');
@@ -183,12 +194,68 @@ const workerLanguage = (req) => {
   return match ? match[1] : i18n.detect(req, settings);
 };
 
-const serviceWorker = (language) => `'use strict';
+const pushWorker = (language) => `
+const PUSH_ICON = '/icons/icon-192.png';
+const PUSH_BADGE = ${customFavicon() ? 'null' : "'/icons/badge-96.png'"};
+const PUSH_TITLE = ${JSON.stringify(settings.get('site.title'))};
+
+self.addEventListener('push', (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch (error) {
+    data = { body: event.data ? event.data.text() : '' };
+  }
+  const options = { body: data.body || '', icon: PUSH_ICON, data: { url: data.url || '/' }, lang: ${JSON.stringify(language)}, timestamp: data.at || Date.now() };
+  if (PUSH_BADGE) options.badge = PUSH_BADGE;
+  if (data.tag) {
+    options.tag = data.tag;
+    options.renotify = true;
+  }
+  event.waitUntil(self.registration.showNotification(data.title || PUSH_TITLE, options));
+});
+
+async function openTarget(href) {
+  const target = new URL(href, self.location.origin);
+  if (target.origin === self.location.origin) {
+    const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const match = windows.find((client) => new URL(client.url).pathname === target.pathname);
+    if (match) {
+      await match.focus();
+      if (match.url !== target.href && 'navigate' in match) await match.navigate(target.href).catch(() => null);
+      return;
+    }
+  }
+  await self.clients.openWindow(target.href);
+}
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const href = (event.notification.data && event.notification.data.url) || '/';
+  event.waitUntil(openTarget(href).catch(() => self.clients.openWindow('/')));
+});
+
+self.addEventListener('pushsubscriptionchange', (event) => {
+  event.waitUntil(
+    (async () => {
+      const old = event.oldSubscription || null;
+      let fresh = event.newSubscription || null;
+      if (!fresh && old && old.options) fresh = await self.registration.pushManager.subscribe(old.options);
+      if (!fresh) return;
+      await fetch('/api/account/push', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ subscription: fresh.toJSON(), replaces: old ? old.endpoint : null }),
+      });
+    })().catch(() => null)
+  );
+});
+`;
+
+const appWorker = (language) => `
 const SHARE_CACHE = 'moeshare-share';
 const OFFLINE = ${JSON.stringify(offlinePage(language))};
-
-self.addEventListener('install', () => self.skipWaiting());
-self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()));
 
 async function storeShare(request) {
   const data = await request.formData();
@@ -218,18 +285,25 @@ self.addEventListener('fetch', (event) => {
 });
 `;
 
+const serviceWorker = (language, { app, push }) =>
+  `'use strict';
+self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()));
+${app ? appWorker(language) : ''}${push ? pushWorker(language) : ''}`;
+
 router.get('/sw.js', (req, res) => {
-  if (!settings.get('site.pwa')) {
-    res.set('Cache-Control', 'no-cache');
+  const app = settings.get('site.pwa');
+  const push = settings.get('push.enabled');
+  res.set('Cache-Control', 'no-cache');
+  if (!app && !push) {
     return res
       .type('application/javascript')
       .send(
         "self.addEventListener('install', () => self.skipWaiting());\nself.addEventListener('activate', () => self.registration.unregister());\n"
       );
   }
-  res.set('Cache-Control', 'no-cache');
   res.set('Service-Worker-Allowed', '/');
-  return res.type('application/javascript').send(serviceWorker(workerLanguage(req)));
+  return res.type('application/javascript').send(serviceWorker(workerLanguage(req), { app, push }));
 });
 
 router.post('/share-target', (req, res) => res.redirect(303, '/dashboard?teilen=fehler'));

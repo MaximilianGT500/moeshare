@@ -9,6 +9,8 @@ const PUBLIC_GET = [
   /^\/$/,
   /^\/view\/[^/]+$/,
   /^\/view\/[^/]+\/blur\.jpg$/,
+  /^\/view\/[^/]+\/zip$/,
+  /^\/view\/[^/]+\/zip\/\d+$/,
   /^\/download\/[^/]+$/,
   /^\/oembed\/[^/]+$/,
   /^\/uploads\/[^/]+\/(?:preview\/|m3u8\/|web\/)?[^/]+$/,

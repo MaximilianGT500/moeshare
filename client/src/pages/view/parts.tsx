@@ -41,7 +41,17 @@ import { fileIcon, typeDescription } from '../../components/FileIcons';
 import { FooterLinks, SiteFooter } from '../../components/SiteFooter';
 import { ReportButton } from '../../components/ReportDialog';
 import { TextStage } from './TextStage';
+import { PdfStage } from './PdfStage';
+import { SealedStage } from './SealedStage';
+import type { SealedMeta } from '../../lib/sealed';
+import { ZipStage } from './ZipStage';
 import { c, ease, elevation, radius } from '../../theme/tokens';
+
+export interface UnsealedView {
+  meta: SealedMeta;
+  url: string;
+  key: string;
+}
 
 export interface ViewModel {
   site: SiteInfo;
@@ -50,6 +60,8 @@ export interface ViewModel {
   label: string;
   accent: string;
   boot: ViewBoot;
+  downloadName?: string;
+  onUnseal?: (opened: UnsealedView) => void;
 }
 
 export const labelOf = (file: ViewFile) => file.title || file.originalName || file.filename;
@@ -340,6 +352,14 @@ export function MediaStage({
       </Box>
     );
   }
+  const ext = extensionOf(file.filename);
+  if (file.sealed && model.onUnseal) {
+    return (
+      <Box className="ms-media">
+        <SealedStage model={model} />
+      </Box>
+    );
+  }
   if (file.type === 'text') {
     return (
       <Box className="ms-media">
@@ -349,7 +369,23 @@ export function MediaStage({
           preview={file.textPreview}
           sizeBytes={file.sizeBytes}
           downloadUrl={urls.download}
+          format={file.syntax === 'markdown' ? 'markdown' : ext === 'csv' || ext === 'tsv' ? 'csv' : null}
+          filename={file.filename}
         />
+      </Box>
+    );
+  }
+  if (ext === 'pdf' && !file.blocked) {
+    return (
+      <Box className="ms-media">
+        <PdfStage src={urls.raw} name={label} size={file.sizeBytes} />
+      </Box>
+    );
+  }
+  if (ext === 'zip' && !file.blocked && !file.sealed) {
+    return (
+      <Box className="ms-media">
+        <ZipStage listUrl={`/view/${encodeURIComponent(file.slug)}/zip`} size={file.sizeBytes} />
       </Box>
     );
   }
@@ -369,9 +405,11 @@ export function Actions({ model, style = 'buttons' }: { model: ViewModel; style?
   const shareable = {
     filename: label,
     type: file.type,
-    urls: { view: urls.view, direct: file.protected || file.once ? urls.view : urls.direct },
+    urls: { view: urls.view, direct: file.protected || file.once || file.sealed ? urls.view : urls.direct },
   };
-  const original = (file.type === 'image' || file.type === 'file') && !file.once && shows('original');
+  const original = (file.type === 'image' || file.type === 'file') && !file.once && !file.sealed && shows('original');
+  const downloadable = shows('download') && (!file.sealed || Boolean(model.downloadName));
+  const saveAs = model.downloadName ? { download: model.downloadName } : {};
   const glass = style === 'glass';
   const iconSx = glass ? { color: '#fff', '&:hover': { bgcolor: 'rgb(255 255 255 / 0.14)' } } : {};
 
@@ -399,10 +437,11 @@ export function Actions({ model, style = 'buttons' }: { model: ViewModel; style?
             </IconButton>
           </Tooltip>
         )}
-        {shows('download') && (
+        {downloadable && (
           <Button
             variant="contained"
             href={urls.download}
+            {...saveAs}
             startIcon={<DownloadRounded />}
             sx={{
               ml: 0.5,
@@ -422,8 +461,8 @@ export function Actions({ model, style = 'buttons' }: { model: ViewModel; style?
     const link = { color: 'text.primary', fontWeight: 700, textUnderlineOffset: '4px' };
     return (
       <Box className="ms-actions" sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 3, rowGap: 1 }}>
-        {shows('download') && (
-          <Link href={urls.download} underline="always" sx={link}>
+        {downloadable && (
+          <Link href={urls.download} {...saveAs} underline="always" sx={link}>
             {t('Herunterladen')}
           </Link>
         )}
@@ -449,8 +488,14 @@ export function Actions({ model, style = 'buttons' }: { model: ViewModel; style?
 
   return (
     <Box className="ms-actions" sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1 }}>
-      {shows('download') && (
-        <Button variant="contained" startIcon={<DownloadRounded />} href={urls.download} sx={{ borderRadius: `${r(radius.full)}px` }}>
+      {downloadable && (
+        <Button
+          variant="contained"
+          startIcon={<DownloadRounded />}
+          href={urls.download}
+          {...saveAs}
+          sx={{ borderRadius: `${r(radius.full)}px` }}
+        >
           {t('Herunterladen')}
         </Button>
       )}
@@ -738,8 +783,9 @@ export function PageHeader({ model, tone = 'normal' }: { model: ViewModel; tone?
 
 export function PageFooter({ model, sx }: { model: ViewModel; sx?: object }) {
   const { shows } = useDesign();
-  const { site, boot } = model;
-  const report = site.report && boot.report ? <ReportButton target={boot.report} /> : null;
+  const { site, boot, file, urls } = model;
+  const target = boot.report && file.sealed && model.downloadName ? { ...boot.report, link: urls.view } : boot.report;
+  const report = site.report && target ? <ReportButton target={target} /> : null;
   if (!shows('footer')) {
     const legal = site.legal || [];
     if (!report && !legal.length) return null;

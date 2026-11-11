@@ -19,4 +19,7 @@ function svg({ shape = 'circle', scale = 1, id = 'g' } = {}) {
 
 const SVG = svg();
 
-module.exports = { GRADIENT, SVG, svg };
+const badge = (size = 96) =>
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="${size}" height="${size}"><g transform="translate(32 32) scale(1.42) translate(-32 -32.5)">${GLYPH}</g></svg>`;
+
+module.exports = { GRADIENT, SVG, svg, badge };

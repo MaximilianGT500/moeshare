@@ -35,11 +35,13 @@ import { isTypingTarget } from '../../lib/hooks';
 import { mix } from '../../lib/color';
 import { droppedEntries, groupPicked, readDrop, type DropContents } from '../../lib/folders';
 import { canUnzip, isZip } from '../../lib/unzip';
+import { linkWithKey, seal, SEALED_LIMIT } from '../../lib/sealed';
+import { rememberKey } from '../../lib/sealedKeys';
 import { useToast } from '../../components/Toaster';
 import { fileIcon } from '../../components/FileIcons';
 import { c, css, ease, elevation, radius } from '../../theme/tokens';
 
-type Status = 'queued' | 'uploading' | 'paused' | 'retrying' | 'done' | 'error';
+type Status = 'queued' | 'encrypting' | 'uploading' | 'paused' | 'retrying' | 'done' | 'error';
 
 interface UploadItem {
   id: number;
@@ -51,6 +53,8 @@ interface UploadItem {
   error?: string;
   thumb?: string;
   result?: UploadResponse;
+  payload?: File;
+  sealed?: { key: string; name: string; type: string; size: number };
 }
 
 interface Control {
@@ -81,7 +85,7 @@ const UploadContext = createContext<UploadContextValue>({
 export const useUploads = () => useContext(UploadContext);
 
 const CONCURRENCY = 2;
-const RUNNING: Status[] = ['uploading', 'retrying'];
+const RUNNING: Status[] = ['encrypting', 'uploading', 'retrying'];
 
 function guessType(file: File) {
   if (file.type.startsWith('image/')) return 'image' as const;
@@ -153,21 +157,25 @@ export function UploadProvider({
       setItems((list) => [
         ...list,
         ...files.map((file) => {
+          const options = { ...optionsRef.current, ...overrides };
           const tooBig = maxBytes !== null && file.size > maxBytes;
+          const tooBigToSeal = Boolean(options.encrypt) && file.size > SEALED_LIMIT;
           const extension = /\.[a-z0-9]{1,10}$/i.exec(file.name)?.[0].toLowerCase() || '';
           const blocked = Boolean(extension && rules?.blocked.includes(extension));
           return {
             id: nextId.current++,
             file,
-            options: { ...optionsRef.current, ...overrides },
+            options,
             progress: 0,
             resumable: chunked && file.size > chunkSize,
-            status: tooBig || blocked ? ('error' as const) : ('queued' as const),
+            status: tooBig || blocked || tooBigToSeal ? ('error' as const) : ('queued' as const),
             error: blocked
               ? t('Dateien vom Typ {ext} sind auf diesem Server nicht erlaubt.', { ext: extension })
               : tooBig
                 ? t('Zu groß – erlaubt sind bis zu {max}.', { max: formatBytes(maxBytes!) })
-                : undefined,
+                : tooBigToSeal
+                  ? t('Zu groß zum Verschlüsseln im Browser, erlaubt sind bis zu {max}.', { max: formatBytes(SEALED_LIMIT) })
+                  : undefined,
             thumb: guessType(file) === 'image' && file.size < 25 * 1024 * 1024 ? URL.createObjectURL(file) : undefined,
           };
         }),
@@ -197,22 +205,46 @@ export function UploadProvider({
     const waiting = items.filter((item) => item.status === 'queued' && !started.current.has(item.id));
     for (const item of waiting.slice(0, Math.max(0, CONCURRENCY - running))) {
       started.current.add(item.id);
+      if (item.options.encrypt && !item.payload) {
+        update(item.id, { status: 'encrypting', progress: 0 });
+        const type = item.file.type || 'application/octet-stream';
+        seal(item.file, { name: item.file.name, type, size: item.file.size, kind: 'file' }, (progress) => update(item.id, { progress }))
+          .then(({ blob, key }) => {
+            const payload = new File([blob], 'verschluesselt.mse', { type: 'application/octet-stream' });
+            started.current.delete(item.id);
+            update(item.id, {
+              payload,
+              sealed: { key, name: item.file.name, type, size: item.file.size },
+              resumable: chunked && payload.size > chunkSize,
+              status: 'queued',
+              progress: 0,
+            });
+          })
+          .catch(() => update(item.id, { status: 'error', error: t('Die Datei ließ sich nicht verschlüsseln.') }));
+        continue;
+      }
       update(item.id, { status: 'uploading', progress: 0 });
       const onProgress = (progress: number) => update(item.id, { progress });
+      const body = item.payload || item.file;
       let promise: Promise<UploadResponse>;
       if (item.resumable) {
-        const handle = uploadResumable(item.file, onProgress, item.options, {
+        const handle = uploadResumable(body, onProgress, item.options, {
           onState: (state) => update(item.id, { status: state === 'running' ? 'uploading' : state }),
         });
         handles.current.set(item.id, handle);
         promise = handle.promise as Promise<UploadResponse>;
       } else {
-        const handle = uploadFile(item.file, onProgress, item.options);
+        const handle = uploadFile(body, onProgress, item.options);
         handles.current.set(item.id, handle);
         promise = handle.promise;
       }
       promise
-        .then((result) => {
+        .then((uploaded) => {
+          const sealed = item.sealed;
+          if (sealed) rememberKey(uploaded.slug, sealed);
+          const result = sealed
+            ? { ...uploaded, view: linkWithKey(uploaded.view, sealed.key), sealed: { key: sealed.key, name: sealed.name } }
+            : uploaded;
           update(item.id, { status: 'done', progress: 1, result });
           finished.current.push(result);
           window.clearTimeout(flushTimer.current);
@@ -234,7 +266,7 @@ export function UploadProvider({
         })
         .finally(() => handles.current.delete(item.id));
     }
-  }, [items, update, toast]);
+  }, [items, update, toast, chunked, chunkSize]);
 
   const allDone = items.length > 0 && items.every((item) => item.status === 'done');
   useEffect(() => {
@@ -254,7 +286,7 @@ export function UploadProvider({
   const forget = (item: UploadItem) => {
     const handle = handles.current.get(item.id);
     if (handle) handle.abort();
-    else if (item.resumable && item.status === 'error') discardResumable(item.file);
+    else if (item.resumable && item.status === 'error') discardResumable(item.payload || item.file);
     if (item.thumb) URL.revokeObjectURL(item.thumb);
   };
 
@@ -353,7 +385,7 @@ export function UploadProvider({
     await Promise.all(list.map((session) => cancelUploadSession(session.id).catch(() => {})));
   }, [pending]);
 
-  const active = items.filter((item) => ['queued', 'uploading', 'paused', 'retrying'].includes(item.status)).length;
+  const active = items.filter((item) => ['queued', 'encrypting', 'uploading', 'paused', 'retrying'].includes(item.status)).length;
   const value = useMemo(
     () => ({
       pick: () => input.current?.click(),
@@ -592,7 +624,7 @@ function UploadTray({
   onRetry: (id: number) => void;
   onClose: () => void;
 }) {
-  const active = items.filter((item) => ['queued', 'uploading', 'paused', 'retrying'].includes(item.status));
+  const active = items.filter((item) => ['queued', 'encrypting', 'uploading', 'paused', 'retrying'].includes(item.status));
   const failed = items.filter((item) => item.status === 'error').length;
   const done = items.filter((item) => item.status === 'done').length;
   const paused = items.filter((item) => item.status === 'paused').length;
@@ -698,11 +730,13 @@ function UploadRow({
   const label =
     item.status === 'queued'
       ? t('wartet')
-      : item.status === 'paused'
-        ? t('pausiert')
-        : item.status === 'retrying'
-          ? t('neuer Versuch')
-          : `${Math.round(item.progress * 100)} %`;
+      : item.status === 'encrypting'
+        ? t('verschlüsselt {percent} %', { percent: Math.round(item.progress * 100) })
+        : item.status === 'paused'
+          ? t('pausiert')
+          : item.status === 'retrying'
+            ? t('neuer Versuch')
+            : `${Math.round(item.progress * 100)} %`;
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, p: 1, borderRadius: `${radius.tile}px` }}>
       <Box

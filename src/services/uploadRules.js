@@ -4,6 +4,7 @@ const fsp = require('fs').promises;
 const { HttpError } = require('../lib/errors');
 const { extensionOf } = require('../lib/storage');
 const settings = require('./settingsService');
+const sealed = require('../lib/sealed');
 
 const RECOMMENDED = [
   '.exe',
@@ -48,7 +49,14 @@ const blocked = (name) => {
 
 const refuse = (message, values) => new HttpError(415, message, { code: 'blocked_type', extra: values });
 
+function assertSealedAllowed(names) {
+  if (!settings.get('uploads.encrypted') && names.some((name) => sealed.isSealedName(name))) {
+    throw refuse('Ende-zu-Ende-verschlüsselte Dateien sind auf diesem Server abgeschaltet.', { extension: '.mse' });
+  }
+}
+
 function assertName(user, name, { via = 'upload' } = {}) {
+  assertSealedAllowed([name]);
   if (exempt(user, via)) return;
   const ext = blocked(name);
   if (ext) throw refuse(`Dateien vom Typ ${ext} sind auf diesem Server nicht erlaubt.`, { extension: ext });
@@ -66,6 +74,10 @@ async function isProgram(file) {
 }
 
 async function assertFile(user, file, names, { via = 'upload' } = {}) {
+  assertSealedAllowed(names.filter(Boolean));
+  if (names.some((name) => sealed.isSealedName(name)) && !(await sealed.inspect(file))) {
+    throw new HttpError(400, 'Die verschlüsselte Datei ist beschädigt. Lade sie noch einmal hoch.', { code: 'sealed_invalid' });
+  }
   if (exempt(user, via)) return;
   for (const name of names) if (name) assertName(user, name, { via });
   if (settings.get('uploads.blockPrograms') && (await isProgram(file))) {

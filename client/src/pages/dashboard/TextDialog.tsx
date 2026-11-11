@@ -7,13 +7,17 @@ import Dialog from '@mui/material/Dialog';
 import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
 import DialogTitle from '@mui/material/DialogTitle';
+import FormControlLabel from '@mui/material/FormControlLabel';
 import MenuItem from '@mui/material/MenuItem';
+import Switch from '@mui/material/Switch';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import NoteAddOutlined from '@mui/icons-material/NoteAddOutlined';
 import ExpandMoreRounded from '@mui/icons-material/ExpandMoreRounded';
-import { ApiError, createText, type UploadResponse } from '../../lib/api';
+import { ApiError, createText, uploadFile, type UploadResponse } from '../../lib/api';
+import { linkWithKey, seal } from '../../lib/sealed';
+import { rememberKey } from '../../lib/sealedKeys';
 import type { TagCount, UploadOptionsInfo } from '../../lib/types';
 import { formatBytes } from '../../lib/format';
 import { t } from '../../lib/i18n';
@@ -86,6 +90,7 @@ export function TextDialog({
   const [addressError, setAddressError] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [encrypt, setEncrypt] = useState(false);
 
   useEffect(() => {
     if (open && initialText) setContent(initialText);
@@ -101,6 +106,21 @@ export function TextDialog({
     setPrefs(EMPTY_PREFS);
     setMore(false);
     setError('');
+    setEncrypt(false);
+  };
+
+  const sealedText = async () => {
+    const extension = syntax === 'markdown' ? 'md' : 'txt';
+    const name = `${title.trim().replace(/[\\/:*?"<>|]+/g, '-') || t('Text')}.${extension}`;
+    const plain = new Blob([content], { type: syntax === 'markdown' ? 'text/markdown; charset=utf-8' : 'text/plain; charset=utf-8' });
+    const { blob, key } = await seal(plain, { name, type: plain.type, size: plain.size, kind: 'text', syntax });
+    const options = toUploadOptions(prefs);
+    const uploaded = await uploadFile(new File([blob], 'verschluesselt.mse', { type: 'application/octet-stream' }), () => {}, {
+      ...options,
+      slug: address.trim() || undefined,
+    }).promise;
+    rememberKey(uploaded.slug, { key, name, type: plain.type, size: plain.size });
+    return { ...uploaded, view: linkWithKey(uploaded.view, key), sealed: { key, name } };
   };
 
   const submit = async () => {
@@ -108,12 +128,14 @@ export function TextDialog({
     setBusy(true);
     setError('');
     try {
-      const result = await createText(content, {
-        ...toUploadOptions(prefs),
-        title: title.trim() || undefined,
-        syntax,
-        slug: address.trim() || undefined,
-      });
+      const result = encrypt
+        ? await sealedText()
+        : await createText(content, {
+            ...toUploadOptions(prefs),
+            title: title.trim() || undefined,
+            syntax,
+            slug: address.trim() || undefined,
+          });
       reset();
       setAddress('');
       onDone(result);
@@ -206,6 +228,20 @@ export function TextDialog({
         </Button>
         <Collapse in={more}>
           <Box sx={{ display: 'grid', gap: 2, pt: 1.5 }}>
+            {info.encrypted && (
+              <FormControlLabel
+                control={<Switch checked={encrypt} onChange={(event) => setEncrypt(event.target.checked)} />}
+                label={
+                  <Box>
+                    {t('Ende-zu-Ende verschlüsseln')}
+                    <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+                      {t('Der Text wird im Browser verschlüsselt. Lesen kann ihn nur, wer den vollständigen Link hat.')}
+                    </Typography>
+                  </Box>
+                }
+                sx={{ alignItems: 'flex-start', '& .MuiSwitch-root': { mt: -0.5 } }}
+              />
+            )}
             <ExpirySelect
               value={prefs.expires}
               onChange={(expires) => setPrefs({ ...prefs, expires })}
@@ -239,7 +275,7 @@ export function TextDialog({
             <TagInput value={prefs.tags} onChange={(next) => setPrefs({ ...prefs, tags: next })} suggestions={tags} />
           </Box>
         </Collapse>
-        {!more && (prefs.expires || prefs.passwordEnabled || prefs.once) && (
+        {!more && (prefs.expires || prefs.passwordEnabled || prefs.once || encrypt) && (
           <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.5 }}>
             {t('Zusätzliche Optionen sind gesetzt.')}
           </Typography>

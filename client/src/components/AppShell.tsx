@@ -19,12 +19,15 @@ import BrushOutlined from '@mui/icons-material/BrushOutlined';
 import AccountCircleRounded from '@mui/icons-material/AccountCircleRounded';
 import AccountCircleOutlined from '@mui/icons-material/AccountCircleOutlined';
 import ManageAccountsRounded from '@mui/icons-material/ManageAccountsRounded';
+import KeyboardCommandKeyRounded from '@mui/icons-material/KeyboardCommandKeyRounded';
 import { BrandMark } from './BrandMark';
 import { SiteFooter } from './SiteFooter';
 import { Announcements } from './Announcements';
 import { ThemeModeSelector, ThemeToggleButton } from './ThemeToggle';
 import { LanguageSelector } from './LanguageSwitch';
 import { UserAvatar } from './UserAvatar';
+import { CommandPalette } from './CommandPalette';
+import { openPalette, paletteShortcut } from '../lib/palette';
 import type { SessionUser, SiteInfo } from '../lib/types';
 import { mix } from '../lib/color';
 import { c, css, elevation, radius } from '../theme/tokens';
@@ -153,6 +156,22 @@ function AccountMenu({
         <LanguageSelector />
       </Box>
       <Divider sx={{ my: 0.5 }} />
+      <MenuItem
+        onClick={() => {
+          onClose();
+          openPalette();
+        }}
+      >
+        <ListItemIcon>
+          <KeyboardCommandKeyRounded />
+        </ListItemIcon>
+        <Box component="span" sx={{ flex: 1 }}>
+          {t('Befehle')}
+        </Box>
+        <Typography variant="caption" sx={{ color: 'text.secondary', display: { xs: 'none', md: 'inline' } }}>
+          {paletteShortcut()}
+        </Typography>
+      </MenuItem>
       <MenuItem component="a" href="/account">
         <ListItemIcon>
           <ManageAccountsRounded />
@@ -217,6 +236,7 @@ export function AppShell({
 
   return (
     <Box sx={{ minHeight: '100dvh' }}>
+      <CommandPalette user={user} />
       <Box
         component="nav"
         aria-label={t('Hauptnavigation')}
