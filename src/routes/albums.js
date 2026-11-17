@@ -12,11 +12,15 @@ const albums = require('../services/albumService');
 const designs = require('../services/designService');
 const domains = require('../services/domainService');
 const protection = require('../services/protectionService');
+const reactions = require('../services/reactionService');
+const mailShare = require('../services/mailShareService');
+const audit = require('../services/auditService');
 const settings = require('../services/settingsService');
 const stats = require('../services/statsService');
 const zips = require('../services/zipService');
 const redirects = require('../services/redirectService');
 const db = require('../lib/db');
+const { discoveryTag } = require('../lib/oembed');
 
 const router = express.Router();
 const signedIn = requireApi();
@@ -25,6 +29,10 @@ const MISSING = 'Dieses Album gibt es nicht (mehr).';
 const BLOCKED = 'Dieses Album wurde von der Moderation gesperrt.';
 
 const unlockLimiter = limiter({ windowMs: 15 * 60 * 1000, limit: 30 });
+const reactLimiter = limiter({ windowMs: 60 * 1000, limit: 30 });
+const mailLimiter = limiter({ windowMs: 60 * 1000, limit: 10 });
+const mailShareOn = (req, res, next) =>
+  next(mailShare.enabled() ? undefined : forbidden('Teilen per E-Mail ist auf diesem Server abgeschaltet.'));
 
 const enabled = (req, res, next) => {
   if (!settings.get('albums.enabled')) throw notFound('Alben sind auf diesem Server abgeschaltet.');
@@ -78,6 +86,7 @@ router.get('/a/:code', async (req, res) => {
       feedable(row)
         ? `<link rel="alternate" type="application/atom+xml" title="${escapeHtml(view.album.title)}" href="${escapeHtml(`${view.album.url}/feed.xml`)}" />`
         : '',
+      feedable(row) ? discoveryTag(view.album.url, view.album.title) : '',
     ]
       .filter(Boolean)
       .join('\n  '),
@@ -89,6 +98,7 @@ router.get('/a/:code', async (req, res) => {
       css: style.css,
       report: settings.get('reports.enabled') ? { kind: 'album', target: row.code } : null,
       feed: feedable(row) ? `${view.album.url}/feed.xml` : null,
+      reactions: reactions.enabled() && style.design.show.reactions !== false ? await reactions.counts('a', row.id) : null,
     },
     scheme: style.design.scheme,
   });
@@ -143,6 +153,21 @@ router.post('/a/:code/unlock', sameOriginOnly, unlockLimiter, async (req, res) =
   res.json({ ok: true });
 });
 
+router.post('/a/:code/react', sameOriginOnly, reactLimiter, async (req, res) => {
+  if (!reactions.enabled()) throw forbidden('Reaktionen sind auf diesem Server abgeschaltet.');
+  const row = await publicAlbum(req);
+  if (!row) throw notFound(MISSING);
+  const access = await albums.access(req, row);
+  if (access.state === 'hidden') throw notFound(MISSING);
+  if (access.state === 'blocked') throw new HttpError(451, BLOCKED);
+  if (access.state === 'locked') throw forbidden('Dieses Album ist mit einem Passwort geschützt.', { code: 'locked' });
+  const owner = await db.get('SELECT username FROM users WHERE id = ?', [row.user_id]);
+  const { design } = await designs.forOwner(owner ? owner.username : '');
+  if (design.show && design.show.reactions === false) throw forbidden('Für dieses Album sind Reaktionen abgeschaltet.');
+  res.set('Cache-Control', 'no-store');
+  res.json(await reactions.react({ kind: 'a', id: row.id, ownerId: row.user_id }, String((req.body || {}).reaction || ''), req));
+});
+
 router.get('/api/albums', signedIn, enabled, async (req, res) => res.json({ albums: await albums.list(req.user) }));
 router.post('/api/albums', signedIn, enabled, async (req, res) => res.json({ album: await albums.create(req.user, req.body) }));
 router.get('/api/albums/:id', signedIn, enabled, async (req, res) => res.json({ album: await albums.get(req.user, req.params.id) }));
@@ -172,6 +197,13 @@ router.delete('/api/albums/:id/files', signedIn, enabled, async (req, res) =>
 router.put('/api/albums/:id/order', signedIn, enabled, async (req, res) =>
   res.json({ album: await albums.reorder(req.user, req.params.id, req.body.fileIds) })
 );
+router.post('/api/albums/:id/email', signedIn, enabled, mailShareOn, mailLimiter, async (req, res) => {
+  const album = await albums.get(req.user, req.params.id);
+  const row = await albums.findByCode(album.code);
+  const result = await mailShare.shareAlbum(req.user, row, req.body || {});
+  audit.log('file_emailed', { userId: req.user.id, req, details: { album: row.title, recipients: result.sent } });
+  res.json({ ok: true, ...result });
+});
 router.post('/api/albums/:id/members', signedIn, enabled, async (req, res) =>
   res.json({ album: await albums.addMember(req.user, req.params.id, req.body.username) })
 );

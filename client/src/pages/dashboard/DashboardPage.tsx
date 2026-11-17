@@ -17,6 +17,11 @@ import AddLinkRounded from '@mui/icons-material/AddLinkRounded';
 import CloudDownloadRounded from '@mui/icons-material/CloudDownloadRounded';
 import ScreenshotMonitorRounded from '@mui/icons-material/ScreenshotMonitorRounded';
 import TuneRounded from '@mui/icons-material/TuneRounded';
+import StarRounded from '@mui/icons-material/StarRounded';
+import ScheduleRounded from '@mui/icons-material/ScheduleRounded';
+import SellOutlined from '@mui/icons-material/SellOutlined';
+import AccessibilityNewRounded from '@mui/icons-material/AccessibilityNewRounded';
+import InsightsRounded from '@mui/icons-material/InsightsRounded';
 import { readBoot, siteName } from '../../lib/boot';
 import { RequestsView } from './requests';
 import { SubtitlesDialog } from './subtitles';
@@ -43,6 +48,7 @@ import { withSavedKey } from '../../lib/sealedKeys';
 import { usePaletteCommands, type PaletteCommand } from '../../lib/palette';
 import { sharedUrl, takeSharedItems } from '../../lib/shareTarget';
 import { ScrollTabs } from '../../components/ScrollTabs';
+import { ShareCodesDialog, type ShareTarget } from '../../components/ShareCodesDialog';
 import { EditFileDialog } from './EditFileDialog';
 import { TextDialog } from './TextDialog';
 import { AlbumPickerDialog, AlbumsView } from './albums';
@@ -68,6 +74,10 @@ import { DuplicatesDialog } from './duplicates';
 import { TrashView } from './trash';
 import { CleanupView } from './cleanup';
 import { InsightsView } from './insights';
+import { AltTextDialog } from './altText';
+import { TagManagerDialog } from './tagManager';
+import { EmailShareDialog, type EmailTarget } from '../../components/EmailShareDialog';
+import { MemoriesCard } from './memories';
 import { ImageEditor } from './editor/ImageEditor';
 import { StatsDialog, type StatsTarget } from '../../components/StatsView';
 import { displayName, hasWarning } from './MediaTile';
@@ -85,6 +95,14 @@ const keyframes = (
     }}
   />
 );
+
+function originOf(url: string) {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return readBoot().site.baseUrl;
+  }
+}
 
 function totalBytes(stats: UserStats) {
   const b = stats.storageBreakdown;
@@ -213,6 +231,13 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
   const [bulk, setBulk] = useState<BulkAction | null>(null);
   const [tags, setTags] = useState<TagCount[]>(boot.tags || []);
   const [tag, setTag] = useState('');
+  const [starredOnly, setStarredOnly] = useState(false);
+  const [scheduledOnly, setScheduledOnly] = useState(false);
+  const [altOnly, setAltOnly] = useState(false);
+  const [altOpen, setAltOpen] = useState(false);
+  const [tagsOpen, setTagsOpen] = useState(false);
+  const [emailTarget, setEmailTarget] = useState<EmailTarget | null>(null);
+  const [codesFor, setCodesFor] = useState<ShareTarget | null>(null);
   const [albums, setAlbums] = useState<Album[]>([]);
   const [statsTarget, setStatsTarget] = useState<StatsTarget | null>(null);
   const [imageEdit, setImageEdit] = useState<FileItem | null>(null);
@@ -288,7 +313,7 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
   statusRef.current = status;
 
   const selecting = selectMode || selected.size > 0;
-  const filtered = !!search || type !== '' || !!tag;
+  const filtered = !!search || type !== '' || !!tag || starredOnly || scheduledOnly || altOnly;
   const overlay = viewerIndex !== null || !!imageEdit || !!versionsFile || !!clipFile;
   const trashOn = boot.options.trash;
   const canEditImage = useCallback(
@@ -331,7 +356,17 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
       const id = ++requestId.current;
       setStatus('reload');
       try {
-        const res = await listFiles({ page: 1, limit: pageSize, search, type, sort, tag });
+        const res = await listFiles({
+          page: 1,
+          limit: pageSize,
+          search,
+          type,
+          sort,
+          tag,
+          starred: starredOnly,
+          scheduled: scheduledOnly,
+          missingAlt: altOnly,
+        });
         if (id !== requestId.current) return;
         setFiles(res.files);
         setPage(res.page);
@@ -347,7 +382,7 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
         if (id === requestId.current) setStatus('idle');
       }
     },
-    [pageSize, search, type, sort, tag, fail]
+    [pageSize, search, type, sort, tag, starredOnly, scheduledOnly, altOnly, fail]
   );
 
   const firstRun = useRef(true);
@@ -357,14 +392,24 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
       return;
     }
     reload();
-  }, [search, type, sort, tag]);
+  }, [search, type, sort, tag, starredOnly, scheduledOnly, altOnly]);
 
   const loadMore = useCallback(async () => {
     if (statusRef.current !== 'idle' || !hasMore) return;
     const id = requestId.current;
     setStatus('more');
     try {
-      const res = await listFiles({ page: page + 1, limit: pageSize, search, type, sort, tag });
+      const res = await listFiles({
+        page: page + 1,
+        limit: pageSize,
+        search,
+        type,
+        sort,
+        tag,
+        starred: starredOnly,
+        scheduled: scheduledOnly,
+        missingAlt: altOnly,
+      });
       if (id !== requestId.current) return;
       setFiles((prev) => {
         const known = new Set(prev.map((f) => f.filename));
@@ -378,7 +423,7 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
     } finally {
       if (id === requestId.current) setStatus('idle');
     }
-  }, [hasMore, page, pageSize, search, type, sort, tag, fail]);
+  }, [hasMore, page, pageSize, search, type, sort, tag, starredOnly, scheduledOnly, altOnly, fail]);
 
   const sentinel = useInView(loadMore, hasMore && status === 'idle');
 
@@ -695,6 +740,58 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
         run: () => setCaptureOpen(true),
       },
       {
+        id: 'starred',
+        group: 'actions',
+        label: t('Favoriten zeigen'),
+        icon: <StarRounded />,
+        keywords: 'stern favorit markiert',
+        run: () => {
+          setStarredOnly(true);
+          setSection('files');
+        },
+      },
+      {
+        id: 'scheduled',
+        group: 'actions',
+        label: t('Geplante Uploads zeigen'),
+        icon: <ScheduleRounded />,
+        keywords: 'später veröffentlichen zeitplan termin',
+        run: () => {
+          setScheduledOnly(true);
+          goSection('files');
+        },
+      },
+      {
+        id: 'tags',
+        group: 'actions',
+        label: t('Tags verwalten'),
+        icon: <SellOutlined />,
+        keywords: 'umbenennen zusammenführen löschen schlagwort',
+        run: () => setTagsOpen(true),
+      },
+      {
+        id: 'alt',
+        group: 'actions',
+        label: t('Alternativtexte nachtragen'),
+        icon: <AccessibilityNewRounded />,
+        keywords: 'barrierefrei screenreader bildbeschreibung',
+        run: () => setAltOpen(true),
+      },
+      boot.options.stats && {
+        id: 'year',
+        group: 'actions',
+        label: t('Jahresrückblick'),
+        icon: <InsightsRounded />,
+        keywords: 'jahr rückblick statistik',
+        run: () => {
+          goSection('stats');
+          window.setTimeout(
+            () => document.getElementById('year-review-title')?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+            350
+          );
+        },
+      },
+      {
         id: 'options',
         group: 'actions',
         label: t('Upload-Optionen'),
@@ -704,7 +801,7 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
       },
     ];
     return list.filter(Boolean) as PaletteCommand[];
-  }, [pick, pickFolder, boot.options.texts, boot.options.links, boot.urlFetch, capture]);
+  }, [pick, pickFolder, boot.options.texts, boot.options.links, boot.options.stats, boot.urlFetch, capture, goSection]);
   usePaletteCommands(paletteCommands);
   useHotkey('Escape', () => !overlay && selecting && clearSelection(), { enabled: selecting });
   useEffect(() => {
@@ -734,6 +831,41 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
     const next = withSavedKey(updated);
     setFiles((prev) => prev.map((file) => (file.id === next.id ? next : file)));
   }, []);
+
+  const toggleStar = useCallback(
+    async (file: FileItem): Promise<FileItem | null> => {
+      try {
+        const { file: updated } = await updateFile(file.id, { starred: !file.starred });
+        if (starredOnly && !updated.starred) setFiles((list) => list.filter((item) => item.id !== updated.id));
+        else replaceFile(updated);
+        refreshStats();
+        toast(updated.starred ? t('Zu den Favoriten gelegt') : t('Aus den Favoriten entfernt'), { variant: 'success' });
+        return updated;
+      } catch (error) {
+        fail(error);
+        return null;
+      }
+    },
+    [starredOnly, replaceFile, refreshStats, toast, fail]
+  );
+
+  const shareTargetOf = useCallback(
+    (file: FileItem): ShareTarget => ({
+      kind: 'file',
+      name: file.title || file.originalName || file.filename,
+      alt: file.alt || null,
+      view: file.urls.view,
+      direct: file.urls.direct,
+      frame:
+        file.password || file.maxViews || /\.mse$/i.test(file.filename)
+          ? null
+          : `${originOf(file.urls.view)}/frame/${encodeURIComponent(file.slug)}`,
+      type: file.type,
+      width: file.width || 0,
+      height: file.height || 0,
+    }),
+    []
+  );
 
   const toggleWarning = useCallback(
     async (file: FileItem) => {
@@ -776,20 +908,25 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
             ? tn(res.count, '1 Datei erscheint jetzt im Profil', '{count} Dateien erscheinen jetzt im Profil')
             : action === 'unlist'
               ? tn(res.count, '1 Datei aus dem Profil genommen', '{count} Dateien aus dem Profil genommen')
-              : action === 'warn'
-                ? tn(res.count, '1 Datei hat jetzt eine Inhaltswarnung', '{count} Dateien haben jetzt eine Inhaltswarnung')
-                : action === 'unwarn'
-                  ? tn(res.count, 'Inhaltswarnung bei 1 Datei entfernt', 'Inhaltswarnung bei {count} Dateien entfernt')
-                  : tn(res.count, '1 Datei geändert', '{count} Dateien geändert'),
+              : action === 'star'
+                ? tn(res.count, '1 Datei bei den Favoriten', '{count} Dateien bei den Favoriten')
+                : action === 'unstar'
+                  ? tn(res.count, '1 Datei aus den Favoriten entfernt', '{count} Dateien aus den Favoriten entfernt')
+                  : action === 'warn'
+                    ? tn(res.count, '1 Datei hat jetzt eine Inhaltswarnung', '{count} Dateien haben jetzt eine Inhaltswarnung')
+                    : action === 'unwarn'
+                      ? tn(res.count, 'Inhaltswarnung bei 1 Datei entfernt', 'Inhaltswarnung bei {count} Dateien entfernt')
+                      : tn(res.count, '1 Datei geändert', '{count} Dateien geändert'),
           { variant: 'success' }
         );
         reload();
+        if (action === 'star' || action === 'unstar') refreshStats();
         if (action === 'tag' || action === 'untag') refreshTags();
       } catch (error) {
         fail(error);
       }
     },
-    [selectedFiles, toast, reload, refreshTags, fail]
+    [selectedFiles, toast, reload, refreshTags, refreshStats, fail]
   );
 
   const scrolledDown = useScrollTrigger({ threshold: 120 });
@@ -955,7 +1092,17 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
       )}
       {section === 'links' && <LinksView info={boot.options} version={linksVersion} />}
       {section === 'requests' && <RequestsView />}
-      {section === 'stats' && <InsightsView onOpen={openStats} />}
+      {section === 'stats' && (
+        <InsightsView
+          onOpen={openStats}
+          missingAlt={stats.missingAlt || 0}
+          onAltFix={() => setAltOpen(true)}
+          onAltShow={() => {
+            setAltOnly(true);
+            goSection('files');
+          }}
+        />
+      )}
       {section === 'cleanup' && (
         <CleanupView
           onChanged={() => {
@@ -978,6 +1125,12 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
       {section === 'files' && (
         <>
           <ResumeNotice />
+          <MemoriesCard
+            visible={!filtered}
+            statsEnabled={boot.options.stats}
+            onDelete={(file) => deleteFiles([file])}
+            onStar={toggleStar}
+          />
           {(stats.files > 0 || filtered || files.length > 0) && (
             <FilterBar
               type={type}
@@ -996,6 +1149,16 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
               tags={tags}
               tag={tag}
               onTag={setTag}
+              starred={starredOnly}
+              starredCount={stats.starred || 0}
+              onStarred={setStarredOnly}
+              scheduled={scheduledOnly}
+              scheduledCount={stats.scheduled || 0}
+              onScheduled={setScheduledOnly}
+              missingAlt={altOnly}
+              onMissingAlt={setAltOnly}
+              onManageTags={() => setTagsOpen(true)}
+              reactionsSort={Boolean(boot.site.reactions)}
               selecting={selecting}
               onSelectMode={() => (selecting ? clearSelection() : setSelectMode(true))}
             />
@@ -1021,6 +1184,9 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
                 setQuery('');
                 setType('');
                 setTag('');
+                setStarredOnly(false);
+                setScheduledOnly(false);
+                setAltOnly(false);
               }}
               onPick={pick}
               onUrl={boot.urlFetch ? () => setUrlOpen(true) : undefined}
@@ -1060,7 +1226,33 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
         onSubtitles={(file) => setSubtitlesFile(file)}
         onVersions={(file) => setVersionsFile(file)}
         onWarning={toggleWarning}
+        onStar={toggleStar}
+        onFrame={(file) => setCodesFor(shareTargetOf(file))}
+        onEmail={boot.site.mailShare ? (file) => setEmailTarget({ kind: 'file', id: file.id, name: displayName(file) }) : undefined}
         trash={trashOn}
+      />
+
+      <ShareCodesDialog target={codesFor} onClose={() => setCodesFor(null)} zIndex={1550} />
+      <EmailShareDialog target={emailTarget} onClose={() => setEmailTarget(null)} zIndex={1550} />
+      <TagManagerDialog
+        open={tagsOpen}
+        onClose={() => setTagsOpen(false)}
+        onChanged={(next, change) => {
+          setTags(next);
+          if (tag === change.from) setTag(change.to || '');
+          else reload();
+        }}
+      />
+      <AltTextDialog
+        open={altOpen}
+        total={stats.missingAlt || 0}
+        onClose={(saved) => {
+          setAltOpen(false);
+          if (!saved) return;
+          refreshStats();
+          if (altOnly) reload();
+        }}
+        onSaved={replaceFile}
       />
 
       <Viewer
@@ -1080,8 +1272,11 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
         onClip={boot.options.clips ? (file) => setClipFile(file) : undefined}
         onSubtitles={(file) => setSubtitlesFile(file)}
         onWarning={toggleWarning}
+        onStar={toggleStar}
+        onCodes={(file) => setCodesFor(shareTargetOf(file))}
+        onEmail={boot.site.mailShare ? (file) => setEmailTarget({ kind: 'file', id: file.id, name: displayName(file) }) : undefined}
         trash={trashOn}
-        paused={!!imageEdit || !!versionsFile || !!clipFile || !!subtitlesFile}
+        paused={!!imageEdit || !!versionsFile || !!clipFile || !!subtitlesFile || !!codesFor || !!emailTarget}
         tracksVersion={tracksVersion}
       />
 
@@ -1202,8 +1397,10 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
         onClose={() => setEditing(null)}
         onSaved={(updated) => {
           const next = withSavedKey(updated);
-          setFiles((prev) => prev.map((file) => (file.id === next.id ? next : file)));
+          const gone = (scheduledOnly && !next.publishAt) || (altOnly && Boolean(next.alt));
+          setFiles((prev) => (gone ? prev.filter((file) => file.id !== next.id) : prev.map((file) => (file.id === next.id ? next : file))));
           refreshTags();
+          refreshStats();
           toast(t('Änderungen gespeichert'), { variant: 'success' });
         }}
       />

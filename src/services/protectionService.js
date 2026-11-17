@@ -58,6 +58,7 @@ function fileAccess(req, record, { now = Date.now() } = {}) {
   if (isOwner(req, record.username)) return { state: 'open', owner: true };
   if (record.deleted_at) return { state: 'missing' };
   if (record.blocked_at) return { state: 'blocked' };
+  if (record.publish_at && Number(record.publish_at) > now) return { state: 'scheduled', at: Number(record.publish_at) };
   if (record.password_hash && !granted(req, 'f', record.id)) return { state: 'locked' };
   if (record.max_views && !granted(req, 'g', record.id)) {
     return Number(record.views) >= Number(record.max_views) ? { state: 'used' } : { state: 'once' };

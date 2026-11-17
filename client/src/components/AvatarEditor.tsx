@@ -27,9 +27,9 @@ import { c, radius } from '../theme/tokens';
 
 const VIEW = 264;
 const MAX_ZOOM = 4;
-const ACCEPT = 'image/png,image/jpeg,image/webp,image/gif,image/avif';
+export const ACCEPT = 'image/png,image/jpeg,image/webp,image/gif,image/avif';
 
-interface Source {
+export interface Source {
   url: string;
   blob?: Blob;
   fileId?: number;
@@ -107,7 +107,7 @@ function clampOffset(offset: { x: number; y: number }, natural: Natural, scale: 
   };
 }
 
-function Cropper({
+export function Cropper({
   source,
   onReady,
   onFailed,
@@ -299,7 +299,7 @@ function Cropper({
   );
 }
 
-function UploadPicker({ onPick }: { onPick: (file: FileItem) => void }) {
+export function UploadPicker({ onPick, pickLabel }: { onPick: (file: FileItem) => void; pickLabel?: (name: string) => string }) {
   const [items, setItems] = useState<FileItem[] | null>(null);
   const [error, setError] = useState('');
 
@@ -337,7 +337,11 @@ function UploadPicker({ onPick }: { onPick: (file: FileItem) => void }) {
           <ButtonBase
             key={file.id}
             onClick={() => onPick(file)}
-            aria-label={t('{name} als Profilbild nehmen', { name: file.title || file.originalName || file.filename })}
+            aria-label={
+              pickLabel
+                ? pickLabel(file.title || file.originalName || file.filename)
+                : t('{name} als Profilbild nehmen', { name: file.title || file.originalName || file.filename })
+            }
             sx={{
               aspectRatio: '1',
               borderRadius: `${radius.md}px`,

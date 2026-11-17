@@ -126,6 +126,9 @@ module.exports = {
   port: Number.parseInt(env.PORT, 10) || 3000,
   devServer: (env.UI_DEV_SERVER || '').replace(/\/+$/, ''),
   allowPrivateFetch: env.URL_FETCH_ALLOW_PRIVATE === 'true',
+  tickMs: Math.max(1000, Number.parseInt(env.TICK_INTERVAL_MS, 10) || 60 * 1000),
+  reactionNoticeMs: Math.max(1, Number.parseInt(env.REACTION_NOTICE_DELAY_MS, 10) || 10 * 60 * 1000),
+  memoryHour: Math.min(23, Math.max(0, Number.parseInt(env.MEMORY_NOTICE_HOUR ?? '9', 10) || 0)),
   glitchtip: glitchtip.target,
   database: databaseOptions(),
   databaseFile: DATABASE_FILE,
@@ -140,6 +143,12 @@ module.exports = {
     format: logFormat.value,
     color: colorPreference(),
     problems: [logLevel.invalid, logFormat.invalid, glitchtip.problem, updateCheck.problem].filter(Boolean),
+  },
+  slack: {
+    hooks: (env.SLACK_HOOKS_BASE || 'https://hooks.slack.com').replace(/\/+$/, ''),
+  },
+  telegram: {
+    api: (env.TELEGRAM_API_BASE || 'https://api.telegram.org').replace(/\/+$/, ''),
   },
   discord: {
     api: (env.DISCORD_API_BASE || 'https://discord.com/api').replace(/\/+$/, ''),

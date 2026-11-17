@@ -33,10 +33,11 @@ Konto: {user}
 Erstellt: {date}
 
 account.json   Konto, Einstellungen, Profil, Design, Domains, Anmeldeverfahren
-files.json     Alle Dateien mit Tags, Alben, Schutz und Versionen
+files.json     Alle Dateien mit Tags, Alben, Schutz, Versionen und Beschreibungen
 albums.json    Eigene und geteilte Alben
 links.json     Kurzlinks
 activity.json  Aktivitäten des Kontos
+symbole/       Eigene Symbole für Links im Profil
 files/         Die Dateien selbst
 versions/      Ältere Versionen
 trash/         Dateien aus dem Papierkorb
@@ -47,10 +48,11 @@ Account: {user}
 Created: {date}
 
 account.json   Account, preferences, profile, design, domains, sign-in methods
-files.json     All files with tags, albums, protection and versions
+files.json     All files with tags, albums, protection, versions and descriptions
 albums.json    Own and shared albums
 links.json     Short links
 activity.json  Account activity
+icons/         Custom icons for profile links
 files/         The files themselves
 versions/      Older versions
 trash/         Files from the trash
@@ -171,6 +173,9 @@ function buildIndex(data, includeFiles) {
       slug: file.slug,
       name: entryName(record),
       title: record.title || null,
+      description: record.description || null,
+      alt: record.alt_text || null,
+      starred: Boolean(record.starred_at),
       type: file.type,
       sizeBytes: Number(record.size_bytes) || 0,
       createdAt: iso(record.created_at),
@@ -245,6 +250,10 @@ async function send(res, user, { includeFiles = true, language = 'de' } = {}) {
     await zip.add(`${root}/activity.json`, json(data.activity), { date: now });
     const picture = data.row.avatar ? await avatars.file(data.row.id) : null;
     if (picture) await zip.add(`${root}/${language === 'en' ? 'avatar.webp' : 'profilbild.webp'}`, [picture], { date: now });
+    const icons = await db.all('SELECT icon_key, image FROM profile_icons WHERE user_id = ? ORDER BY id', [data.row.id]);
+    for (const icon of icons) {
+      await zip.add(`${root}/${language === 'en' ? 'icons' : 'symbole'}/${icon.icon_key}.webp`, [Buffer.from(icon.image)], { date: now });
+    }
     if (includeFiles) {
       for (const entry of index.entries) {
         let source;

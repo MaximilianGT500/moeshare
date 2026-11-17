@@ -259,6 +259,11 @@ const DEFINITIONS = {
   'profiles.enabled': { type: 'bool', default: true },
   'profiles.avatars': { type: 'bool', default: true },
   'profiles.animatedAvatars': { type: 'bool', default: true },
+  'profiles.customIcons': { type: 'bool', default: true },
+  'reactions.enabled': { type: 'bool', default: true },
+  'sharing.email': { type: 'bool', default: true },
+  'frames.enabled': { type: 'bool', default: true },
+  'autoShare.enabled': { type: 'bool', default: true },
 
   'domains.enabled': { type: 'bool', default: false },
   'domains.maxPerUser': { type: 'int', min: 1, max: 20, default: 3 },

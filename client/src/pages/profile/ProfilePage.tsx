@@ -5,6 +5,7 @@ import Button from '@mui/material/Button';
 import IconButton from '@mui/material/IconButton';
 import Tooltip from '@mui/material/Tooltip';
 import RssFeedRounded from '@mui/icons-material/RssFeedRounded';
+import PersonAddAlt1Rounded from '@mui/icons-material/PersonAddAlt1Rounded';
 import CircularProgress from '@mui/material/CircularProgress';
 import Typography from '@mui/material/Typography';
 import ArrowOutwardRounded from '@mui/icons-material/ArrowOutwardRounded';
@@ -12,7 +13,8 @@ import CollectionsOutlined from '@mui/icons-material/CollectionsOutlined';
 import LockRounded from '@mui/icons-material/LockRounded';
 import PhotoLibraryOutlined from '@mui/icons-material/PhotoLibraryOutlined';
 import { readBoot } from '../../lib/boot';
-import type { AlbumItem, ProfileBoot, PublicAlbum } from '../../lib/types';
+import type { AlbumItem, ProfileBoot, PublicAlbum, PublicProfileLink } from '../../lib/types';
+import { LinkIcon } from '../../lib/linkIcons';
 import { accentOf, useDesign, withDefaults } from '../../lib/design';
 import { errorMessage, fetchProfileFiles } from '../../lib/api';
 import { formatDate } from '../../lib/format';
@@ -95,6 +97,138 @@ function AlbumCard({ album, index }: { album: PublicAlbum; index: number }) {
   );
 }
 
+type LinkItem = Extract<PublicProfileLink, { type: 'link' }>;
+
+interface LinkSection {
+  id: number;
+  heading: string | null;
+  items: LinkItem[];
+}
+
+function sectionsOf(links: PublicProfileLink[]) {
+  const sections: LinkSection[] = [];
+  for (const link of links) {
+    if (link.type === 'heading') {
+      sections.push({ id: link.id, heading: link.label, items: [] });
+      continue;
+    }
+    if (link.style !== 'button') continue;
+    if (!sections.length) sections.push({ id: 0, heading: null, items: [] });
+    sections[sections.length - 1].items.push(link);
+  }
+  return sections.filter((section) => section.items.length);
+}
+
+function track(username: string, id: number) {
+  const url = `/u/${encodeURIComponent(username)}/links/${id}/click`;
+  try {
+    if (navigator.sendBeacon && navigator.sendBeacon(url)) return;
+  } catch {}
+  void fetch(url, { method: 'POST', keepalive: true, credentials: 'same-origin' }).catch(() => {});
+}
+
+function linkProps(username: string, link: LinkItem) {
+  const web = /^https?:/i.test(link.url);
+  return {
+    href: link.url,
+    ...(web ? { target: '_blank', rel: 'noopener me' } : {}),
+    onClick: () => track(username, link.id),
+    onAuxClick: (event: { button: number }) => event.button === 1 && track(username, link.id),
+  };
+}
+
+function IconRow({ username, links }: { username: string; links: LinkItem[] }) {
+  return (
+    <Box component="nav" aria-label={t('Kanäle')} className="ms-link-icons" sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 3 }}>
+      {links.map((link) => (
+        <Tooltip key={link.id} title={link.label}>
+          <IconButton
+            component="a"
+            {...linkProps(username, link)}
+            aria-label={link.label}
+            className="ms-link-icon"
+            sx={{
+              width: 48,
+              height: 48,
+              bgcolor: link.highlight ? c.primary : mix(c.secondaryContainer, 88),
+              color: link.highlight ? c.onPrimary : c.onSecondaryContainer,
+              transition: 'transform 160ms cubic-bezier(0.2, 0, 0, 1), background-color 160ms',
+              '&:hover': { bgcolor: c.secondaryContainer, transform: 'translateY(-2px)' },
+            }}
+          >
+            <LinkIcon icon={link.icon ?? 'auto'} url={link.url} iconUrl={link.iconUrl} size={24} />
+          </IconButton>
+        </Tooltip>
+      ))}
+    </Box>
+  );
+}
+
+function LinkList({ username, sections, layout }: { username: string; sections: LinkSection[]; layout: 'row' | 'list' }) {
+  const { r } = useDesign();
+  const list = layout === 'list';
+  return (
+    <Box className={`ms-links ms-links-${layout}`} sx={{ display: 'grid', gap: 2.5, mt: 3, maxWidth: list ? 600 : 'none' }}>
+      {sections.map((section) => (
+        <Box key={section.id} component="section" aria-label={section.heading || undefined}>
+          {section.heading && (
+            <Typography
+              variant="subtitle1"
+              component="h2"
+              className="ms-link-heading"
+              sx={{ fontWeight: 700, mb: 1.25, color: 'text.secondary', textAlign: 'left' }}
+            >
+              {section.heading}
+            </Typography>
+          )}
+          <Box sx={list ? { display: 'grid', gap: 1.25 } : { display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+            {section.items.map((link) => {
+              const icon = link.icon ? <LinkIcon icon={link.icon} url={link.url} iconUrl={link.iconUrl} size={list ? 24 : 20} /> : null;
+              return (
+                <Button
+                  key={link.id}
+                  {...linkProps(username, link)}
+                  className={link.highlight ? 'ms-link ms-link-highlight' : 'ms-link'}
+                  variant={link.highlight ? 'contained' : 'tonal'}
+                  size={list ? 'large' : 'medium'}
+                  startIcon={!list ? icon : undefined}
+                  endIcon={!list && !icon ? <ArrowOutwardRounded /> : undefined}
+                  sx={
+                    list
+                      ? {
+                          position: 'relative',
+                          minHeight: 58,
+                          px: 7,
+                          borderRadius: `${r(radius.lg)}px`,
+                          fontSize: '1rem',
+                          fontWeight: 700,
+                          textAlign: 'center',
+                          overflowWrap: 'anywhere',
+                          transition: 'transform 160ms cubic-bezier(0.2, 0, 0, 1)',
+                          '&:hover': { transform: 'translateY(-2px)' },
+                        }
+                      : { borderRadius: `${r(radius.full)}px` }
+                  }
+                >
+                  {list && icon && (
+                    <Box
+                      component="span"
+                      sx={{ position: 'absolute', left: 18, top: '50%', transform: 'translateY(-50%)', display: 'flex' }}
+                    >
+                      {icon}
+                    </Box>
+                  )}
+                  {link.label}
+                </Button>
+              );
+            })}
+          </Box>
+        </Box>
+      ))}
+    </Box>
+  );
+}
+
 function Profile({ boot }: { boot: ProfileBoot }) {
   const toast = useToast();
   const { r } = useDesign();
@@ -119,6 +253,8 @@ function Profile({ boot }: { boot: ProfileBoot }) {
   };
 
   const empty = !albums.length && !items.length;
+  const iconLinks = profile.links.filter((link): link is LinkItem => link.type === 'link' && link.style === 'icon');
+  const sections = sectionsOf(profile.links);
 
   return (
     <>
@@ -167,20 +303,21 @@ function Profile({ boot }: { boot: ProfileBoot }) {
             {profile.bio}
           </Typography>
         )}
+        {iconLinks.length > 0 && <IconRow username={profile.username} links={iconLinks} />}
+        {sections.length > 0 && <LinkList username={profile.username} sections={sections} layout={profile.linkLayout} />}
         <Box className="ms-actions" sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 3 }}>
-          {profile.links.map((link) => (
+          {profile.contactCard && (
             <Button
-              key={`${link.label}-${link.url}`}
-              variant="tonal"
-              href={link.url}
-              target="_blank"
-              rel="noopener me"
-              endIcon={<ArrowOutwardRounded />}
+              variant="outlined"
+              href={profile.contactCard}
+              download
+              startIcon={<PersonAddAlt1Rounded />}
+              className="ms-contact"
               sx={{ borderRadius: `${r(radius.full)}px` }}
             >
-              {link.label}
+              {t('Kontakt speichern')}
             </Button>
-          ))}
+          )}
           <CopyTextButton value={profile.url} variant="outlined" message={t('Link kopiert')} sx={{ borderRadius: `${r(radius.full)}px` }}>
             {t('Profil-Link kopieren')}
           </CopyTextButton>

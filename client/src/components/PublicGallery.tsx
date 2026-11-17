@@ -186,7 +186,9 @@ function AlbumTile({
     <m.a
       href={item.view}
       onClick={click}
-      aria-label={veiled ? t('{name}, Inhaltswarnung: zum Anzeigen tippen', { name: item.warning || name }) : name}
+      aria-label={
+        veiled ? t('{name}, Inhaltswarnung: zum Anzeigen tippen', { name: item.warning || name }) : item.alt ? `${name}: ${item.alt}` : name
+      }
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.45, delay: Math.min(index, 24) * 0.025, ease: ease.emphasizedDecelerate }}
@@ -607,7 +609,7 @@ function Lightbox({
               ) : item.type === 'image' ? (
                 <img
                   src={item.direct!}
-                  alt={item.name || ''}
+                  alt={item.alt || item.name || ''}
                   draggable={false}
                   style={{
                     display: 'block',

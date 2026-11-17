@@ -32,7 +32,9 @@ import RemoveCircleOutlineRounded from '@mui/icons-material/RemoveCircleOutlineR
 import WallpaperRounded from '@mui/icons-material/WallpaperRounded';
 import OpenInNewRounded from '@mui/icons-material/OpenInNewRounded';
 import QrCode2Rounded from '@mui/icons-material/QrCode2Rounded';
+import CodeRounded from '@mui/icons-material/CodeRounded';
 import { QrDialog } from '../../components/QrDialog';
+import { ShareCodesDialog, type ShareTarget } from '../../components/ShareCodesDialog';
 import DragIndicatorRounded from '@mui/icons-material/DragIndicatorRounded';
 import LinkRounded from '@mui/icons-material/LinkRounded';
 import BarChartRounded from '@mui/icons-material/BarChartRounded';
@@ -44,6 +46,12 @@ import CloudUploadRounded from '@mui/icons-material/CloudUploadRounded';
 import CloseRounded from '@mui/icons-material/CloseRounded';
 import Alert from '@mui/material/Alert';
 import Chip from '@mui/material/Chip';
+import MenuItem from '@mui/material/MenuItem';
+import ToggleButton from '@mui/material/ToggleButton';
+import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
+import AutoAwesomeRounded from '@mui/icons-material/AutoAwesomeRounded';
+import ForwardToInboxRounded from '@mui/icons-material/ForwardToInboxRounded';
+import PanToolAltOutlined from '@mui/icons-material/PanToolAltOutlined';
 import {
   ApiError,
   addAlbumMember,
@@ -52,6 +60,7 @@ import {
   createAlbum,
   deleteAlbum,
   fetchAlbum,
+  fetchTags,
   leaveAlbum,
   listAlbums,
   removeAlbumMember,
@@ -59,8 +68,10 @@ import {
   reorderAlbum,
   updateAlbum,
 } from '../../lib/api';
-import type { Album, AlbumVisibility, FileItem, UploadOptionsInfo } from '../../lib/types';
+import type { Album, AlbumRule, AlbumVisibility, FileItem, FileType, TagCount, UploadOptionsInfo } from '../../lib/types';
+import { EmailShareDialog, type EmailTarget } from '../../components/EmailShareDialog';
 import { relativeMs } from '../../lib/format';
+import { readBoot } from '../../lib/boot';
 import { t, tn } from '../../lib/i18n';
 import { meaningfulColor, mix } from '../../lib/color';
 import { CopyTextButton } from '../../components/CopyButton';
@@ -75,6 +86,120 @@ import { displayName, hasWarning } from './MediaTile';
 import { useUploads } from './uploads';
 import { AddressField, prefixOf } from '../../components/ShareOptions';
 import { c, css, radius } from '../../theme/tokens';
+
+const RULE_TYPES: Array<{ key: FileType; label: () => string }> = [
+  { key: 'image', label: () => t('Bilder') },
+  { key: 'video', label: () => t('Videos') },
+  { key: 'audio', label: () => t('Audio') },
+  { key: 'text', label: () => t('Texte') },
+  { key: 'file', label: () => t('Andere Dateien') },
+];
+
+const RULE_DAYS = [7, 30, 90, 365];
+
+const daysLabel = (days: number) => (days === 365 ? t('im letzten Jahr') : t('in den letzten {count} Tagen', { count: days }));
+
+export function ruleSummary(rule: AlbumRule) {
+  const parts: string[] = [];
+  if (rule.tag) parts.push(`#${rule.tag}`);
+  if (rule.type) parts.push(RULE_TYPES.find((entry) => entry.key === rule.type)?.label() || rule.type);
+  if (rule.starred) parts.push(t('nur Favoriten'));
+  if (rule.days) parts.push(daysLabel(rule.days));
+  return parts.length ? parts.join(' · ') : t('alle deine Uploads');
+}
+
+interface RuleDraft {
+  tag: string;
+  type: FileType | '';
+  starred: boolean;
+  days: number | '';
+}
+
+const ruleDraftOf = (rule?: AlbumRule | null): RuleDraft => ({
+  tag: rule?.tag || '',
+  type: rule?.type || '',
+  starred: Boolean(rule?.starred),
+  days: rule?.days || '',
+});
+
+const ruleOfDraft = (draft: RuleDraft): AlbumRule => ({
+  ...(draft.tag.trim() ? { tag: draft.tag.trim().replace(/^#/, '') } : {}),
+  ...(draft.type ? { type: draft.type } : {}),
+  ...(draft.starred ? { starred: true } : {}),
+  ...(draft.days ? { days: Number(draft.days) } : {}),
+});
+
+function RuleFields({ value, onChange, tags }: { value: RuleDraft; onChange: (value: RuleDraft) => void; tags: TagCount[] }) {
+  const knownTag = !value.tag || tags.some((entry) => entry.tag === value.tag);
+  return (
+    <Box sx={{ display: 'grid', gap: 1.5, p: 2, borderRadius: `${radius.md}px`, bgcolor: c.surfaceContainerLow }}>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.5 }}>
+        <TextField
+          select
+          size="small"
+          label={t('Nur mit Tag')}
+          value={value.tag}
+          onChange={(event) => onChange({ ...value, tag: event.target.value })}
+          slotProps={{
+            select: { displayEmpty: true, renderValue: (selected) => (selected ? `#${String(selected)}` : t('Egal')) },
+            inputLabel: { shrink: true },
+          }}
+        >
+          <MenuItem value="">{t('Egal')}</MenuItem>
+          {!knownTag && <MenuItem value={value.tag}>#{value.tag}</MenuItem>}
+          {tags.map((entry) => (
+            <MenuItem key={entry.tag} value={entry.tag}>
+              #{entry.tag}
+              <Box component="span" sx={{ ml: 'auto', pl: 2, color: 'text.secondary', fontSize: '0.8125rem' }}>
+                {entry.files}
+              </Box>
+            </MenuItem>
+          ))}
+        </TextField>
+        <TextField
+          select
+          size="small"
+          label={t('Dateityp')}
+          value={value.type}
+          onChange={(event) => onChange({ ...value, type: event.target.value as FileType | '' })}
+          slotProps={{ select: { displayEmpty: true }, inputLabel: { shrink: true } }}
+        >
+          <MenuItem value="">{t('Alle Dateitypen')}</MenuItem>
+          {RULE_TYPES.map((entry) => (
+            <MenuItem key={entry.key} value={entry.key}>
+              {entry.label()}
+            </MenuItem>
+          ))}
+        </TextField>
+        <TextField
+          select
+          size="small"
+          label={t('Zeitraum')}
+          value={value.days}
+          onChange={(event) => onChange({ ...value, days: event.target.value === '' ? '' : Number(event.target.value) })}
+          slotProps={{ select: { displayEmpty: true }, inputLabel: { shrink: true } }}
+        >
+          <MenuItem value="">{t('Ohne Begrenzung')}</MenuItem>
+          {RULE_DAYS.map((days) => (
+            <MenuItem key={days} value={days}>
+              {days === 365 ? t('Letztes Jahr') : t('Letzte {count} Tage', { count: days })}
+            </MenuItem>
+          ))}
+        </TextField>
+        <FormControlLabel
+          control={<Switch checked={value.starred} onChange={(event) => onChange({ ...value, starred: event.target.checked })} />}
+          label={t('Nur Favoriten')}
+        />
+      </Box>
+      <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+        {t(
+          'Zeigt {rule}. Neue passende Uploads kommen von selbst dazu. Dateien mit Passwort, Aufruflimit oder Verschlüsselung bleiben draußen, höchstens 500, die neuesten zuerst.',
+          { rule: ruleSummary(ruleOfDraft(value)) }
+        )}
+      </Typography>
+    </Box>
+  );
+}
 
 export function AlbumEditorDialog({
   open,
@@ -100,9 +225,22 @@ export function AlbumEditorDialog({
   const [codeError, setCodeError] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [mode, setMode] = useState<'manual' | 'smart'>('manual');
+  const [rule, setRule] = useState<RuleDraft>(ruleDraftOf(null));
+  const [tags, setTags] = useState<TagCount[]>([]);
+  const canChooseMode = !fileIds.length && (!album || (album.role !== 'member' && !(album.members ?? 0)));
+
+  useEffect(() => {
+    if (!open || mode !== 'smart') return;
+    fetchTags()
+      .then((result) => setTags(result.tags))
+      .catch(() => {});
+  }, [open, mode]);
 
   useEffect(() => {
     if (!open) return;
+    setMode(album?.rule ? 'smart' : 'manual');
+    setRule(ruleDraftOf(album?.rule));
     setCode(album?.code || '');
     setCodeError('');
     setTitle(album?.title || '');
@@ -128,6 +266,7 @@ export function AlbumEditorDialog({
         visibility,
         ...(passwordEnabled ? (password ? { password } : {}) : album?.password ? { password: null } : {}),
         ...(customAddresses && wanted && wanted !== album?.code ? { code: wanted } : {}),
+        ...(mode === 'smart' ? { rule: ruleOfDraft(rule) } : album?.rule ? { rule: null } : {}),
       };
       const result = album
         ? await updateAlbum(album.id, data)
@@ -175,6 +314,40 @@ export function AlbumEditorDialog({
             minRows={2}
             maxRows={6}
           />
+          {canChooseMode && (
+            <Box sx={{ display: 'grid', gap: 1.5 }}>
+              <ToggleButtonGroup
+                exclusive
+                fullWidth
+                size="small"
+                value={mode}
+                onChange={(_event, next: 'manual' | 'smart' | null) => next && setMode(next)}
+                aria-label={t('Wie sich das Album füllt')}
+              >
+                <ToggleButton value="manual" sx={{ gap: 1 }}>
+                  <PanToolAltOutlined fontSize="small" />
+                  {t('Von Hand')}
+                </ToggleButton>
+                <ToggleButton value="smart" sx={{ gap: 1 }}>
+                  <AutoAwesomeRounded fontSize="small" />
+                  {t('Füllt sich selbst')}
+                </ToggleButton>
+              </ToggleButtonGroup>
+              {mode === 'smart' && <RuleFields value={rule} onChange={setRule} tags={tags} />}
+              {album && mode === 'smart' && !album.rule && album.files > 0 && (
+                <Alert severity="warning">
+                  {tn(
+                    album.files,
+                    'Die von Hand hinzugefügte Datei wird aus dem Album genommen. In deinem Konto bleibt sie.',
+                    'Die {count} von Hand hinzugefügten Dateien werden aus dem Album genommen. In deinem Konto bleiben sie.'
+                  )}
+                </Alert>
+              )}
+              {album?.rule && mode === 'manual' && (
+                <Alert severity="info">{t('Das Album ist danach leer. Lege Dateien von Hand hinein.')}</Alert>
+              )}
+            </Box>
+          )}
           {customAddresses && (
             <AddressField
               label={album ? t('Adresse') : t('Eigene Adresse (optional)')}
@@ -294,7 +467,7 @@ export function AlbumPickerDialog({
     if (!open) return;
     setAlbums(null);
     listAlbums()
-      .then((res) => setAlbums(res.albums))
+      .then((res) => setAlbums(res.albums.filter((album) => !album.rule)))
       .catch(() => setAlbums([]));
   }, [open]);
 
@@ -734,6 +907,8 @@ function AlbumDetail({
   const [statsTarget, setStatsTarget] = useState<StatsTarget | null>(null);
   const [editing, setEditing] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
+  const [codes, setCodes] = useState<ShareTarget | null>(null);
+  const [emailTarget, setEmailTarget] = useState<EmailTarget | null>(null);
   const [dragging, setDragging] = useState<number | null>(null);
   const picker = useRef<HTMLInputElement>(null);
 
@@ -763,6 +938,7 @@ function AlbumDetail({
 
   const items = album.items || [];
   const owner = album.role !== 'member';
+  const smart = Boolean(album.rule);
   const shared = (album.members ?? album.memberList?.length ?? 0) > 0 || !owner;
 
   const remove = async (file: FileItem) => {
@@ -864,6 +1040,15 @@ function AlbumDetail({
               .filter(Boolean)
               .join(' · ')}
           </Typography>
+          {album.rule && (
+            <Typography
+              variant="body2"
+              sx={{ mt: 0.75, display: 'flex', alignItems: 'center', gap: 0.75, color: c.secondary, fontWeight: 600 }}
+            >
+              <AutoAwesomeRounded sx={{ fontSize: 18 }} />
+              {t('Füllt sich selbst: {rule}', { rule: ruleSummary(album.rule) })}
+            </Typography>
+          )}
           {album.description && (
             <Typography variant="body1" sx={{ mt: 1, maxWidth: 720, whiteSpace: 'pre-line' }}>
               {album.description}
@@ -883,11 +1068,43 @@ function AlbumDetail({
                 {t('QR-Code')}
               </Button>
               <QrDialog url={qrOpen ? album.url : null} title={album.title} onClose={() => setQrOpen(false)} />
+              {readBoot().site.frames && !album.password && (
+                <>
+                  <Button
+                    startIcon={<CodeRounded />}
+                    aria-haspopup="dialog"
+                    onClick={() =>
+                      setCodes({
+                        kind: 'album',
+                        name: album.title,
+                        view: album.url,
+                        frame: `${new URL(album.url, readBoot().site.baseUrl).origin}/frame/a/${encodeURIComponent(album.code)}`,
+                      })
+                    }
+                  >
+                    {t('Einbetten')}
+                  </Button>
+                  <ShareCodesDialog target={codes} onClose={() => setCodes(null)} />
+                </>
+              )}
             </>
           )}
-          <Button startIcon={<CloudUploadRounded />} onClick={() => picker.current?.click()}>
-            {t('Hochladen')}
-          </Button>
+          {readBoot().site.mailShare && album.visibility !== 'private' && owner && (
+            <>
+              <Button
+                startIcon={<ForwardToInboxRounded />}
+                onClick={() => setEmailTarget({ kind: 'album', id: album.id, name: album.title })}
+              >
+                {t('Per E-Mail')}
+              </Button>
+              <EmailShareDialog target={emailTarget} onClose={() => setEmailTarget(null)} />
+            </>
+          )}
+          {!smart && (
+            <Button startIcon={<CloudUploadRounded />} onClick={() => picker.current?.click()}>
+              {t('Hochladen')}
+            </Button>
+          )}
           {owner && (
             <Button startIcon={<EditOutlined />} onClick={() => setEditing(true)}>
               {t('Bearbeiten')}
@@ -926,7 +1143,7 @@ function AlbumDetail({
         />
       </Box>
 
-      <MembersPanel album={album} onChange={(updated) => setAlbum(updated)} />
+      {!smart && <MembersPanel album={album} onChange={(updated) => setAlbum(updated)} />}
 
       {album.blocked && (
         <Alert severity="error" sx={{ mb: 2 }}>
@@ -939,7 +1156,9 @@ function AlbumDetail({
         <Box sx={{ textAlign: 'center', py: 8, color: 'text.secondary' }}>
           <CollectionsOutlined sx={{ fontSize: 48, opacity: 0.6 }} />
           <Typography variant="body1" sx={{ mt: 1.5 }}>
-            {t('Noch leer. Lade Dateien direkt hier hoch oder wähle im Bereich „Dateien“ welche aus und lege sie in dieses Album.')}
+            {smart
+              ? t('Gerade passt keine Datei zur Regel. Neue passende Uploads erscheinen hier von selbst.')
+              : t('Noch leer. Lade Dateien direkt hier hoch oder wähle im Bereich „Dateien“ welche aus und lege sie in dieses Album.')}
           </Typography>
         </Box>
       ) : (
@@ -955,12 +1174,12 @@ function AlbumDetail({
               key={file.id}
               file={file}
               isCover={album.coverFileId === file.id}
-              onRemove={owner || file.mine ? () => remove(file) : undefined}
-              onCover={owner ? () => setCover(file) : undefined}
+              onRemove={!smart && (owner || file.mine) ? () => remove(file) : undefined}
+              onCover={owner && !smart ? () => setCover(file) : undefined}
               contributor={shared && file.username !== album.owner ? file.username : undefined}
               contributorAvatar={album.avatars?.[file.username]}
               dragProps={
-                owner
+                owner && !smart
                   ? {
                       draggable: true,
                       onDragStart: () => setDragging(index),
@@ -1091,7 +1310,12 @@ export function AlbumsView({
                   <Box component="span" sx={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {album.title}
                   </Box>
-                  <Box component="span" sx={{ color: 'text.secondary', display: 'inline-flex', flexShrink: 0 }}>
+                  <Box component="span" sx={{ color: 'text.secondary', display: 'inline-flex', flexShrink: 0, gap: 0.5 }}>
+                    {album.rule && (
+                      <Tooltip title={t('Füllt sich selbst: {rule}', { rule: ruleSummary(album.rule) })}>
+                        <AutoAwesomeRounded fontSize="small" sx={{ color: c.secondary }} />
+                      </Tooltip>
+                    )}
                     <VisibilityIcon album={album} />
                   </Box>
                 </Typography>

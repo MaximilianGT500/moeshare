@@ -15,6 +15,9 @@ const embeds = require('./embedService');
 const storage = require('./storageService');
 const designs = require('./designService');
 const avatars = require('./avatarService');
+const reactions = require('./reactionService');
+const protection = require('./protectionService');
+const frames = require('./frameService');
 const profiles = require('./profileService');
 const subtitles = require('./subtitleService');
 
@@ -91,6 +94,8 @@ async function fileView(record, { access = { state: 'open' }, domain = null } = 
       slug,
       filename,
       title: record.title || null,
+      description: record.description || null,
+      alt: record.alt_text || null,
       originalName: record.original_name || null,
       type,
       isGif,
@@ -132,6 +137,11 @@ async function fileView(record, { access = { state: 'open' }, domain = null } = 
     css: style.css,
     profile,
     report: settings.get('reports.enabled') ? { kind: 'file', target: slug } : null,
+    reactions: reactions.enabled() && !record.max_views && !isSealedName(filename) ? await reactions.counts('f', record.id) : null,
+    frame:
+      frames.enabled() && !record.password_hash && !record.max_views && !isSealedName(filename)
+        ? `${domain || settings.get('site.baseUrl')}/frame/${encodeURIComponent(slug)}`
+        : null,
   };
 }
 

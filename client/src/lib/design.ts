@@ -7,6 +7,7 @@ import { t } from './i18n';
 export const DESIGN_ELEMENTS: DesignElement[] = [
   'header',
   'title',
+  'description',
   'owner',
   'date',
   'size',
@@ -15,7 +16,9 @@ export const DESIGN_ELEMENTS: DesignElement[] = [
   'download',
   'copy',
   'share',
+  'frame',
   'original',
+  'reactions',
   'footer',
 ];
 
@@ -117,6 +120,7 @@ export const LAYOUT_HINTS = {
 export const ELEMENT_LABELS: Record<DesignElement, () => string> = {
   header: () => t('Kopfzeile mit Seitenname'),
   title: () => t('Titel'),
+  description: () => t('Beschreibung'),
   owner: () => t('Hochgeladen von'),
   date: () => t('Datum'),
   size: () => t('Dateigröße'),
@@ -125,7 +129,9 @@ export const ELEMENT_LABELS: Record<DesignElement, () => string> = {
   download: () => t('Herunterladen'),
   copy: () => t('Link kopieren'),
   share: () => t('Teilen'),
+  frame: () => t('Einbetten'),
   original: () => t('Original öffnen'),
+  reactions: () => t('Reaktionen'),
   footer: () => t('Fußzeile mit Links'),
 };
 

@@ -7,7 +7,23 @@ const SCHEMES = ['visitor', 'dark', 'light'];
 const BACKGROUNDS = ['ambient', 'gradient', 'plain', 'dots'];
 const FONTS = ['rounded', 'system', 'serif', 'mono'];
 const CORNERS = ['round', 'soft', 'sharp'];
-const ELEMENTS = ['header', 'title', 'owner', 'date', 'size', 'resolution', 'views', 'download', 'copy', 'share', 'original', 'footer'];
+const ELEMENTS = [
+  'header',
+  'title',
+  'description',
+  'owner',
+  'date',
+  'size',
+  'resolution',
+  'views',
+  'download',
+  'copy',
+  'share',
+  'frame',
+  'original',
+  'reactions',
+  'footer',
+];
 
 const MAX_NOTE = 280;
 const MAX_LABEL = 40;

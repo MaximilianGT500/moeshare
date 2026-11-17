@@ -414,9 +414,74 @@ const MIGRATIONS = [
       await createTable(db, 'push_subscriptions');
     },
   },
+  {
+    version: 13,
+    name: 'Symbole für Profil-Links',
+    async up(db) {
+      await createTable(db, 'profile_icons');
+    },
+  },
+  {
+    version: 14,
+    name: 'Favoriten, Beschreibungen, Reaktionen, geplante Veröffentlichung, smarte Alben und automatisches Teilen',
+    async up(db) {
+      await addColumns(db, 'file_data', ['description', 'alt_text', 'starred_at', 'publish_at']);
+      await addColumns(db, 'albums', ['rule']);
+      for (const table of ['reactions', 'reaction_notices', 'auto_shares']) await createTable(db, table);
+      await createIndexes(db, 'file_data');
+    },
+  },
 ];
 
 const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
+
+async function previewState(db) {
+  const look = introspect(db);
+  const shares = (await look.hasTable('auto_shares')) ? await look.columns('auto_shares') : null;
+  const state = {
+    oldReactions: await look.hasTable('file_reactions'),
+    oldShares: Boolean(shares && !shares.has('name')),
+    missing:
+      !shares ||
+      !(await look.hasTable('reactions')) ||
+      !(await look.hasTable('reaction_notices')) ||
+      !(await look.columns('file_data')).has('publish_at') ||
+      !(await look.columns('albums')).has('rule'),
+  };
+  return state.oldReactions || state.oldShares || state.missing ? state : null;
+}
+
+async function replaceIndex(db, table, name) {
+  if (db.client !== 'mysql') {
+    await db.run(`DROP INDEX IF EXISTS ${name}`);
+    return;
+  }
+  const look = introspect(db);
+  if (!(await look.hasIndex(table, name))) return;
+  const spare = `${name}_tmp`;
+  if (!(await look.hasIndex(table, spare))) await db.run(`CREATE INDEX ${spare} ON ${table} (user_id, id)`);
+  await db.run(`DROP INDEX ${name} ON ${table}`);
+  await createIndexes(db, table);
+  await db.run(`DROP INDEX ${spare} ON ${table}`);
+}
+
+async function alignPreview(db, state) {
+  await addColumns(db, 'file_data', ['description', 'alt_text', 'starred_at', 'publish_at']);
+  await addColumns(db, 'albums', ['rule']);
+  for (const table of ['reactions', 'reaction_notices', 'auto_shares']) await createTable(db, table);
+  if (state.oldReactions) {
+    await db.run(
+      "INSERT INTO reactions (kind, ref_id, reaction, count) SELECT 'f', r.file_id, r.reaction, r.count FROM file_reactions r JOIN file_data d ON d.id = r.file_id WHERE NOT EXISTS (SELECT 1 FROM reactions x WHERE x.kind = 'f' AND x.ref_id = r.file_id AND x.reaction = r.reaction)"
+    );
+    await db.run('DROP TABLE file_reactions');
+  }
+  if (state.oldShares) {
+    await replaceIndex(db, 'auto_shares', 'idx_auto_shares_user');
+    await addColumns(db, 'auto_shares', ['name', 'types', 'template']);
+  }
+  await createIndexes(db, 'auto_shares');
+  await createIndexes(db, 'file_data');
+}
 
 const timestamp = () => new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15);
 
@@ -480,6 +545,11 @@ async function migrate(adapter, { file, logger }) {
   return adapter.withLock(async (exec) => {
     const db = build(exec, adapter.client);
     const current = await readVersion(db);
+    const preview = current >= 14 ? await previewState(db) : null;
+    if (preview) {
+      await atomically(exec, adapter.client, () => alignPreview(db, preview));
+      logger.info('Vorabversion von 3.8 angeglichen', { version: current });
+    }
     if (current >= LATEST_VERSION) return { from: current, to: current, backup: null };
 
     if (current === 0 && !(await hasUsers(db))) {

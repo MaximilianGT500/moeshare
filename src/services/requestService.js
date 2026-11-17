@@ -97,8 +97,9 @@ const positive = (value, field, max) => {
 async function ownedAlbum(user, value) {
   if (value === undefined || value === null || value === '') return null;
   const id = Number(value);
-  const row = Number.isSafeInteger(id) ? await db.get('SELECT id FROM albums WHERE id = ? AND user_id = ?', [id, user.id]) : null;
+  const row = Number.isSafeInteger(id) ? await db.get('SELECT id, rule FROM albums WHERE id = ? AND user_id = ?', [id, user.id]) : null;
   if (!row) throw badRequest('Dieses Album gibt es nicht.', { field: 'albumId' });
+  if (row.rule) throw badRequest('Smarte Alben füllen sich selbst und nehmen keine Uploads an.', { field: 'albumId' });
   return Number(row.id);
 }
 

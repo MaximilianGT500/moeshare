@@ -80,7 +80,14 @@ function guard() {
     login_links: [['user_id', 'users']],
     upload_requests: [['user_id', 'users']],
     file_subtitles: [['file_id', 'file_data']],
+    user_devices: [['user_id', 'users']],
+    push_subscriptions: [['user_id', 'users']],
+    profile_icons: [['user_id', 'users']],
+    reaction_notices: [['user_id', 'users']],
+    auto_shares: [['user_id', 'users']],
   };
+  const kinds = { f: 'file_data', a: 'albums' };
+  const polymorphic = { reactions: 'ref_id', reaction_notices: 'ref_id' };
   const optional = {
     invites: [['created_by', 'users']],
     albums: [['cover_file_id', 'file_data']],
@@ -97,6 +104,10 @@ function guard() {
     accept(tableName, row) {
       for (const [column, target] of references[tableName] || []) {
         if (!known[target].has(Number(row[column]))) return false;
+      }
+      if (polymorphic[tableName]) {
+        const target = kinds[row.kind];
+        if (!target || !known[target].has(Number(row[polymorphic[tableName]]))) return false;
       }
       for (const [column, target] of optional[tableName] || []) {
         if (row[column] !== null && row[column] !== undefined && !known[target].has(Number(row[column]))) row[column] = null;

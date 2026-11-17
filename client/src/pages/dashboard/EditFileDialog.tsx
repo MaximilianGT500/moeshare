@@ -17,7 +17,17 @@ import type { ExpiryChoice, FileItem, TagCount, UploadOptionsInfo } from '../../
 import { formatDateTime } from '../../lib/format';
 import { t } from '../../lib/i18n';
 import { GrowTransition } from '../../components/transitions';
-import { AddressField, ExpirySelect, ProtectionFields, TagInput, WarningFields, prefixOf } from '../../components/ShareOptions';
+import {
+  AddressField,
+  ExpirySelect,
+  ProtectionFields,
+  PublishAtFields,
+  TagInput,
+  WarningFields,
+  prefixOf,
+  scheduleError,
+} from '../../components/ShareOptions';
+import Alert from '@mui/material/Alert';
 import { SYNTAXES } from './TextDialog';
 import { c } from '../../theme/tokens';
 
@@ -35,12 +45,16 @@ export function EditFileDialog({
   onSaved: (file: FileItem) => void;
 }) {
   const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [alt, setAlt] = useState('');
   const [fileTags, setFileTags] = useState<string[]>([]);
   const [expires, setExpires] = useState<ExpiryChoice | ''>('');
   const [protection, setProtection] = useState({ passwordEnabled: false, password: '', once: false });
   const [syntax, setSyntax] = useState('auto');
   const [listed, setListed] = useState(false);
   const [warning, setWarning] = useState<string | null>(null);
+  const [publishAt, setPublishAt] = useState<number | null>(null);
+  const [publishError, setPublishError] = useState('');
   const [address, setAddress] = useState('');
   const [addressError, setAddressError] = useState('');
   const [error, setError] = useState('');
@@ -49,12 +63,16 @@ export function EditFileDialog({
   useEffect(() => {
     if (!file) return;
     setTitle(file.title || '');
+    setDescription(file.description || '');
+    setAlt(file.alt || '');
     setFileTags(file.tags || []);
     setExpires('');
     setProtection({ passwordEnabled: file.password, password: '', once: Boolean(file.maxViews) });
     setSyntax(file.syntax || 'auto');
     setListed(Boolean(file.listed));
     setWarning(typeof file.warning === 'string' ? file.warning : null);
+    setPublishAt(file.publishAt ?? null);
+    setPublishError('');
     setAddress(file.slug);
     setAddressError('');
     setError('');
@@ -64,6 +82,8 @@ export function EditFileDialog({
 
   const save = async () => {
     const patch: FilePatch = { title: title.trim() || null, tags: fileTags };
+    if (description.trim() !== (file.description || '')) patch.description = description.trim() || null;
+    if (alt.trim() !== (file.alt || '')) patch.alt = alt.trim() || null;
     if (expires) patch.expires = expires;
     if (!protection.passwordEnabled && file.password) patch.password = null;
     if (protection.passwordEnabled && protection.password) patch.password = protection.password;
@@ -73,6 +93,15 @@ export function EditFileDialog({
     const nextWarning = warning === null ? null : warning.trim();
     if (nextWarning !== (typeof file.warning === 'string' ? file.warning : null)) patch.warning = nextWarning;
     if (info.customAddresses && address.trim() && address.trim() !== file.slug) patch.slug = address.trim();
+    if (publishAt === null && file.publishAt) patch.publishAt = null;
+    if (publishAt !== null && publishAt !== (file.publishAt ?? null)) {
+      const problem = scheduleError(publishAt);
+      if (problem) {
+        setPublishError(problem);
+        return;
+      }
+      patch.publishAt = publishAt;
+    }
     setBusy(true);
     setError('');
     setAddressError('');
@@ -82,6 +111,7 @@ export function EditFileDialog({
       onClose();
     } catch (err) {
       if (err instanceof ApiError && err.field === 'slug') setAddressError(err.message);
+      else if (err instanceof ApiError && err.field === 'publishAt') setPublishError(err.message);
       else setError(err instanceof ApiError ? err.message : t('Die Änderungen konnten nicht gespeichert werden.'));
     } finally {
       setBusy(false);
@@ -117,6 +147,31 @@ export function EditFileDialog({
             size="small"
             slotProps={{ htmlInput: { maxLength: 200 } }}
           />
+          <TextField
+            label={t('Beschreibung')}
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
+            size="small"
+            multiline
+            minRows={2}
+            maxRows={8}
+            helperText={t('Steht auf der Ansichtsseite unter dem Titel und in Link-Vorschauen. {count} von 2000 Zeichen.', {
+              count: description.length,
+            })}
+            slotProps={{ htmlInput: { maxLength: 2000 } }}
+          />
+          {(file.type === 'image' || file.type === 'video') && (
+            <TextField
+              label={t('Alternativtext')}
+              value={alt}
+              onChange={(event) => setAlt(event.target.value)}
+              size="small"
+              multiline
+              maxRows={4}
+              helperText={t('Beschreibt, was zu sehen ist, für Menschen, die das Bild nicht sehen können.')}
+              slotProps={{ htmlInput: { maxLength: 500 } }}
+            />
+          )}
           {info.customAddresses && (
             <AddressField
               value={address}
@@ -159,6 +214,19 @@ export function EditFileDialog({
           </Box>
           <ProtectionFields value={protection} onChange={setProtection} hasPassword={file.password} />
           <WarningFields value={warning} onChange={setWarning} />
+          <PublishAtFields
+            value={publishAt}
+            onChange={(next) => {
+              setPublishAt(next);
+              setPublishError('');
+            }}
+            error={publishError}
+          />
+          {file.publishAt && publishAt === null && (
+            <Alert severity="info" sx={{ mt: -1 }}>
+              {t('Beim Speichern wird die Datei sofort veröffentlicht.')}
+            </Alert>
+          )}
           {info.profiles && (
             <Box>
               <FormControlLabel

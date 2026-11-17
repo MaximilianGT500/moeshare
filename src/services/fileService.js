@@ -3,7 +3,8 @@
 const db = require('../lib/db');
 const cache = require('../lib/cache');
 const logger = require('../lib/logger');
-const { notFound } = require('../lib/errors');
+const { badRequest, notFound } = require('../lib/errors');
+const { durationOf } = require('../lib/expiry');
 const { berlinDate, berlinDay } = require('../lib/format');
 const { displayPath } = require('../lib/slugs');
 const { extensionOf, baseNameOf, userDirs, isSafeFilename } = require('../lib/storage');
@@ -75,6 +76,7 @@ const SORTS = {
   name: 'lower(filename) ASC, id ASC',
   size: 'size_bytes DESC, id DESC',
   views: 'views DESC, id DESC',
+  reactions: "COALESCE((SELECT SUM(r.count) FROM reactions r WHERE r.kind = 'f' AND r.ref_id = file_data.id), 0) DESC, id DESC",
   expiring: 'CASE WHEN expires_at IS NULL THEN 1 ELSE 0 END, expires_at ASC, id DESC',
 };
 
@@ -197,6 +199,10 @@ const toFile = (row, tags = [], domain = null) => ({
   filename: row.filename,
   username: row.username,
   title: row.title || null,
+  description: row.description || null,
+  alt: row.alt_text || null,
+  starred: Boolean(row.starred_at),
+  publishAt: row.publish_at && Number(row.publish_at) > Date.now() ? Number(row.publish_at) : null,
   originalName: row.original_name || null,
   sizeBytes: Number(row.size_bytes) || 0,
   date: row.creation_date,
@@ -253,12 +259,23 @@ async function twinCounts(rows) {
   return result;
 }
 
+async function reactionCounts(ids) {
+  const wanted = [...new Set(ids.map(Number).filter((id) => Number.isSafeInteger(id) && id > 0))];
+  if (!wanted.length) return new Map();
+  const rows = await db.all(
+    `SELECT ref_id, SUM(count) AS total FROM reactions WHERE kind = 'f' AND ref_id IN (${wanted.map(() => '?').join(', ')}) GROUP BY ref_id`,
+    wanted
+  );
+  return new Map(rows.map((row) => [Number(row.ref_id), Number(row.total) || 0]));
+}
+
 async function withTags(rows, { domain = null, matches = null } = {}) {
   const ids = rows.map((row) => row.id);
-  const [tags, versions, twins] = await Promise.all([tagsByFile(ids), versionCounts(ids), twinCounts(rows)]);
+  const [tags, versions, twins, reacted] = await Promise.all([tagsByFile(ids), versionCounts(ids), twinCounts(rows), reactionCounts(ids)]);
   return rows.map((row) => {
     const file = toFile(row, tags.get(Number(row.id)) || [], domain);
     file.versions = versions.get(Number(row.id)) || 0;
+    file.reactions = reacted.get(Number(row.id)) || 0;
     file.twins = row.sha256 ? Math.max(0, (twins.get(`${row.username}/${row.sha256}`) || 1) - 1) : 0;
     if (matches && matches.has(Number(row.id))) file.match = matches.get(Number(row.id));
     return file;
@@ -282,12 +299,19 @@ async function paginate({ conditions, params, order, page, limit, maxLimit, from
 
 function searchCondition(search, { content = false } = {}) {
   const term = `%${db.escapeLike(String(search).toLowerCase())}%`;
-  const names =
-    "lower(filename) LIKE ? ESCAPE '!' OR lower(slug) LIKE ? ESCAPE '!' OR lower(title) LIKE ? ESCAPE '!' OR lower(original_name) LIKE ? ESCAPE '!'";
-  if (!content) return { sql: `(${names})`, params: [term, term, term, term] };
+  const names = [
+    "lower(filename) LIKE ? ESCAPE '!'",
+    "lower(slug) LIKE ? ESCAPE '!'",
+    "lower(title) LIKE ? ESCAPE '!'",
+    "lower(original_name) LIKE ? ESCAPE '!'",
+    "lower(description) LIKE ? ESCAPE '!'",
+    "lower(alt_text) LIKE ? ESCAPE '!'",
+  ];
+  const params = names.map(() => term);
+  if (!content) return { sql: `(${names.join(' OR ')})`, params };
   return {
-    sql: `(${names} OR EXISTS (SELECT 1 FROM file_search s WHERE s.file_id = file_data.id AND s.folded LIKE ? ESCAPE '!'))`,
-    params: [term, term, term, term, term],
+    sql: `(${names.join(' OR ')} OR EXISTS (SELECT 1 FROM file_search s WHERE s.file_id = file_data.id AND s.folded LIKE ? ESCAPE '!'))`,
+    params: [...params, term],
   };
 }
 
@@ -298,10 +322,33 @@ const useContentSearch = (provider) => {
 
 function listForUser(
   username,
-  { page = 1, limit = 24, search = '', type = '', sort = 'newest', tag = '', album = null, trash = false, domain = null } = {}
+  {
+    page = 1,
+    limit = 24,
+    search = '',
+    type = '',
+    sort = 'newest',
+    tag = '',
+    album = null,
+    trash = false,
+    starred = false,
+    scheduled = false,
+    missingAlt = false,
+    domain = null,
+  } = {}
 ) {
   const conditions = ['file_data.username = ?', trash ? 'file_data.deleted_at IS NOT NULL' : 'file_data.deleted_at IS NULL'];
   const params = [username];
+  if (starred) conditions.push('file_data.starred_at IS NOT NULL');
+  if (scheduled) {
+    conditions.push('file_data.publish_at > ?');
+    params.push(Date.now());
+  }
+  if (missingAlt) {
+    const visual = matchesAny([...formatsOf('image'), ...formatsOf('video')]);
+    conditions.push(`(file_data.alt_text IS NULL OR file_data.alt_text = '')`, visual.sql);
+    params.push(...visual.params);
+  }
   const content = Boolean(search && contentSearch && contentSearch.enabled());
   if (search) {
     const condition = searchCondition(search, { content });
@@ -339,7 +386,7 @@ const ACTIVITY =
   "SELECT 1 FROM stats_daily s WHERE s.kind = 'f' AND s.ref_id = file_data.id AND (s.views > 0 OR s.downloads > 0 OR s.direct > 0)";
 
 async function cleanupFor(username, { kind = 'large', page = 1, limit = 50, domain = null, now = Date.now() } = {}) {
-  const conditions = ['file_data.username = ?', 'file_data.deleted_at IS NULL'];
+  const conditions = ['file_data.username = ?', 'file_data.deleted_at IS NULL', 'file_data.starred_at IS NULL'];
   const params = [username];
   let order = SORTS.size;
   if (kind === 'unseen') {
@@ -354,6 +401,38 @@ async function cleanupFor(username, { kind = 'large', page = 1, limit = 50, doma
   const summary = await db.get(`SELECT COUNT(*) AS count, COALESCE(SUM(size_bytes), 0) AS bytes FROM file_data WHERE ${where}`, params);
   const list = await paginate({ conditions, params, order, page, limit, maxLimit: 100, domain });
   return { ...list, summary: { count: Number(summary.count) || 0, bytes: Number(summary.bytes) || 0 } };
+}
+
+const MEMORY_YEARS = 10;
+const DAY = 24 * 60 * 60 * 1000;
+
+async function memoriesFor(username, { now = new Date(), domain = null, limit = 12 } = {}) {
+  const [year, month, day] = berlinDay(now).split('-').map(Number);
+  const targets = new Map();
+  const ranges = [];
+  for (let back = 1; back <= MEMORY_YEARS; back += 1) {
+    const middle = Date.UTC(year - back, month - 1, day, 12);
+    const target = berlinDay(new Date(middle));
+    if (target.slice(5) !== berlinDay(now).slice(5)) continue;
+    targets.set(target, back);
+    ranges.push(middle - DAY, middle + DAY);
+  }
+  if (!ranges.length) return [];
+  const windows = [];
+  for (let index = 0; index < ranges.length; index += 2) windows.push('(created_at >= ? AND created_at < ?)');
+  const rows = await db.all(
+    `SELECT * FROM file_data WHERE username = ? AND ${LIVE} AND blocked_at IS NULL AND (${windows.join(' OR ')}) ORDER BY created_at DESC LIMIT 400`,
+    [username, ...ranges]
+  );
+  const picked = rows.filter((row) => targets.has(berlinDay(new Date(Number(row.created_at))))).slice(0, limit);
+  const decorated = await withTags(picked, { domain });
+  const groups = new Map();
+  for (const file of decorated) {
+    const years = targets.get(berlinDay(new Date(file.createdAt)));
+    if (!groups.has(years)) groups.set(years, []);
+    groups.get(years).push(file);
+  }
+  return [...groups].sort((a, b) => a[0] - b[0]).map(([years, list]) => ({ years, files: list }));
 }
 
 function listAll({ page = 1, limit = 50, search = '', trash = false } = {}) {
@@ -377,8 +456,9 @@ function listListed(username, { page = 1, limit = 30, now = Date.now(), domain =
       'password_hash IS NULL',
       'max_views IS NULL',
       '(expires_at IS NULL OR expires_at > ?)',
+      '(publish_at IS NULL OR publish_at <= ?)',
     ],
-    params: [username, now],
+    params: [username, now, now],
     order: SORTS.newest,
     page,
     limit,
@@ -421,6 +501,46 @@ async function findOwned(username, key, { deleted = false } = {}) {
   return record;
 }
 
+const MAX_DESCRIPTION = 2000;
+const MAX_ALT = 500;
+
+function cleanDescription(value) {
+  if (value === null || value === undefined) return null;
+  const text = String(value)
+    .replace(/\r\n?/g, '\n')
+    .replace(/[^\S\n]+/g, ' ')
+    .replace(/ *\n */g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+    .slice(0, MAX_DESCRIPTION);
+  return text || null;
+}
+
+function cleanAlt(value) {
+  if (value === null || value === undefined) return null;
+  const text = String(value).replace(/\s+/g, ' ').trim().slice(0, MAX_ALT);
+  return text || null;
+}
+
+const MAX_SCHEDULE_MS = 366 * 24 * 60 * 60 * 1000;
+
+function publishTime(value, now = Date.now()) {
+  if (value === undefined || value === null || value === '') return null;
+  let at = NaN;
+  if (typeof value === 'number') at = value;
+  else {
+    const raw = String(value).trim();
+    const relative = /^\+?\d{1,4}\s*(?:min|m|h|d|w)$/i.test(raw) ? durationOf(raw.replace(/^\+/, '')) : NaN;
+    if (Number.isFinite(relative)) at = now + relative;
+    else if (/^\d{12,14}$/.test(raw)) at = Number(raw);
+    else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(raw)) at = Date.parse(raw);
+  }
+  if (!Number.isFinite(at)) throw badRequest('Ungültiger Zeitpunkt für die Veröffentlichung.', { field: 'publishAt' });
+  if (at <= now) throw badRequest('Der Zeitpunkt für die Veröffentlichung liegt in der Vergangenheit.', { field: 'publishAt' });
+  if (at > now + MAX_SCHEDULE_MS) throw badRequest('Höchstens ein Jahr im Voraus.', { field: 'publishAt' });
+  return Math.round(at);
+}
+
 async function insert({
   username,
   filename,
@@ -432,6 +552,9 @@ async function insert({
   maxViews = null,
   originalName = null,
   title = null,
+  description = null,
+  altText = null,
+  publishAt = null,
   syntax = null,
   sha256 = null,
   deduped = false,
@@ -456,6 +579,9 @@ async function insert({
     max_views: maxViews,
     original_name: originalName ? String(originalName).slice(0, 255) : null,
     title: title ? String(title).slice(0, 255) : null,
+    description: cleanDescription(description),
+    alt_text: cleanAlt(altText),
+    publish_at: publishAt,
     syntax,
     sha256,
     deduped: deduped ? 1 : 0,
@@ -503,6 +629,8 @@ async function forget(record) {
   await db.transaction(async (tx) => {
     await tx.run('DELETE FROM album_files WHERE file_id = ?', [record.id]);
     await tx.run('DELETE FROM file_tags WHERE file_id = ?', [record.id]);
+    await tx.run("DELETE FROM reactions WHERE kind = 'f' AND ref_id = ?", [record.id]);
+    await tx.run("DELETE FROM reaction_notices WHERE kind = 'f' AND ref_id = ?", [record.id]);
     await tx.run('DELETE FROM file_versions WHERE file_id = ?', [record.id]);
     await tx.run('DELETE FROM file_search WHERE file_id = ?', [record.id]);
     await tx.run("DELETE FROM redirects WHERE kind = 'file' AND target_id = ?", [record.id]);
@@ -638,6 +766,7 @@ async function removeAllForUser(username) {
     const own = 'SELECT id FROM file_data WHERE username = ?';
     await tx.run(`DELETE FROM album_files WHERE file_id IN (${own})`, [username]);
     await tx.run(`DELETE FROM file_tags WHERE file_id IN (${own})`, [username]);
+    await tx.run(`DELETE FROM reactions WHERE kind = 'f' AND ref_id IN (${own})`, [username]);
     await tx.run(`DELETE FROM file_versions WHERE file_id IN (${own})`, [username]);
     await tx.run(`DELETE FROM file_search WHERE file_id IN (${own})`, [username]);
     await tx.run(`DELETE FROM redirects WHERE kind = 'file' AND target_id IN (${own})`, [username]);
@@ -730,6 +859,62 @@ async function tagsFor(username) {
     [username]
   );
   return rows.map((row) => ({ tag: row.tag, files: Number(row.files) }));
+}
+
+async function retagRules(username, from, to) {
+  const user = await db.get('SELECT id FROM users WHERE username = ?', [username]);
+  if (!user) return;
+  const albums = await db.all('SELECT id, rule FROM albums WHERE user_id = ? AND rule IS NOT NULL', [user.id]);
+  for (const album of albums) {
+    let rule;
+    try {
+      rule = JSON.parse(album.rule);
+    } catch {
+      continue;
+    }
+    if (!rule || rule.tag !== from) continue;
+    rule.tag = to;
+    await db.run('UPDATE albums SET rule = ?, updated_at = ? WHERE id = ?', [JSON.stringify(rule), Date.now(), album.id]);
+  }
+  await db.run('UPDATE auto_shares SET tag = ? WHERE user_id = ? AND tag = ?', [to, user.id, from]);
+}
+
+async function renameTag(username, from, to) {
+  const source = normalizeTag(from);
+  const target = normalizeTag(to);
+  if (!source) throw notFound('Diesen Tag gibt es nicht.');
+  if (!target) throw badRequest('Ungültiger Tag.', { field: 'name' });
+  const own = 'SELECT id FROM file_data WHERE username = ?';
+  const affected = await db.count(`SELECT COUNT(*) FROM file_tags WHERE tag = ? AND file_id IN (${own})`, [source, username]);
+  if (!affected) throw notFound('Diesen Tag gibt es nicht.');
+  if (source === target) return { tag: target, files: affected, merged: false };
+  const existing = await db.count(`SELECT COUNT(*) FROM file_tags WHERE tag = ? AND file_id IN (${own})`, [target, username]);
+  await db.transaction(async (tx) => {
+    await tx.run(
+      `DELETE FROM file_tags WHERE tag = ? AND file_id IN (${own}) AND file_id IN (SELECT file_id FROM file_tags WHERE tag = ?)`,
+      [source, username, target]
+    );
+    await tx.run(`UPDATE file_tags SET tag = ? WHERE tag = ? AND file_id IN (${own})`, [target, source, username]);
+  });
+  await retagRules(username, source, target);
+  cache.clear();
+  return {
+    tag: target,
+    files: await db.count(`SELECT COUNT(*) FROM file_tags WHERE tag = ? AND file_id IN (${own})`, [target, username]),
+    merged: existing > 0,
+  };
+}
+
+async function deleteTag(username, tag) {
+  const source = normalizeTag(tag);
+  if (!source) throw notFound('Diesen Tag gibt es nicht.');
+  const result = await db.run('DELETE FROM file_tags WHERE tag = ? AND file_id IN (SELECT id FROM file_data WHERE username = ?)', [
+    source,
+    username,
+  ]);
+  if (!result.changes) throw notFound('Diesen Tag gibt es nicht.');
+  cache.clear();
+  return result.changes;
 }
 
 const STORED = '(CASE WHEN deduped = 1 THEN 0 ELSE size_bytes END)';
@@ -826,8 +1011,19 @@ const userStats = (username) =>
       latestUpload: latest ? latest.creation_date : null,
       trash: await trashSummary(username),
       duplicates: await duplicateCount(username),
+      starred: await db.count(`SELECT COUNT(*) FROM file_data WHERE username = ? AND ${LIVE} AND starred_at IS NOT NULL`, [username]),
+      scheduled: await db.count(`SELECT COUNT(*) FROM file_data WHERE username = ? AND ${LIVE} AND publish_at > ?`, [username, Date.now()]),
+      missingAlt: await missingAltCount(username),
     };
   });
+
+function missingAltCount(username) {
+  const visual = matchesAny([...formatsOf('image'), ...formatsOf('video')]);
+  return db.count(
+    `SELECT COUNT(*) FROM file_data WHERE username = ? AND ${LIVE} AND (alt_text IS NULL OR alt_text = '') AND ${visual.sql}`,
+    [username, ...visual.params]
+  );
+}
 
 const globalStats = () =>
   cache.remember('stats:global', 30000, async () => ({
@@ -840,6 +1036,7 @@ module.exports = {
   TEXT_SYNTAX,
   LIVE,
   typeOf,
+  typeFilter,
   typeFilter,
   useContentSearch,
   versionRows,
@@ -858,6 +1055,12 @@ module.exports = {
   withTags,
   listForUser,
   cleanupFor,
+  memoriesFor,
+  cleanDescription,
+  cleanAlt,
+  publishTime,
+  MAX_DESCRIPTION,
+  MAX_ALT,
   CLEANUP_KINDS,
   listAll,
   listListed,
@@ -882,11 +1085,14 @@ module.exports = {
   removeExpired,
   incrementViews,
   consumeView,
+  normalizeTag,
   normalizeTags,
   setTags,
   addTags,
   removeTags,
   tagsFor,
+  renameTag,
+  deleteTag,
   userStats,
   globalStats,
 };

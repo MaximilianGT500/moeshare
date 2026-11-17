@@ -98,7 +98,8 @@ async function send(to, language, message) {
     subject: message.subject,
     html,
     text,
-    headers: { 'Auto-Submitted': 'auto-generated' },
+    ...(message.replyTo ? { replyTo: message.replyTo } : {}),
+    headers: { 'Auto-Submitted': message.personal ? 'no' : 'auto-generated' },
   });
   log.debug('E-Mail verschickt', { to: to.replace(/^(.).*(@.*)$/, '$1…$2'), subject: message.subject });
   return true;

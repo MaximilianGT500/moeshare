@@ -21,6 +21,7 @@ import { DomainSelect, ExpirySelect, UrlStyleSelect, expiryLabel, urlStyleExampl
 import { useToast } from '../../components/Toaster';
 import { EmailSection } from './EmailSection';
 import { PushSection } from './PushSection';
+import { AutoShareSection } from './AutoShareSection';
 import { readBoot } from '../../lib/boot';
 import { fonts } from '../../theme/tokens';
 
@@ -159,6 +160,7 @@ export function PreferencesPanel({ account, onSaved }: { account: AccountOvervie
         />
       )}
       {readBoot().site.push && <PushSection isAdmin={account.user.isAdmin} />}
+      <AutoShareSection />
       <SettingsSection id="sprache" title={t('Sprache')} description={t('Gilt für dich auf allen Geräten, auf denen du angemeldet bist.')}>
         <SettingRow icon={<TranslateRounded />} label={t('Sprache der Oberfläche')} htmlFor="pref-language">
           <Box sx={{ width: { xs: '100%', sm: 280 } }}>

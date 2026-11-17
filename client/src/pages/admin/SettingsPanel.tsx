@@ -85,7 +85,21 @@ const SECTIONS: Array<{ key: SectionKey; label: string; icon: ReactNode; prefixe
     key: 'funktionen',
     label: t('Funktionen'),
     icon: <AppsRounded />,
-    prefixes: ['links.', 'albums.', 'trash.', 'stats.', 'zip.', 'reports.', 'profiles.', 'search.', 'export.', 'requests.'],
+    prefixes: [
+      'links.',
+      'albums.',
+      'trash.',
+      'stats.',
+      'zip.',
+      'reports.',
+      'profiles.',
+      'search.',
+      'export.',
+      'requests.',
+      'reactions.',
+      'frames.',
+      'autoShare.',
+    ],
   },
   { key: 'virenscan', label: t('Virenscan'), icon: <CoronavirusOutlined />, prefixes: ['clamav.'] },
   { key: 'domains', label: t('Eigene Domains'), icon: <LanguageRounded />, prefixes: ['domains.'] },
@@ -1269,6 +1283,32 @@ export function SettingsPanel({
             unit: t('Tage'),
           })}
         </SettingsSection>
+        <SettingsSection title={t('Teilen und Reaktionen')}>
+          {toggle(
+            'reactions.enabled',
+            t('Reaktionen'),
+            t(
+              'Besucher reagieren mit Emojis auf Dateien und Alben, ohne Konto. Gezählt werden nur Summen, jede Person einmal am Tag pro Emoji.'
+            )
+          )}
+          {toggle(
+            'frames.enabled',
+            t('Einbetten auf anderen Seiten'),
+            t('Bilder, Videos, Audio und Alben lassen sich mit einem Code als kleiner Player in andere Websites einbauen.')
+          )}
+          {toggle(
+            'autoShare.enabled',
+            t('Automatisch teilen'),
+            t('Jeder kann bis zu zehn Regeln anlegen, die neue Uploads an Discord, Slack, Telegram, ntfy, Matrix oder Mastodon schicken.')
+          )}
+          {toggle(
+            'sharing.email',
+            t('Per E-Mail teilen'),
+            t(
+              'Dateien und Alben lassen sich direkt aus dem Dashboard an bis zu fünf Adressen schicken. Braucht den E-Mail-Versand weiter unten.'
+            )
+          )}
+        </SettingsSection>
         <SettingsSection title={t('Suche und Daten')}>
           {toggle(
             'search.content',
@@ -1298,6 +1338,11 @@ export function SettingsPanel({
             'profiles.animatedAvatars',
             t('Bewegte Profilbilder'),
             t('GIFs und animierte WebP-Bilder bleiben bewegt. Ausgeschaltet wird nur das erste Bild verwendet.')
+          )}
+          {toggle(
+            'profiles.customIcons',
+            t('Eigene Symbole für Links'),
+            t('Jeder kann eigene Bilder als Symbole für die Links im Profil hochladen. Vorgefertigte Symbole und Emojis gehen immer.')
           )}
           {toggle(
             'reports.enabled',

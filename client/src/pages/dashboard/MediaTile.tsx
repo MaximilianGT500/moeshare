@@ -10,6 +10,7 @@ import MoreVertRounded from '@mui/icons-material/MoreVertRounded';
 import CheckRounded from '@mui/icons-material/CheckRounded';
 import VisibilityOutlined from '@mui/icons-material/VisibilityOutlined';
 import LockRounded from '@mui/icons-material/LockRounded';
+import StarRounded from '@mui/icons-material/StarRounded';
 import TimerOutlined from '@mui/icons-material/TimerOutlined';
 import LooksOneRounded from '@mui/icons-material/LooksOneRounded';
 import CloudOutlined from '@mui/icons-material/CloudOutlined';
@@ -18,10 +19,11 @@ import AccountBoxOutlined from '@mui/icons-material/AccountBoxOutlined';
 import WarningAmberRounded from '@mui/icons-material/WarningAmberRounded';
 import HistoryRounded from '@mui/icons-material/HistoryRounded';
 import FileCopyOutlined from '@mui/icons-material/FileCopyOutlined';
+import ScheduleRounded from '@mui/icons-material/ScheduleRounded';
 import type { FileItem } from '../../lib/types';
 import { t, tn } from '../../lib/i18n';
 import { syntaxLabel } from '../../lib/syntax';
-import { extensionOf, formatBytes, formatNumber, relativeFromServer, relativeMs } from '../../lib/format';
+import { extensionOf, formatBytes, formatDateTime, formatNumber, relativeFromServer, relativeMs } from '../../lib/format';
 import { meaningfulColor, mix } from '../../lib/color';
 import { CopyIconButton } from '../../components/CopyButton';
 import { fileIcon } from '../../components/FileIcons';
@@ -269,6 +271,14 @@ function TextArt({ file, compact }: { file: FileItem; compact: boolean }) {
 function StatusBadges({ file, compact, onMedia }: { file: FileItem; compact: boolean; onMedia: boolean }) {
   const items = [
     file.blocked ? { key: 'blocked', icon: <BlockRounded />, label: t('Von der Moderation gesperrt'), alert: true } : null,
+    file.publishAt
+      ? {
+          key: 'scheduled',
+          icon: <ScheduleRounded />,
+          label: t('Geplant: erscheint am {when}', { when: formatDateTime(new Date(file.publishAt)) }),
+        }
+      : null,
+    file.starred ? { key: 'starred', icon: <StarRounded />, label: t('Favorit') } : null,
     file.listed && !compact ? { key: 'listed', icon: <AccountBoxOutlined />, label: t('Im Profil sichtbar') } : null,
     file.password ? { key: 'lock', icon: <LockRounded />, label: t('Mit Passwort geschützt') } : null,
     file.maxViews ? { key: 'once', icon: <LooksOneRounded />, label: t('Nur einmal abrufbar') } : null,
@@ -429,6 +439,18 @@ function MediaTileImpl({ file, selected, selecting, hidden, fresh, compact, onOp
         <VisibilityOutlined sx={{ fontSize: 13 }} />
         {formatNumber(file.views)}
       </Box>
+      {file.reactions ? (
+        <Box
+          component="span"
+          sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.4 }}
+          aria-label={tn(file.reactions, '1 Reaktion', '{count} Reaktionen')}
+        >
+          <Box component="span" aria-hidden sx={{ fontSize: 11, lineHeight: 1 }}>
+            ❤️
+          </Box>
+          {formatNumber(file.reactions)}
+        </Box>
+      ) : null}
     </Box>
   );
 

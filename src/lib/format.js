@@ -70,4 +70,4 @@ function greeting(date = new Date()) {
 const escapeHtml = (value) =>
   String(value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 
-module.exports = { formatBytes, berlinDate, berlinDay, parseBerlinDate, splitBerlinDate, greeting, escapeHtml };
+module.exports = { formatBytes, berlinParts, berlinOffsetMs, berlinDate, berlinDay, parseBerlinDate, splitBerlinDate, greeting, escapeHtml };

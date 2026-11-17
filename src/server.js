@@ -25,6 +25,8 @@ const loginLinks = require('./services/loginLinkService');
 const stats = require('./services/statsService');
 const resumable = require('./services/resumableService');
 const dedupe = require('./services/dedupeService');
+const notices = require('./services/noticeService');
+const publishing = require('./services/publishService');
 const search = require('./services/searchService');
 const redirects = require('./services/redirectService');
 const webhook = require('./services/webhookService');
@@ -102,7 +104,7 @@ function scheduleMaintenance() {
   setInterval(run, 60 * 60 * 1000).unref();
 
   const everyMinute = async () => {
-    const token = await ephemeral.acquire('minute', 50 * 1000).catch(() => null);
+    const token = await ephemeral.acquire('minute', Math.max(1000, Math.round((config.tickMs * 5) / 6))).catch(() => null);
     if (!token) return;
     try {
       const [expiredFiles, expiredLinks, trashed] = await Promise.all([files.removeExpired(), links.removeExpired(), files.purgeTrash()]);
@@ -113,12 +115,14 @@ function scheduleMaintenance() {
       await resumable.cleanup();
       await search.backfill();
       await dedupe.backfill();
+      await publishing.tick();
+      await notices.tick();
     } catch (error) {
       log.error('Die minütliche Wartung ist fehlgeschlagen', { error });
     }
   };
-  setTimeout(everyMinute, 5000).unref();
-  setInterval(everyMinute, 60 * 1000).unref();
+  setTimeout(everyMinute, Math.min(5000, config.tickMs)).unref();
+  setInterval(everyMinute, config.tickMs).unref();
 
   storage
     .cleanupLocalCopies()

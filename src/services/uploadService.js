@@ -22,6 +22,7 @@ const preferences = require('./preferenceService');
 const protection = require('./protectionService');
 const storage = require('./storageService');
 const webhook = require('./webhookService');
+const autoShare = require('./autoShareService');
 const scans = require('./scanService');
 const rules = require('./uploadRules');
 const dedupe = require('./dedupeService');
@@ -116,7 +117,10 @@ function rawOptions(req) {
     once: first(body.once, header('x-once')),
     urlStyle: first(body.urlStyle, body.style, header('x-url-style')),
     domain: first(body.domain, header('x-domain')),
-    title: first(body.title, header('x-title')),
+    title: first(body.title, decodedHeader(header('x-title'))),
+    description: first(body.description, decodedHeader(header('x-description'))),
+    alt: first(body.alt, body.altText, decodedHeader(header('x-alt'))),
+    publishAt: first(body.publishAt, body.publish_at, header('x-publish-at')),
     syntax: first(body.syntax, body.language, header('x-syntax')),
     tags: first(body.tags, header('x-tags')),
     album: first(body.album, header('x-album')),
@@ -127,11 +131,13 @@ function rawOptions(req) {
 }
 
 async function albumFor(user, value) {
-  return db.get(
-    `SELECT a.id FROM albums a WHERE (a.code = ? OR a.id = ?) AND (a.user_id = ? OR EXISTS (
+  const row = await db.get(
+    `SELECT a.id, a.rule FROM albums a WHERE (a.code = ? OR a.id = ?) AND (a.user_id = ? OR EXISTS (
        SELECT 1 FROM album_members m WHERE m.album_id = a.id AND m.user_id = ?))`,
     [String(value), Number(value) || 0, user.id, user.id]
   );
+  if (row && row.rule) throw badRequest('Smarte Alben füllen sich selbst und nehmen keine Uploads an.', { field: 'album' });
+  return row ? { id: row.id } : null;
 }
 
 async function resolveOptions(user, raw = {}, { kind = 'file' } = {}) {
@@ -190,6 +196,9 @@ async function resolveOptions(user, raw = {}, { kind = 'file' } = {}) {
     maxViews,
     domain: files.pickDomain(domainChoice, user.username),
     title: raw.title ? String(raw.title).replace(/\s+/g, ' ').trim().slice(0, 255) || null : null,
+    description: files.cleanDescription(raw.description),
+    altText: files.cleanAlt(raw.alt),
+    publishAt: files.publishTime(raw.publishAt),
     syntax,
     tags: raw.tags ? files.normalizeTags(raw.tags) : [],
     albumId: album ? album.id : null,
@@ -375,6 +384,9 @@ async function accept(user, filename, { via = 'upload', originalName = null, opt
         maxViews: chosen.maxViews,
         originalName: prepared.originalName,
         title: chosen.title,
+        description: chosen.description,
+        altText: chosen.altText,
+        publishAt: chosen.publishAt,
         syntax: chosen.syntax,
         sha256,
         deduped: link.linked,
@@ -424,6 +436,7 @@ async function accept(user, filename, { via = 'upload', originalName = null, opt
     'Neue Datei hochgeladen',
     `Dateiname: **${record.filename}**\nURL: **${links.view}**\nBenutzername: **${username}**\nGröße: **${formatBytes(record.size_bytes)}**`
   );
+  if (account && account.id) autoShare.shareLater(account, record, links.view, { via, tags: chosen.tags || [] });
   return links;
 }
 

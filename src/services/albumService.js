@@ -21,7 +21,7 @@ const MISSING = 'Dieses Album gibt es nicht (mehr).';
 const cleanTitle = (value) => (typeof value === 'string' ? value.replace(/\s+/g, ' ').trim().slice(0, MAX_TITLE) : '');
 
 const LIVE_FILE = 'd.deleted_at IS NULL';
-const PUBLIC_FILE = 'd.deleted_at IS NULL AND d.blocked_at IS NULL';
+const publicFileSql = () => `d.deleted_at IS NULL AND d.blocked_at IS NULL AND (d.publish_at IS NULL OR d.publish_at <= ${Date.now()})`;
 
 function present(row, extra = {}) {
   const base = settings.get('site.baseUrl');
@@ -40,9 +40,91 @@ function present(row, extra = {}) {
     owner: row.owner_name || null,
     role: row.member_role ? 'member' : 'owner',
     members: row.member_count !== undefined ? Number(row.member_count) || 0 : undefined,
+    rule: ruleOf(row),
     ...extra,
   };
 }
+
+const RULE_TYPES = ['image', 'video', 'audio', 'text', 'file'];
+const MAX_RULE_DAYS = 3650;
+const SMART_LIMIT = 500;
+
+function ruleOf(row) {
+  if (!row || !row.rule) return null;
+  try {
+    const value = JSON.parse(row.rule);
+    return value && typeof value === 'object' ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function cleanRule(input) {
+  if (input === null) return null;
+  if (!input || typeof input !== 'object' || Array.isArray(input)) throw badRequest('Ungültige Regel.', { field: 'rule' });
+  const rule = {};
+  if (input.tag !== undefined && input.tag !== null && input.tag !== '') {
+    const tag = typeof input.tag === 'string' ? files.normalizeTag(input.tag) : null;
+    if (!tag) throw badRequest('Ungültiger Tag.', { field: 'tag' });
+    rule.tag = tag;
+  }
+  if (input.type !== undefined && input.type !== null && input.type !== '') {
+    if (!RULE_TYPES.includes(input.type)) throw badRequest('Ungültiger Dateityp.', { field: 'type' });
+    rule.type = input.type;
+  }
+  if (input.starred !== undefined && input.starred !== null) {
+    if (typeof input.starred !== 'boolean') throw badRequest('Erwartet wird an oder aus.', { field: 'starred' });
+    if (input.starred) rule.starred = true;
+  }
+  if (input.days !== undefined && input.days !== null && input.days !== '') {
+    const days = Number(input.days);
+    if (!Number.isInteger(days) || days < 1 || days > MAX_RULE_DAYS) throw badRequest('Ungültiger Zeitraum.', { field: 'days' });
+    rule.days = days;
+  }
+  return rule;
+}
+
+async function smartWhere(row, { publicOnly = false, now = Date.now() } = {}) {
+  const rule = ruleOf(row);
+  const owner = await db.get('SELECT username FROM users WHERE id = ?', [row.user_id]);
+  if (!rule || !owner) return null;
+  const conditions = ['d.username = ?', LIVE_FILE, 'd.password_hash IS NULL', 'd.max_views IS NULL', "LOWER(d.filename) NOT LIKE '%.mse'"];
+  const params = [owner.username];
+  if (publicOnly) conditions.push(publicFileSql());
+  if (rule.tag) {
+    conditions.push('EXISTS (SELECT 1 FROM file_tags t WHERE t.file_id = d.id AND t.tag = ?)');
+    params.push(rule.tag);
+  }
+  if (rule.type) {
+    const filter = files.typeFilter(rule.type);
+    if (filter) {
+      conditions.push(filter.sql);
+      params.push(...filter.params);
+    }
+  }
+  if (rule.starred) conditions.push('d.starred_at IS NOT NULL');
+  if (rule.days) {
+    conditions.push('d.created_at >= ?');
+    params.push(now - rule.days * 24 * 60 * 60 * 1000);
+  }
+  return { sql: conditions.join(' AND '), params };
+}
+
+async function smartRows(row, options = {}) {
+  const where = await smartWhere(row, options);
+  if (!where) return [];
+  return db.all(`SELECT d.* FROM file_data d WHERE ${where.sql} ORDER BY d.created_at DESC, d.id DESC LIMIT ${SMART_LIMIT}`, where.params);
+}
+
+async function smartCount(row, options = {}) {
+  const where = await smartWhere(row, options);
+  if (!where) return 0;
+  return Math.min(SMART_LIMIT, await db.count(`SELECT COUNT(*) FROM file_data d WHERE ${where.sql}`, where.params));
+}
+
+const smartOnly = (row) => {
+  if (row.rule) throw badRequest('Smarte Alben füllen sich selbst. Ändere stattdessen die Regel.', { code: 'smart_album' });
+};
 
 const codeTaken = async (code) =>
   Boolean(
@@ -65,6 +147,7 @@ async function create(user, input = {}) {
     code = randomString(10);
     while (await codeTaken(code)) code = randomString(12);
   }
+  const rule = input.rule === undefined || input.rule === null ? null : cleanRule(input.rule);
   const now = Date.now();
   const id = await db.insertRow('albums', {
     code,
@@ -76,8 +159,9 @@ async function create(user, input = {}) {
     cover_file_id: null,
     created_at: now,
     updated_at: now,
+    rule: rule ? JSON.stringify(rule) : null,
   });
-  if (Array.isArray(input.fileIds) && input.fileIds.length) await addFiles(user, id, input.fileIds);
+  if (!rule && Array.isArray(input.fileIds) && input.fileIds.length) await addFiles(user, id, input.fileIds);
   return get(user, id);
 }
 
@@ -105,6 +189,7 @@ async function list(user) {
     [user.id, user.id]
   );
   const covers = await coverFiles(rows);
+  for (const row of rows) if (row.rule) row.file_count = await smartCount(row);
   return rows.map((row) => present(row, { files: Number(row.file_count) || 0, cover: covers.get(Number(row.id)) || null }));
 }
 
@@ -125,13 +210,23 @@ async function membersOf(albumId) {
 async function coverFiles(rows, { domain = null } = {}) {
   const map = new Map();
   for (const row of rows) {
+    if (row.rule) {
+      const first = (await smartRows(row, { publicOnly: true })).find((file) =>
+        ['image', 'video'].includes(files.typeOf(file.filename, file.syntax).type)
+      );
+      if (first) {
+        const urls = files.urlsFor(first, { domain });
+        map.set(Number(row.id), { type: files.typeOf(first.filename, first.syntax).type, url: urls.preview, color: first.dominant_color });
+      }
+      continue;
+    }
     const chosen = row.cover_file_id
-      ? await db.get(`SELECT * FROM file_data d WHERE d.id = ? AND ${PUBLIC_FILE}`, [row.cover_file_id])
+      ? await db.get(`SELECT * FROM file_data d WHERE d.id = ? AND ${publicFileSql()}`, [row.cover_file_id])
       : null;
     const file =
       chosen ||
       (await db.get(
-        `SELECT d.* FROM album_files f JOIN file_data d ON d.id = f.file_id WHERE f.album_id = ? AND ${PUBLIC_FILE} ORDER BY f.sort_order, f.added_at LIMIT 1`,
+        `SELECT d.* FROM album_files f JOIN file_data d ON d.id = f.file_id WHERE f.album_id = ? AND ${publicFileSql()} ORDER BY f.sort_order, f.added_at LIMIT 1`,
         [row.id]
       ));
     if (file && !protection.isProtected(file)) {
@@ -148,8 +243,10 @@ async function coverFiles(rows, { domain = null } = {}) {
 }
 
 async function filesOf(albumId, { publicOnly = false, domain = null } = {}) {
+  const album = await db.get('SELECT id, user_id, rule FROM albums WHERE id = ?', [albumId]);
+  if (album && album.rule) return files.withTags(await smartRows(album, { publicOnly }), { domain });
   const rows = await db.all(
-    `SELECT d.*, f.added_by AS album_added_by FROM album_files f JOIN file_data d ON d.id = f.file_id WHERE f.album_id = ? AND ${publicOnly ? PUBLIC_FILE : LIVE_FILE} ORDER BY f.sort_order, f.added_at, d.id`,
+    `SELECT d.*, f.added_by AS album_added_by FROM album_files f JOIN file_data d ON d.id = f.file_id WHERE f.album_id = ? AND ${publicOnly ? publicFileSql() : LIVE_FILE} ORDER BY f.sort_order, f.added_at, d.id`,
     [albumId]
   );
   return files.withTags(rows, { domain });
@@ -202,6 +299,15 @@ async function update(user, id, patch = {}) {
       fields.cover_file_id = inside.file_id;
     }
   }
+  if (patch.rule !== undefined) {
+    const rule = cleanRule(patch.rule);
+    if (rule && !row.rule && (await db.count('SELECT COUNT(*) FROM album_members WHERE album_id = ?', [row.id]))) {
+      throw badRequest('Ein geteiltes Album kann nicht smart werden.', { field: 'rule' });
+    }
+    fields.rule = rule ? JSON.stringify(rule) : null;
+    fields.cover_file_id = null;
+    if (rule) await db.run('DELETE FROM album_files WHERE album_id = ?', [row.id]);
+  }
   if (patch.code !== undefined && patch.code !== row.code) await addresses.rename('album', row, patch.code);
   fields.updated_at = Date.now();
   const columns = Object.keys(fields);
@@ -219,6 +325,8 @@ async function remove(user, id) {
     await tx.run('DELETE FROM album_members WHERE album_id = ?', [row.id]);
     await tx.run("DELETE FROM stats_daily WHERE kind = 'a' AND ref_id = ?", [row.id]);
     await tx.run("DELETE FROM stats_sources WHERE kind = 'a' AND ref_id = ?", [row.id]);
+    await tx.run("DELETE FROM reactions WHERE kind = 'a' AND ref_id = ?", [row.id]);
+    await tx.run("DELETE FROM reaction_notices WHERE kind = 'a' AND ref_id = ?", [row.id]);
     await tx.run('DELETE FROM albums WHERE id = ?', [row.id]);
   });
   return present(row);
@@ -236,6 +344,7 @@ async function ownFileIds(user, ids) {
 
 async function addFiles(user, id, ids) {
   const row = await accessible(user, id);
+  smartOnly(row);
   const fileIds = await ownFileIds(user, ids);
   if (!fileIds.length) throw badRequest('Wähle mindestens eine eigene Datei aus.', { field: 'fileIds' });
   const count = await db.count('SELECT COUNT(*) FROM album_files WHERE album_id = ?', [row.id]);
@@ -267,6 +376,7 @@ async function removableIds(user, row, ids) {
 
 async function removeFiles(user, id, ids) {
   const row = await accessible(user, id);
+  smartOnly(row);
   const fileIds = await removableIds(user, row, ids);
   if (fileIds.length) {
     await db.transaction(async (tx) => {
@@ -285,6 +395,7 @@ async function removeFiles(user, id, ids) {
 
 async function reorder(user, id, ids) {
   const row = await owned(user, id);
+  smartOnly(row);
   const order = (Array.isArray(ids) ? ids : []).map(Number);
   await db.transaction(async (tx) => {
     for (const [index, fileId] of order.entries()) {
@@ -297,6 +408,7 @@ async function reorder(user, id, ids) {
 
 async function addMember(user, id, username) {
   const row = await owned(user, id);
+  if (row.rule) throw badRequest('Smarte Alben lassen sich nicht mit anderen teilen.', { field: 'username', code: 'smart_album' });
   const name = typeof username === 'string' ? username.trim() : '';
   if (!name) throw badRequest('Gib einen Benutzernamen ein.', { field: 'username' });
   const member = await db.get("SELECT id, username, status FROM users WHERE lower(username) = lower(?) AND status = 'active'", [name]);
@@ -373,6 +485,7 @@ function publicFile(file) {
     id: file.id,
     slug: file.slug,
     title: guarded ? null : file.title,
+    alt: guarded ? null : file.alt || null,
     name: guarded ? null : file.title || file.originalName || file.filename,
     filename: guarded ? null : file.filename,
     type: file.type,
@@ -421,8 +534,9 @@ async function publicView(req, row, { domain = null } = {}) {
 
 async function zipRecords(row) {
   const now = Date.now();
+  if (row.rule) return (await smartRows(row, { publicOnly: true })).filter((file) => !file.expires_at || Number(file.expires_at) > now);
   const rows = await db.all(
-    `SELECT d.* FROM album_files f JOIN file_data d ON d.id = f.file_id WHERE f.album_id = ? AND ${PUBLIC_FILE} ORDER BY f.sort_order, f.added_at, d.id`,
+    `SELECT d.* FROM album_files f JOIN file_data d ON d.id = f.file_id WHERE f.album_id = ? AND ${publicFileSql()} ORDER BY f.sort_order, f.added_at, d.id`,
     [row.id]
   );
   return rows.filter((file) => !protection.isProtected(file) && (!file.expires_at || Number(file.expires_at) > now));
@@ -431,8 +545,12 @@ async function zipRecords(row) {
 async function archiveRecords(user, id) {
   const row = await accessible(user, id);
   const now = Date.now();
+  if (row.rule) {
+    const records = (await smartRows(row, { publicOnly: true })).filter((file) => !file.expires_at || Number(file.expires_at) > now);
+    return { row, records };
+  }
   const rows = await db.all(
-    `SELECT d.* FROM album_files f JOIN file_data d ON d.id = f.file_id WHERE f.album_id = ? AND ${PUBLIC_FILE} ORDER BY f.sort_order, f.added_at, d.id`,
+    `SELECT d.* FROM album_files f JOIN file_data d ON d.id = f.file_id WHERE f.album_id = ? AND ${publicFileSql()} ORDER BY f.sort_order, f.added_at, d.id`,
     [row.id]
   );
   const records = rows.filter(
@@ -443,7 +561,7 @@ async function archiveRecords(user, id) {
 
 async function publicAlbums(userId, { domain = null } = {}) {
   const rows = await db.all(
-    `SELECT a.*, (SELECT COUNT(*) FROM album_files f JOIN file_data d ON d.id = f.file_id WHERE f.album_id = a.id AND ${PUBLIC_FILE}) AS file_count
+    `SELECT a.*, (SELECT COUNT(*) FROM album_files f JOIN file_data d ON d.id = f.file_id WHERE f.album_id = a.id AND ${publicFileSql()}) AS file_count
      FROM albums a WHERE a.user_id = ? AND a.visibility = 'public' AND a.blocked_at IS NULL ORDER BY a.updated_at DESC, a.id DESC LIMIT 60`,
     [userId]
   );
@@ -451,6 +569,7 @@ async function publicAlbums(userId, { domain = null } = {}) {
     rows.filter((row) => !row.password_hash),
     { domain }
   );
+  for (const row of rows) if (row.rule) row.file_count = await smartCount(row, { publicOnly: true });
   return rows.map((row) => ({
     code: row.code,
     title: row.title,

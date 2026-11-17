@@ -26,6 +26,9 @@ const mail = require('../services/mailService');
 const watermarks = require('../services/watermarkService');
 const exporter = require('../services/exportService');
 const avatars = require('../services/avatarService');
+const profileIcons = require('../services/profileIconService');
+const autoShare = require('../services/autoShareService');
+const profiles = require('../services/profileService');
 const paths = require('../services/pathService');
 const storage = require('../services/storageService');
 const legalService = require('../services/legalService');
@@ -41,6 +44,8 @@ const router = express.Router();
 const signedIn = requireApi({ allowSetup: true });
 const sudo = [signedIn, requireRecentAuth];
 const pushTestLimiter = limiter({ windowMs: 60 * 1000, limit: 6 });
+const iconLimiter = limiter({ windowMs: 60 * 1000, limit: 30 });
+const shareTestLimiter = limiter({ windowMs: 60 * 1000, limit: 6 });
 
 const OWN_ACTIVITY = [
   'login',
@@ -492,6 +497,53 @@ router.put('/api/account/avatar', signedIn, avatarBody, async (req, res) => {
 router.delete('/api/account/avatar', signedIn, async (req, res) => {
   if (await avatars.remove(req.user.id)) audit.log('avatar_removed', { userId: req.user.id, req });
   res.json({ ok: true, avatar: null });
+});
+
+router.get('/api/account/autoshare', signedIn, async (req, res) => {
+  res.json({
+    enabled: autoShare.enabled(),
+    rules: await autoShare.list(req.user),
+    kinds: autoShare.KINDS,
+    types: autoShare.TYPES,
+    max: autoShare.MAX_RULES,
+  });
+});
+
+router.post('/api/account/autoshare', signedIn, async (req, res) => {
+  const rule = await autoShare.create(req.user, req.body || {});
+  audit.log('autoshare_updated', { userId: req.user.id, req, details: { created: rule.kind } });
+  res.json({ ok: true, rule });
+});
+
+router.patch('/api/account/autoshare/:id', signedIn, async (req, res) => {
+  const rule = await autoShare.update(req.user, req.params.id, req.body || {});
+  audit.log('autoshare_updated', { userId: req.user.id, req, details: { changed: rule.kind } });
+  res.json({ ok: true, rule });
+});
+
+router.delete('/api/account/autoshare/:id', signedIn, async (req, res) => {
+  await autoShare.remove(req.user, req.params.id);
+  audit.log('autoshare_updated', { userId: req.user.id, req, details: { removed: true } });
+  res.json({ ok: true });
+});
+
+router.post('/api/account/autoshare/:id/test', signedIn, shareTestLimiter, async (req, res) => {
+  res.json({ ok: true, rule: await autoShare.test(req.user, req.params.id) });
+});
+
+router.get('/api/profile/icons', signedIn, async (req, res) => {
+  res.json({ enabled: profileIcons.enabled(), max: profileIcons.MAX_ICONS, icons: await profileIcons.list(req.user) });
+});
+
+router.post('/api/profile/icons', signedIn, iconLimiter, avatarBody, async (req, res) => {
+  const crop = Buffer.isBuffer(req.body) ? req.query : (req.body && req.body.crop) || null;
+  const icon = await profileIcons.add(req.user, await avatarSource(req), crop);
+  res.status(201).json({ ok: true, icon });
+});
+
+router.delete('/api/profile/icons/:key', signedIn, async (req, res) => {
+  await profiles.removeIcon(req.user, req.params.key);
+  res.json({ ok: true });
 });
 
 router.put('/api/account/link-path', signedIn, async (req, res) => {

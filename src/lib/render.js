@@ -45,6 +45,10 @@ const siteInfo = (language = settings.get('site.language'), custom = false, admi
   legal: legalLinks(language, domain),
   pwa: settings.get('site.pwa') && !custom,
   push: settings.get('push.enabled') && !custom,
+  frames: Boolean(settings.get('frames.enabled')),
+  reactions: Boolean(settings.get('reactions.enabled')),
+  mailShare: Boolean(settings.get('sharing.email') && require('../services/mailService').ready()),
+  hotlink: Boolean(settings.get('hotlink.enabled')),
   language: settings.get('site.language'),
   report: settings.get('reports.enabled'),
   poweredBy: settings.get('site.poweredBy'),
@@ -165,7 +169,12 @@ function renderPage(res, { page, title, titleRaw = null, data = {}, head = '', n
   return res.status(status).type('html').send(html);
 }
 
-const renderMessage = (res, status, message, { title = 'Nicht gefunden', requestId } = {}) =>
-  renderPage(res, { page: 'notfound', title, status, data: { message: i18n.translate(languageOf(res), message), status, requestId } });
+const renderMessage = (res, status, message, { title = 'Nicht gefunden', requestId, params, data = {} } = {}) =>
+  renderPage(res, {
+    page: 'notfound',
+    title,
+    status,
+    data: { ...data, message: i18n.translate(languageOf(res), message, params), status, requestId },
+  });
 
 module.exports = { renderPage, renderMessage, LEGAL_PAGES };

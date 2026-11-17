@@ -7,6 +7,7 @@ import HideImageRounded from '@mui/icons-material/HideImageRounded';
 import ArrowBackRounded from '@mui/icons-material/ArrowBackRounded';
 import ConstructionRounded from '@mui/icons-material/ConstructionRounded';
 import RefreshRounded from '@mui/icons-material/RefreshRounded';
+import ScheduleRounded from '@mui/icons-material/ScheduleRounded';
 import { readBoot } from '../../lib/boot';
 import type { NotFoundBoot } from '../../lib/types';
 import { AmbientBackdrop } from '../../components/Ambient';
@@ -125,7 +126,7 @@ export function NotFoundPage() {
           <Maintenance message={boot.message} signedIn={Boolean(boot.signedIn)} />
         ) : (
           <Box>
-            <EmptyStack icon={<HideImageRounded />} />
+            <EmptyStack icon={boot.scheduled ? <ScheduleRounded /> : <HideImageRounded />} />
             <m.div
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
@@ -135,13 +136,15 @@ export function NotFoundPage() {
                 {boot.message || t('Diese Seite gibt es nicht.')}
               </Typography>
               <Typography variant="body1" sx={{ color: 'text.secondary', mt: 1.5, maxWidth: 460, mx: 'auto' }}>
-                {missing
-                  ? t(
-                      'Vielleicht wurde die Datei gelöscht oder der Link ist unvollständig. Prüfe die Adresse oder frag nach einem neuen Link.'
-                    )
-                  : boot.requestId
-                    ? t('Lade die Seite neu. Bleibt der Fehler, findest du die Ursache im Server-Log unter der Fehler-ID unten.')
-                    : t('Lade die Seite neu. Bleibt der Fehler, steht im Server-Log, was passiert ist.')}
+                {boot.scheduled
+                  ? t('Bis dahin gibt es hier noch nichts zu sehen. Schau dann einfach wieder vorbei.')
+                  : missing
+                    ? t(
+                        'Vielleicht wurde die Datei gelöscht oder der Link ist unvollständig. Prüfe die Adresse oder frag nach einem neuen Link.'
+                      )
+                    : boot.requestId
+                      ? t('Lade die Seite neu. Bleibt der Fehler, findest du die Ursache im Server-Log unter der Fehler-ID unten.')
+                      : t('Lade die Seite neu. Bleibt der Fehler, steht im Server-Log, was passiert ist.')}
               </Typography>
               <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center', mt: 4, flexWrap: 'wrap' }}>
                 <Button
@@ -155,7 +158,11 @@ export function NotFoundPage() {
                   {t('Zum Dashboard')}
                 </Button>
               </Box>
-              <Typography variant="caption" component="p" sx={{ color: 'text.secondary', mt: 4, opacity: 0.7 }}>
+              <Typography
+                variant="caption"
+                component="p"
+                sx={{ color: 'text.secondary', mt: 4, opacity: 0.7, display: boot.scheduled ? 'none' : undefined }}
+              >
                 {boot.requestId
                   ? rich(
                       'Fehler {status}, Fehler-ID {id}',

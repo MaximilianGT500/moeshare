@@ -1,5 +1,14 @@
 import type { PublicKeyCredentialCreationOptionsJSON, PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/browser';
 import type {
+  AlbumRule,
+  AutoShareInput,
+  AutoShareKind,
+  AutoShareRule,
+  FileType,
+  YearReview,
+  MemoryGroup,
+  ReactionKey,
+  ProfileIcon,
   AccountOverview,
   AdminUser,
   Album,
@@ -174,6 +183,7 @@ export interface UploadOptions {
   slug?: string;
   code?: string;
   encrypt?: boolean;
+  publishAt?: number | null;
 }
 
 function optionFields(options: UploadOptions): Array<[string, string]> {
@@ -192,6 +202,7 @@ function optionFields(options: UploadOptions): Array<[string, string]> {
   if (options.warning !== undefined && options.warning !== null) fields.push(['warning', options.warning.trim() || 'true']);
   if (typeof options.optimize === 'boolean') fields.push(['optimize', String(options.optimize)]);
   if (options.watermark === false) fields.push(['watermark', 'false']);
+  if (options.publishAt) fields.push(['publishAt', String(options.publishAt)]);
   return fields;
 }
 
@@ -478,7 +489,7 @@ export function uploadResumable(
   };
 }
 
-export type SortKey = 'newest' | 'oldest' | 'views' | 'size' | 'name' | 'expiring';
+export type SortKey = 'newest' | 'oldest' | 'views' | 'reactions' | 'size' | 'name' | 'expiring';
 export type TypeFilter = '' | 'image' | 'video' | 'audio' | 'text' | 'file';
 
 export function listFiles(params: {
@@ -489,6 +500,9 @@ export function listFiles(params: {
   sort: SortKey;
   tag?: string;
   album?: number | null;
+  starred?: boolean;
+  scheduled?: boolean;
+  missingAlt?: boolean;
 }) {
   const query = new URLSearchParams({
     page: String(params.page),
@@ -499,6 +513,9 @@ export function listFiles(params: {
   });
   if (params.tag) query.set('tag', params.tag);
   if (params.album) query.set('album', String(params.album));
+  if (params.starred) query.set('starred', '1');
+  if (params.scheduled) query.set('scheduled', '1');
+  if (params.missingAlt) query.set('alt', 'missing');
   return api<FileListResponse>(`/api/files?${query}`).then((res) => ({ ...res, files: res.files.map(withSavedKey) }));
 }
 
@@ -512,7 +529,41 @@ export interface FilePatch {
   syntax?: string | null;
   listed?: boolean;
   slug?: string;
+  description?: string | null;
+  alt?: string | null;
+  starred?: boolean;
+  publishAt?: number | string | null;
 }
+
+export const fetchMemories = () => api<{ memories: MemoryGroup[] }>('/api/files/memories');
+
+export const react = (slug: string, reaction: ReactionKey) =>
+  post<{ reaction: ReactionKey; counted: boolean; counts: Record<ReactionKey, number> }>(`/view/${encodeURIComponent(slug)}/react`, {
+    reaction,
+  });
+
+export const reactAlbum = (code: string, reaction: ReactionKey) =>
+  post<{ reaction: ReactionKey; counted: boolean; counts: Record<ReactionKey, number> }>(`/a/${encodeURIComponent(code)}/react`, {
+    reaction,
+  });
+
+export const fetchYearReview = (year?: number) => api<YearReview>(`/api/files/year${year ? `?year=${year}` : ''}`);
+
+export const fetchAutoShare = () =>
+  api<{ enabled: boolean; rules: AutoShareRule[]; kinds: AutoShareKind[]; types: FileType[]; max: number }>('/api/account/autoshare');
+export const createAutoShare = (data: AutoShareInput) => post<{ ok: boolean; rule: AutoShareRule }>('/api/account/autoshare', data);
+export const updateAutoShare = (id: number, data: AutoShareInput) =>
+  patch<{ ok: boolean; rule: AutoShareRule }>(`/api/account/autoshare/${id}`, data);
+export const deleteAutoShare = (id: number) => del<{ ok: boolean }>(`/api/account/autoshare/${id}`);
+export const testAutoShare = (id: number) => post<{ ok: boolean; rule: AutoShareRule }>(`/api/account/autoshare/${id}/test`, {});
+
+export interface MailShareInput {
+  to: string[];
+  message?: string;
+}
+
+export const emailFile = (id: number, data: MailShareInput) => post<{ ok: boolean; sent: number }>(`/api/files/${id}/email`, data);
+export const emailAlbum = (id: number, data: MailShareInput) => post<{ ok: boolean; sent: number }>(`/api/albums/${id}/email`, data);
 
 export const updateFile = (id: number, data: FilePatch) => patch<{ file: FileItem }>(`/api/files/${id}`, data);
 export const fetchFile = (id: number) => api<{ file: FileItem }>(`/api/files/${id}`);
@@ -539,6 +590,9 @@ export const fetchCleanup = (kind: CleanupKind, page = 1, limit = 50) =>
     files: res.files.map(withSavedKey),
   }));
 export const fetchTags = () => api<{ tags: TagCount[] }>('/api/tags');
+export const renameTag = (tag: string, name: string) =>
+  patch<{ ok: boolean; tag: string; files: number; merged: boolean; tags: TagCount[] }>(`/api/tags/${encodeURIComponent(tag)}`, { name });
+export const deleteTag = (tag: string) => del<{ ok: boolean; files: number; tags: TagCount[] }>(`/api/tags/${encodeURIComponent(tag)}`);
 
 export const listTrash = (page = 1, limit = 60) =>
   api<FileListResponse & { summary: TrashSummary }>(`/api/trash?page=${page}&limit=${limit}`);
@@ -685,10 +739,19 @@ export const createAlbum = (data: {
   password?: string;
   fileIds?: number[];
   code?: string;
+  rule?: AlbumRule | null;
 }) => post<{ album: Album }>('/api/albums', data);
 export const updateAlbum = (
   id: number,
-  data: { title?: string; description?: string; visibility?: string; password?: string | null; coverFileId?: number | null; code?: string }
+  data: {
+    title?: string;
+    description?: string;
+    visibility?: string;
+    password?: string | null;
+    coverFileId?: number | null;
+    code?: string;
+    rule?: AlbumRule | null;
+  }
 ) => patch<{ album: Album }>(`/api/albums/${id}`, data);
 export const deleteAlbum = (id: number) => del<{ ok: boolean }>(`/api/albums/${id}`);
 export const addToAlbum = (id: number, fileIds: number[]) => post<{ album: Album }>(`/api/albums/${id}/files`, { fileIds });
@@ -730,6 +793,21 @@ export async function uploadAvatar(file: Blob, crop: AvatarCrop) {
 export const avatarFromFile = (fileId: number, crop: AvatarCrop) =>
   put<{ ok: boolean; avatar: string | null; animated: boolean }>('/api/account/avatar', { fileId, crop });
 export const removeAvatar = () => del<{ ok: boolean; avatar: null }>('/api/account/avatar');
+
+export const fetchProfileIcons = () => api<{ enabled: boolean; max: number; icons: ProfileIcon[] }>('/api/profile/icons');
+
+export async function uploadProfileIcon(file: Blob, crop: AvatarCrop) {
+  const query = new URLSearchParams({ x: String(Math.round(crop.x)), y: String(Math.round(crop.y)), size: String(Math.round(crop.size)) });
+  return api<{ ok: boolean; icon: ProfileIcon }>(`/api/profile/icons?${query}`, {
+    method: 'POST',
+    headers: { 'Content-Type': file.type || 'application/octet-stream' },
+    body: file,
+  });
+}
+
+export const profileIconFromFile = (fileId: number, crop: AvatarCrop) =>
+  post<{ ok: boolean; icon: ProfileIcon }>('/api/profile/icons', { fileId, crop });
+export const deleteProfileIcon = (key: string) => del<{ ok: boolean }>(`/api/profile/icons/${encodeURIComponent(key)}`);
 export const saveLinkPath = (path: string) => put<{ ok: boolean; path: string }>('/api/account/link-path', { path });
 export const clearLinkPath = () => del<{ ok: boolean; path: null }>('/api/account/link-path');
 export const changePassword = (current: string, next: string) =>

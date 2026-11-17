@@ -19,12 +19,15 @@ import {
   DomainSelect,
   ExpirySelect,
   ProtectionFields,
+  PublishAtFields,
   TagInput,
   UrlStyleSelect,
   WarningFields,
   expiryLabel,
+  scheduleError,
   urlStyleLabel,
 } from '../../components/ShareOptions';
+import { formatDateTime } from '../../lib/format';
 import { c } from '../../theme/tokens';
 
 export interface UploadPrefs {
@@ -40,6 +43,7 @@ export interface UploadPrefs {
   optimize: boolean | null;
   watermark: boolean | null;
   encrypt: boolean;
+  publishAt: number | null;
 }
 
 export const EMPTY_PREFS: UploadPrefs = {
@@ -55,6 +59,7 @@ export const EMPTY_PREFS: UploadPrefs = {
   optimize: null,
   watermark: null,
   encrypt: false,
+  publishAt: null,
 };
 
 export const prefsActive = (prefs: UploadPrefs) =>
@@ -69,7 +74,8 @@ export const prefsActive = (prefs: UploadPrefs) =>
     prefs.warning !== null ||
     prefs.optimize !== null ||
     prefs.watermark !== null ||
-    prefs.encrypt
+    prefs.encrypt ||
+    prefs.publishAt !== null
   );
 
 export function toUploadOptions(prefs: UploadPrefs): UploadOptions {
@@ -85,6 +91,7 @@ export function toUploadOptions(prefs: UploadPrefs): UploadOptions {
     optimize: prefs.optimize ?? undefined,
     watermark: prefs.watermark ?? undefined,
     encrypt: prefs.encrypt || undefined,
+    publishAt: prefs.publishAt && prefs.publishAt > Date.now() ? prefs.publishAt : undefined,
   };
 }
 
@@ -101,6 +108,12 @@ export function describePrefs(prefs: UploadPrefs, albums: Album[] = []) {
   if (prefs.optimize !== null) parts.push(prefs.optimize ? t('Bilder optimieren') : t('Bilder nicht optimieren'));
   if (prefs.watermark === false) parts.push(t('Ohne Wasserzeichen'));
   if (prefs.encrypt) parts.push(t('Ende-zu-Ende verschlüsselt'));
+  if (prefs.publishAt)
+    parts.push(
+      prefs.publishAt > Date.now()
+        ? t('Erscheint am {when}', { when: formatDateTime(new Date(prefs.publishAt)) })
+        : t('Geplanter Zeitpunkt ist vorbei, Uploads erscheinen sofort')
+    );
   return parts.join(' · ');
 }
 
@@ -126,6 +139,7 @@ export function UploadOptionsDialog({
     if (open) setDraft(value);
   }, [open, value]);
   const passwordMissing = draft.passwordEnabled && !draft.password;
+  const scheduleProblem = draft.publishAt !== null && Boolean(scheduleError(draft.publishAt));
 
   return (
     <Dialog
@@ -167,6 +181,7 @@ export function UploadOptionsDialog({
           />
           <TagInput value={draft.tags} onChange={(next) => setDraft({ ...draft, tags: next })} suggestions={tags} />
           <WarningFields value={draft.warning} onChange={(warning) => setDraft({ ...draft, warning })} />
+          <PublishAtFields value={draft.publishAt} onChange={(publishAt) => setDraft({ ...draft, publishAt })} />
           {(info.optimize || info.watermark) && (
             <Box sx={{ display: 'grid', gap: 0.5 }}>
               {info.optimize && (
@@ -231,7 +246,7 @@ export function UploadOptionsDialog({
               sx={{ alignItems: 'flex-start', '& .MuiSwitch-root': { mt: -0.5 } }}
             />
           )}
-          {info.albums && albums.length > 0 && (
+          {info.albums && albums.some((album) => !album.rule) && (
             <TextField
               select
               fullWidth
@@ -241,11 +256,13 @@ export function UploadOptionsDialog({
               onChange={(event) => setDraft({ ...draft, album: event.target.value === '' ? null : Number(event.target.value) })}
             >
               <MenuItem value="">{t('Kein Album')}</MenuItem>
-              {albums.map((album) => (
-                <MenuItem key={album.id} value={album.id}>
-                  {album.title}
-                </MenuItem>
-              ))}
+              {albums
+                .filter((album) => !album.rule)
+                .map((album) => (
+                  <MenuItem key={album.id} value={album.id}>
+                    {album.title}
+                  </MenuItem>
+                ))}
             </TextField>
           )}
         </Box>
@@ -257,7 +274,7 @@ export function UploadOptionsDialog({
         <Button onClick={onClose}>{t('Abbrechen')}</Button>
         <Button
           variant="contained"
-          disabled={passwordMissing}
+          disabled={passwordMissing || scheduleProblem}
           onClick={() => {
             onChange(draft);
             onClose();

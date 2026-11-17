@@ -17,6 +17,11 @@ export interface FileItem {
   slug: string;
   filename: string;
   title: string | null;
+  description?: string | null;
+  alt?: string | null;
+  starred?: boolean;
+  publishAt?: number | null;
+  reactions?: number;
   originalName: string | null;
   username: string;
   createdAt: number | null;
@@ -224,6 +229,9 @@ export interface UserStats {
   texts?: number;
   savedBytes?: number;
   duplicates?: number;
+  starred?: number;
+  scheduled?: number;
+  missingAlt?: number;
   latestUpload: string | null;
   storageBreakdown: StorageBreakdown;
   quota?: QuotaInfo;
@@ -321,6 +329,10 @@ export interface SiteInfo {
   legal: SiteLink[];
   pwa?: boolean;
   push?: boolean;
+  frames?: boolean;
+  reactions?: boolean;
+  mailShare?: boolean;
+  hotlink?: boolean;
   language?: 'de' | 'en';
   report?: boolean;
   poweredBy?: boolean;
@@ -392,6 +404,13 @@ export interface LinkListResponse {
 
 export type AlbumVisibility = 'private' | 'link' | 'public';
 
+export interface AlbumRule {
+  tag?: string;
+  type?: FileType;
+  starred?: boolean;
+  days?: number;
+}
+
 export interface Album {
   id: number;
   code: string;
@@ -404,6 +423,7 @@ export interface Album {
   updatedAt: number;
   url: string;
   files: number;
+  rule?: AlbumRule | null;
   blocked?: { at: number; reason: string } | null;
   cover?: { type: FileType; url: string | null; color: string } | null;
   items?: FileItem[];
@@ -423,7 +443,7 @@ export interface AlbumMember {
   addedAt: number;
 }
 
-export type NotifyKey = 'security' | 'reports' | 'users' | 'system' | 'requests';
+export type NotifyKey = 'security' | 'reports' | 'users' | 'system' | 'requests' | 'reactions' | 'memories';
 
 export interface Preferences {
   language: 'de' | 'en' | null;
@@ -680,7 +700,21 @@ export type DesignBackground = 'ambient' | 'gradient' | 'plain' | 'dots';
 export type DesignFont = 'rounded' | 'system' | 'serif' | 'mono';
 export type DesignCorners = 'round' | 'soft' | 'sharp';
 export type DesignElement =
-  'header' | 'title' | 'owner' | 'date' | 'size' | 'resolution' | 'views' | 'download' | 'copy' | 'share' | 'original' | 'footer';
+  | 'header'
+  | 'title'
+  | 'description'
+  | 'owner'
+  | 'date'
+  | 'size'
+  | 'resolution'
+  | 'views'
+  | 'download'
+  | 'copy'
+  | 'share'
+  | 'frame'
+  | 'original'
+  | 'reactions'
+  | 'footer';
 
 export interface ViewDesign {
   layout: DesignLayout;
@@ -714,17 +748,59 @@ export interface ViewDesignData {
   maxCss: number;
 }
 
+export type LinkLayout = 'row' | 'list';
+
+export type ProfileLink =
+  | { id?: number; type: 'heading'; label: string; hidden: boolean }
+  | {
+      id?: number;
+      type: 'link';
+      label: string;
+      url: string;
+      icon: string | null;
+      style: 'button' | 'icon';
+      highlight: boolean;
+      hidden: boolean;
+      from: number | null;
+      until: number | null;
+    };
+
+export type PublicProfileLink =
+  | { id: number; type: 'heading'; label: string }
+  | {
+      id: number;
+      type: 'link';
+      label: string;
+      url: string;
+      icon: string | null;
+      iconUrl: string | null;
+      style: 'button' | 'icon';
+      highlight: boolean;
+    };
+
+export interface ProfileIcon {
+  key: string;
+  url: string;
+  sizeBytes: number;
+  createdAt: number | null;
+}
+
 export interface ProfileSettings {
   enabled: boolean;
   name: string;
   bio: string;
-  links: SiteLink[];
+  links: ProfileLink[];
+  linkLayout: LinkLayout;
   showAlbums: boolean;
   showFiles: boolean;
+  contactCard: boolean;
   blocked: { at: number; reason: string } | null;
   available: boolean;
   urls: { profile: string; domains: string[] };
   counts: { albums: number; files: number };
+  maxLinks: number;
+  icons: { enabled: boolean; max: number; items: ProfileIcon[] };
+  stats: { enabled: boolean; days: number; views: number; previews: number; clicks: Record<string, number> };
 }
 
 export interface DesignBoot extends BootBase {
@@ -763,6 +839,30 @@ export interface StatsOverview {
   days: StatsDay[];
   top: Array<StatsCounts & { id: number; total: number; file: FileItem }>;
   sources: Array<{ source: string; hits: number }>;
+  reactions?: { total: number; top: Array<{ id: number; total: number; file: FileItem }> } | null;
+}
+
+export interface YearReview {
+  year: number;
+  years: number[];
+  complete: boolean;
+  uploads: number;
+  bytes: number;
+  types: Record<FileType, number>;
+  months: number[];
+  weekdays: number[];
+  hours: number[];
+  activeDays: number;
+  busiestDay: { day: string; uploads: number } | null;
+  streak: { days: number; from: string; to: string } | null;
+  views: number;
+  reactions: number;
+  starred: number;
+  albums: number;
+  links: number;
+  first: FileItem | null;
+  topViewed: FileItem[];
+  topReacted: Array<{ file: FileItem; reactions: number }>;
 }
 
 export type ReportReason = 'illegal' | 'copyright' | 'privacy' | 'spam' | 'abuse' | 'other';
@@ -1266,6 +1366,8 @@ export interface ViewFile {
   slug: string;
   filename: string;
   title: string | null;
+  description?: string | null;
+  alt?: string | null;
   originalName: string | null;
   type: FileType;
   isGif: boolean;
@@ -1320,12 +1422,59 @@ export interface ViewBoot extends BootBase, OwnerStyle {
   preview?: boolean;
   sample?: boolean;
   sampleUser?: string;
+  reactions?: Record<ReactionKey, number> | null;
+  frame?: string | null;
+}
+
+export type ReactionKey = 'like' | 'love' | 'laugh' | 'wow' | 'fire' | 'clap';
+
+export interface MemoryGroup {
+  years: number;
+  files: FileItem[];
+}
+
+export type AutoShareKind = 'discord' | 'slack' | 'telegram' | 'ntfy' | 'matrix' | 'mastodon';
+export type MastodonVisibility = 'public' | 'unlisted' | 'private';
+
+export interface AutoShareRule {
+  id: number;
+  name: string | null;
+  kind: AutoShareKind;
+  enabled: boolean;
+  tag: string | null;
+  types: FileType[];
+  template: string | null;
+  hint: string | null;
+  visibility: MastodonVisibility | null;
+  createdAt: number;
+  lastSuccessAt: number | null;
+  lastError: string | null;
+  failures: number;
+}
+
+export interface AutoShareInput {
+  kind?: AutoShareKind;
+  name?: string | null;
+  tag?: string | null;
+  types?: FileType[] | null;
+  template?: string | null;
+  enabled?: boolean;
+  url?: string;
+  token?: string | null;
+  chatId?: string;
+  server?: string;
+  topic?: string;
+  homeserver?: string;
+  room?: string;
+  instance?: string;
+  visibility?: MastodonVisibility;
 }
 
 export interface AlbumItem {
   id: number;
   slug: string;
   title: string | null;
+  alt?: string | null;
   name: string | null;
   filename: string | null;
   type: FileType;
@@ -1364,6 +1513,7 @@ export interface AlbumBoot extends BootBase, OwnerStyle {
   items?: AlbumItem[];
   owner?: boolean;
   dashboard?: string | null;
+  reactions?: Record<ReactionKey, number> | null;
 }
 
 export interface PublicAlbum {
@@ -1392,7 +1542,9 @@ export interface ProfileBoot extends BootBase, OwnerStyle {
     username: string;
     name: string;
     bio: string;
-    links: SiteLink[];
+    links: PublicProfileLink[];
+    linkLayout: LinkLayout;
+    contactCard: string | null;
     since: number | null;
     url: string;
     avatar?: string | null;
@@ -1423,6 +1575,7 @@ export interface NotFoundBoot extends BootBase {
   requestId?: string;
   maintenance?: boolean;
   signedIn?: boolean;
+  scheduled?: boolean;
 }
 
 export type HomeStatKey = 'files' | 'storage' | 'views' | 'users' | 'images' | 'videos' | 'audio' | 'today';

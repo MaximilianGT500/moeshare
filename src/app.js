@@ -86,6 +86,8 @@ function createApp() {
   app.use(require('./routes/account'));
   app.use(require('./routes/design'));
   app.use(require('./routes/embed'));
+  app.use(require('./routes/frames'));
+  app.use(require('./routes/oembed'));
   app.use(require('./routes/admin'));
   app.use(require('./routes/access'));
   app.use(require('./routes/moderation'));

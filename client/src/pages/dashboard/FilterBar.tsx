@@ -20,6 +20,8 @@ import SellOutlined from '@mui/icons-material/SellOutlined';
 import CloseRounded from '@mui/icons-material/CloseRounded';
 import DriveFolderUploadOutlined from '@mui/icons-material/DriveFolderUploadOutlined';
 import FileCopyOutlined from '@mui/icons-material/FileCopyOutlined';
+import EditOutlined from '@mui/icons-material/EditOutlined';
+import Divider from '@mui/material/Divider';
 import Badge from '@mui/material/Badge';
 import Chip from '@mui/material/Chip';
 import type { SortKey, TypeFilter } from '../../lib/api';
@@ -33,6 +35,7 @@ const SORT_OPTIONS: { key: SortKey; label: string }[] = [
   { key: 'newest', label: t('Neueste zuerst') },
   { key: 'oldest', label: t('Älteste zuerst') },
   { key: 'views', label: t('Meiste Aufrufe') },
+  { key: 'reactions', label: t('Meiste Reaktionen') },
   { key: 'size', label: t('Größte zuerst') },
   { key: 'name', label: t('Name (A–Z)') },
   { key: 'expiring', label: t('Läuft bald ab') },
@@ -127,6 +130,16 @@ export function FilterBar({
   onTag,
   selecting,
   onSelectMode,
+  starred = false,
+  starredCount = 0,
+  onStarred,
+  scheduled = false,
+  scheduledCount = 0,
+  onScheduled,
+  missingAlt = false,
+  onMissingAlt,
+  onManageTags,
+  reactionsSort = true,
 }: {
   type: TypeFilter;
   onType: (type: TypeFilter) => void;
@@ -146,6 +159,16 @@ export function FilterBar({
   onTag?: (tag: string) => void;
   selecting: boolean;
   onSelectMode: () => void;
+  starred?: boolean;
+  starredCount?: number;
+  onStarred?: (value: boolean) => void;
+  scheduled?: boolean;
+  scheduledCount?: number;
+  onScheduled?: (value: boolean) => void;
+  missingAlt?: boolean;
+  onMissingAlt?: (value: boolean) => void;
+  onManageTags?: () => void;
+  reactionsSort?: boolean;
 }) {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const [tagAnchor, setTagAnchor] = useState<HTMLElement | null>(null);
@@ -179,6 +202,32 @@ export function FilterBar({
             onClick={() => onType(chip.key)}
           />
         ))}
+        {onStarred && (starredCount > 0 || starred) && (
+          <FilterChip
+            label={t('Favoriten')}
+            count={starredCount}
+            color={c.tertiary}
+            selected={starred}
+            onClick={() => onStarred(!starred)}
+          />
+        )}
+        {onScheduled && (scheduledCount > 0 || scheduled) && (
+          <FilterChip
+            label={t('Geplant')}
+            count={scheduledCount}
+            color={c.secondary}
+            selected={scheduled}
+            onClick={() => onScheduled(!scheduled)}
+          />
+        )}
+        {missingAlt && onMissingAlt && (
+          <Chip
+            label={t('Ohne Alternativtext')}
+            onDelete={() => onMissingAlt(false)}
+            deleteIcon={<CloseRounded />}
+            sx={{ bgcolor: c.tertiaryContainer, color: c.onTertiaryContainer, fontWeight: 600, flexShrink: 0 }}
+          />
+        )}
         {tag && onTag && (
           <Chip
             label={`#${tag}`}
@@ -232,7 +281,7 @@ export function FilterBar({
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
       >
-        {SORT_OPTIONS.map((option) => (
+        {SORT_OPTIONS.filter((option) => reactionsSort || option.key !== 'reactions').map((option) => (
           <MenuItem
             key={option.key}
             selected={option.key === sort}
@@ -280,6 +329,20 @@ export function FilterBar({
                 </Box>
               </MenuItem>
             ))}
+            {onManageTags && <Divider />}
+            {onManageTags && (
+              <MenuItem
+                onClick={() => {
+                  setTagAnchor(null);
+                  onManageTags();
+                }}
+              >
+                <ListItemIcon sx={{ width: 20 }}>
+                  <EditOutlined fontSize="small" />
+                </ListItemIcon>
+                {t('Tags verwalten')}
+              </MenuItem>
+            )}
           </Menu>
         </>
       )}

@@ -5,10 +5,10 @@ const db = require('../lib/db');
 const i18n = require('../lib/i18n');
 const tpl = require('../lib/embedTemplate');
 const { escapeHtml, formatBytes, splitBerlinDate } = require('../lib/format');
-const { displayPath } = require('../lib/slugs');
 const { extensionOf } = require('../lib/storage');
 const { isSealedName } = require('../lib/sealed');
 const { isCrawler } = require('../lib/crawlers');
+const { discoveryTag } = require('../lib/oembed');
 const settings = require('./settingsService');
 const files = require('./fileService');
 const storage = require('./storageService');
@@ -154,16 +154,19 @@ function metaTags(record, embed, { domain = null, locale = 'de_DE' } = {}) {
   const tag = (attr, key, value) => `<meta ${attr}="${key}" content="${escapeHtml(value)}" />`;
   const tags = [tag('property', 'og:url', urls.view), tag('property', 'og:locale', locale)];
 
+  const own = record.description ? String(record.description).replace(/\s+/g, ' ').trim().slice(0, 300) : '';
   if (embed.enabled) {
     if (embed.siteName) tags.push(tag('property', 'og:site_name', embed.siteName));
     if (embed.title) tags.push(tag('property', 'og:title', embed.title));
-    if (embed.description) tags.push(tag('property', 'og:description', embed.description));
+    if (embed.description && !own) tags.push(tag('property', 'og:description', embed.description));
   }
+  if (own) tags.push(tag('property', 'og:description', own), tag('name', 'description', own));
   tags.push(tag('name', 'theme-color', embed.themeColor));
 
   if (type === 'image') {
     tags.push(tag('property', 'og:type', 'website'), tag('property', 'og:image', urls.direct), tag('name', 'twitter:image', urls.direct));
     if (width && height) tags.push(tag('property', 'og:image:width', width), tag('property', 'og:image:height', height));
+    if (record.alt_text) tags.push(tag('property', 'og:image:alt', record.alt_text), tag('name', 'twitter:image:alt', record.alt_text));
     tags.push(tag('name', 'twitter:card', embed.largeImage ? 'summary_large_image' : 'summary'));
   } else if (type === 'video') {
     const source = urls.playback || urls.direct;
@@ -186,10 +189,7 @@ function metaTags(record, embed, { domain = null, locale = 'de_DE' } = {}) {
     tags.push(tag('property', 'og:type', 'website'));
   }
 
-  if (embed.enabled && (embed.author || embed.siteName)) {
-    const oembed = `${domain || settings.get('site.baseUrl')}/oembed/${displayPath(record.slug || record.filename)}`;
-    tags.push(`<link rel="alternate" type="application/json+oembed" href="${escapeHtml(oembed)}" title="oEmbed" />`);
-  }
+  tags.push(discoveryTag(urls.view, (embed.enabled && embed.title) || record.title || record.original_name || record.filename));
   return tags.join('\n  ');
 }
 

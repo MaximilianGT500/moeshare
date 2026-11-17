@@ -1,4 +1,4 @@
-import { useId, useState, type ReactNode } from 'react';
+import { useEffect, useId, useState, type ReactNode } from 'react';
 import Autocomplete from '@mui/material/Autocomplete';
 import Box from '@mui/material/Box';
 import Chip from '@mui/material/Chip';
@@ -11,9 +11,10 @@ import TimerOutlined from '@mui/icons-material/TimerOutlined';
 import LockOutlined from '@mui/icons-material/LockOutlined';
 import VisibilityOutlined from '@mui/icons-material/VisibilityOutlined';
 import WarningAmberRounded from '@mui/icons-material/WarningAmberRounded';
+import ScheduleRounded from '@mui/icons-material/ScheduleRounded';
 import type { ExpiryChoice, TagCount, UrlStyle } from '../lib/types';
 import { t } from '../lib/i18n';
-import { formatNumber, relativeMs } from '../lib/format';
+import { formatDateTime, formatNumber, relativeMs } from '../lib/format';
 import { PasswordField } from './PasswordField';
 import { c, fonts, radius } from '../theme/tokens';
 
@@ -341,6 +342,136 @@ export function WarningFields({
       {enabled && (
         <Box sx={{ pl: { xs: 0, sm: 6.5 } }}>
           <WarningLabelInput value={value} onChange={onChange} />
+        </Box>
+      )}
+    </Box>
+  );
+}
+
+const pad = (value: number) => String(value).padStart(2, '0');
+
+export const toLocalInput = (ms: number) => {
+  const date = new Date(ms);
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+};
+
+export const fromLocalInput = (value: string) => {
+  const ms = value ? new Date(value).getTime() : Number.NaN;
+  return Number.isFinite(ms) ? ms : null;
+};
+
+const MAX_SCHEDULE_MS = 365 * 24 * 60 * 60 * 1000;
+
+function presetTimes(now = new Date()) {
+  const inHour = new Date(now.getTime() + 60 * 60 * 1000);
+  inHour.setSeconds(0, 0);
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(9, 0, 0, 0);
+  const evening = new Date(now);
+  evening.setHours(18, 0, 0, 0);
+  const week = new Date(now);
+  week.setDate(week.getDate() + 7);
+  week.setHours(9, 0, 0, 0);
+  return [
+    { key: 'hour', label: t('In 1 Stunde'), at: inHour.getTime() },
+    ...(evening.getTime() - now.getTime() > 30 * 60 * 1000 ? [{ key: 'evening', label: t('Heute 18 Uhr'), at: evening.getTime() }] : []),
+    { key: 'tomorrow', label: t('Morgen 9 Uhr'), at: tomorrow.getTime() },
+    { key: 'week', label: t('In einer Woche'), at: week.getTime() },
+  ];
+}
+
+export function scheduleError(ms: number | null, now = Date.now()) {
+  if (ms === null) return t('Bitte Datum und Uhrzeit wählen.');
+  if (ms <= now) return t('Der Zeitpunkt liegt in der Vergangenheit.');
+  if (ms > now + MAX_SCHEDULE_MS) return t('Höchstens ein Jahr im Voraus.');
+  return '';
+}
+
+export function PublishAtFields({
+  value,
+  onChange,
+  help = t(
+    'Bis dahin siehst nur du die Datei. Wer den Link schon hat, erfährt, wann sie erscheint. Automatisches Teilen startet erst dann.'
+  ),
+  error = '',
+}: {
+  value: number | null;
+  onChange: (value: number | null) => void;
+  help?: string;
+  error?: string;
+}) {
+  const enabled = value !== null;
+  const [text, setText] = useState(() => (value ? toLocalInput(value) : ''));
+  useEffect(() => {
+    if (value !== null) setText((current) => (fromLocalInput(current) === value ? current : toLocalInput(value)));
+  }, [value]);
+  const problem = error || (enabled ? scheduleError(fromLocalInput(text)) : '');
+  return (
+    <Box sx={{ display: 'grid', gap: 1 }}>
+      <FormControlLabel
+        control={
+          <Switch
+            checked={enabled}
+            onChange={(event) => {
+              if (!event.target.checked) {
+                onChange(null);
+                return;
+              }
+              const first = presetTimes()[0].at;
+              setText(toLocalInput(first));
+              onChange(first);
+            }}
+          />
+        }
+        label={
+          <Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <ScheduleRounded fontSize="small" sx={{ color: 'text.secondary' }} />
+              {t('Später veröffentlichen')}
+            </Box>
+            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+              {help}
+            </Typography>
+          </Box>
+        }
+        sx={{ alignItems: 'flex-start', '& .MuiSwitch-root': { mt: -0.5 } }}
+      />
+      {enabled && (
+        <Box sx={{ pl: { xs: 0, sm: 6.5 }, display: 'grid', gap: 1 }}>
+          <TextField
+            type="datetime-local"
+            size="small"
+            label={t('Erscheint am')}
+            value={text}
+            onChange={(event) => {
+              setText(event.target.value);
+              const ms = fromLocalInput(event.target.value);
+              if (ms !== null) onChange(ms);
+            }}
+            error={Boolean(problem)}
+            helperText={problem || (value ? t('Das ist {when}.', { when: relativeMs(value) }) : ' ')}
+            slotProps={{
+              inputLabel: { shrink: true },
+              htmlInput: { min: toLocalInput(Date.now()), max: toLocalInput(Date.now() + MAX_SCHEDULE_MS), step: 60 },
+            }}
+            sx={{ maxWidth: 280 }}
+          />
+          <Box role="group" aria-label={t('Schnellauswahl')} sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+            {presetTimes().map((preset) => (
+              <Chip
+                key={preset.key}
+                size="small"
+                label={preset.label}
+                onClick={() => {
+                  setText(toLocalInput(preset.at));
+                  onChange(preset.at);
+                }}
+                variant={value === preset.at ? 'filled' : 'outlined'}
+                title={formatDateTime(new Date(preset.at))}
+              />
+            ))}
+          </Box>
         </Box>
       )}
     </Box>

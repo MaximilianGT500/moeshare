@@ -9,7 +9,7 @@ const domains = require('./domainService');
 
 const log = logger.scope('stats');
 
-const KINDS = ['f', 'l', 'a', 'p'];
+const KINDS = ['f', 'l', 'a', 'p', 'pl'];
 const COUNTERS = ['views', 'downloads', 'direct', 'previews'];
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_DAYS = 365;
@@ -108,6 +108,20 @@ async function series(kind, refId, { days = 30 } = {}) {
   };
 }
 
+async function sums(kind, refIds, { days = 30 } = {}) {
+  const ids = [...new Set(refIds.map(Number).filter((id) => Number.isSafeInteger(id) && id > 0))];
+  const result = new Map();
+  if (!ids.length) return result;
+  const span = Math.min(MAX_DAYS, Math.max(1, Number.parseInt(days, 10) || 30));
+  const rows = await db.all(
+    `SELECT ref_id, ${COUNTERS.map((name) => `SUM(${name}) AS ${name}`).join(', ')} FROM stats_daily
+     WHERE kind = ? AND day >= ? AND ref_id IN (${ids.map(() => '?').join(', ')}) GROUP BY ref_id`,
+    [kind, lastDays(span)[0], ...ids]
+  );
+  for (const row of rows) result.set(Number(row.ref_id), toCounts(row));
+  return result;
+}
+
 async function overview(username, { days = 30 } = {}) {
   const span = Math.min(MAX_DAYS, Math.max(7, Number.parseInt(days, 10) || 30));
   const list = lastDays(span);
@@ -158,6 +172,7 @@ module.exports = {
   record,
   track,
   series,
+  sums,
   overview,
   forget,
   prune,

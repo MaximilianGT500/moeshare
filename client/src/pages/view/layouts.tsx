@@ -15,6 +15,7 @@ import { typeDescription } from '../../components/FileIcons';
 import {
   Actions,
   Backdrop,
+  DescriptionBlock,
   MediaStage,
   MetaList,
   NoteBlock,
@@ -22,6 +23,7 @@ import {
   Owner,
   PageFooter,
   PageHeader,
+  ReactionBar,
   TitleBlock,
   type ViewModel,
 } from './parts';
@@ -87,8 +89,10 @@ function StandardLayout({ model, loaded, onLoaded, zooming, onZoom }: LayoutProp
             }}
           >
             <TitleBlock model={model} />
+            <DescriptionBlock model={model} />
             <Actions model={model} />
             <MetaList model={model} />
+            <ReactionBar model={model} />
             <NoteBlock />
           </Box>
         </m.section>
@@ -151,7 +155,9 @@ function MinimalLayout({ model, loaded, onLoaded, zooming, onZoom }: LayoutProps
           </Box>
           <Actions model={model} style="compact" />
         </Box>
-        <Box sx={{ mt: 3 }}>
+        <Box sx={{ mt: 3, display: 'grid', gap: 2.5, '&:empty': { display: 'none' } }}>
+          <DescriptionBlock model={model} />
+          <ReactionBar model={model} />
           <NoteBlock />
         </Box>
       </Box>
@@ -241,7 +247,9 @@ function StageLayout({ model, loaded, onLoaded, zooming, onZoom }: LayoutProps) 
                   gap: 2,
                 }}
               >
+                <DescriptionBlock model={model} tone="glass" />
                 <MetaList model={model} />
+                <ReactionBar model={model} tone="glass" />
                 <NoteBlock />
               </Box>
             </m.div>
@@ -359,6 +367,7 @@ function SplitLayout({ model, loaded, onLoaded, zooming, onZoom }: LayoutProps) 
           style={{ display: 'grid', gap: 24, alignContent: 'start' }}
         >
           <TitleBlock model={model} size="large" />
+          <DescriptionBlock model={model} />
           {shows('owner') && <Owner model={model} size={36} />}
           <Box sx={{ '& .ms-actions': { display: 'grid', gridTemplateColumns: '1fr', '& > *': { justifyContent: 'center' } } }}>
             <Actions model={model} />
@@ -367,6 +376,7 @@ function SplitLayout({ model, loaded, onLoaded, zooming, onZoom }: LayoutProps) 
           <Box sx={{ '& .ms-meta': { flexDirection: 'column', alignItems: 'flex-start' } }}>
             <MetaList model={model} owner={false} />
           </Box>
+          <ReactionBar model={model} />
           <NoteBlock />
           <Notices model={model} />
         </m.aside>
@@ -463,10 +473,12 @@ function PolaroidLayout({ model, loaded, onLoaded, zooming, onZoom }: LayoutProp
         </m.div>
         <Notices model={model} sx={{ mt: 3, maxWidth: 640, width: '100%' }} />
         <Box className="ms-info" sx={{ mt: { xs: 4, md: 5 }, display: 'grid', justifyItems: 'center', gap: 2.5, textAlign: 'center' }}>
+          <DescriptionBlock model={model} align="center" />
           <Actions model={model} />
           <Box sx={{ '& .ms-meta': { justifyContent: 'center' } }}>
             <MetaList model={model} />
           </Box>
+          <ReactionBar model={model} align="center" />
           <NoteBlock align="center" />
         </Box>
       </Box>
@@ -514,6 +526,9 @@ function MagazineLayout({ model, loaded, onLoaded, zooming, onZoom }: LayoutProp
             {typeDescription(file.filename, file.type, file.isGif)}
           </Typography>
           <TitleBlock model={model} size="display" />
+          <Box sx={{ mt: 2, '&:empty': { display: 'none' } }}>
+            <DescriptionBlock model={model} size="lede" />
+          </Box>
           <Box sx={{ mt: 2.5, display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 2.5, rowGap: 1 }}>
             {shows('owner') && <Owner model={model} size={28} />}
             {byline.length > 0 && (
@@ -553,6 +568,9 @@ function MagazineLayout({ model, loaded, onLoaded, zooming, onZoom }: LayoutProp
           </Box>
         </m.figure>
         <Notices model={model} sx={{ mt: 3 }} />
+        <Box sx={{ mt: 3, '&:empty': { display: 'none' } }}>
+          <ReactionBar model={model} />
+        </Box>
         {(design.note || design.button.url) && (
           <Box
             sx={{

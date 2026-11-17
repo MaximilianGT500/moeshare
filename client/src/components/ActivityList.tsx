@@ -290,6 +290,8 @@ function describeEvent(event: AuditEvent): Described {
       };
     case 'embed_updated':
       return { icon: <BrushRounded />, title: t('Embed geändert'), tone: 'neutral' };
+    case 'autoshare_updated':
+      return { icon: <TuneRounded />, title: t('Automatisches Teilen geändert'), tone: 'neutral' };
     case 'design_updated':
       return { icon: <PaletteOutlined />, title: t('Design der Vorschauseite geändert'), tone: 'neutral' };
     case 'email_changed':

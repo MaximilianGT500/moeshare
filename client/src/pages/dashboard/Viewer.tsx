@@ -25,6 +25,11 @@ import SubtitlesOutlined from '@mui/icons-material/SubtitlesOutlined';
 import WarningAmberRounded from '@mui/icons-material/WarningAmberRounded';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import QrCode2Rounded from '@mui/icons-material/QrCode2Rounded';
+import StarRounded from '@mui/icons-material/StarRounded';
+import StarBorderRounded from '@mui/icons-material/StarBorderRounded';
+import CodeRounded from '@mui/icons-material/CodeRounded';
+import ForwardToInboxRounded from '@mui/icons-material/ForwardToInboxRounded';
+import { isSealedName } from '../../lib/sealed';
 import { QrDialog } from '../../components/QrDialog';
 import MenuItem from '@mui/material/MenuItem';
 import type { FileItem, Subtitle } from '../../lib/types';
@@ -64,6 +69,9 @@ interface ViewerProps {
   onClip?: (file: FileItem) => void;
   onSubtitles?: (file: FileItem) => void;
   onWarning?: (file: FileItem) => void;
+  onStar?: (file: FileItem) => void;
+  onCodes?: (file: FileItem) => void;
+  onEmail?: (file: FileItem) => void;
   trash?: boolean;
   paused?: boolean;
   tracksVersion?: number;
@@ -140,6 +148,11 @@ function InfoPanel({ file, stats }: { file: FileItem; stats: boolean }) {
       <Typography variant="h6" component="h2">
         {t('Details')}
       </Typography>
+      {file.description && (
+        <Typography variant="body2" sx={{ mt: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+          {file.description}
+        </Typography>
+      )}
       <Box sx={{ mt: 1 }}>
         <DetailRow label={t('Typ')}>{typeDescription(file.filename, file.type, file.isGif)}</DetailRow>
         <DetailRow label={t('Größe')}>{formatBytes(file.sizeBytes)}</DetailRow>
@@ -154,7 +167,16 @@ function InfoPanel({ file, stats }: { file: FileItem; stats: boolean }) {
             {relativeFromServer(file.date)}
           </Typography>
         </DetailRow>
+        {file.publishAt ? (
+          <DetailRow label={t('Erscheint')}>
+            {formatDateTime(new Date(file.publishAt))}
+            <Typography variant="caption" component="p" sx={{ color: 'text.secondary' }}>
+              {t('Bis dahin siehst nur du die Datei.')}
+            </Typography>
+          </DetailRow>
+        ) : null}
         <DetailRow label={t('Aufrufe')}>{formatNumber(file.views)}</DetailRow>
+        {file.reactions ? <DetailRow label={t('Reaktionen')}>{formatNumber(file.reactions)}</DetailRow> : null}
         {(file.version > 1 || (file.versions ?? 0) > 0) && (
           <DetailRow label={t('Version')}>
             {t('Version {version}', { version: file.version })}
@@ -171,6 +193,7 @@ function InfoPanel({ file, stats }: { file: FileItem; stats: boolean }) {
           </DetailRow>
         )}
         {file.scan === 'clean' && <DetailRow label={t('Virenscan')}>{t('Geprüft, nichts gefunden')}</DetailRow>}
+        {file.alt && <DetailRow label={t('Alternativtext')}>{file.alt}</DetailRow>}
         <DetailRow label={t('Dateiname')}>
           <Box component="span" sx={{ fontFamily: fonts.mono, fontSize: '0.8rem' }}>
             {file.filename}
@@ -310,6 +333,9 @@ export function Viewer({
   onClip,
   onSubtitles,
   onWarning,
+  onStar,
+  onCodes,
+  onEmail,
   trash = false,
   paused = false,
   tracksVersion = 0,
@@ -568,6 +594,13 @@ export function Viewer({
               {t('Link kopieren')}
             </CopyTextButton>
           )}
+          {onStar && !phone && (
+            <Tooltip title={file.starred ? t('Aus Favoriten entfernen') : t('Zu Favoriten')}>
+              <IconButton aria-label={t('Favorit')} aria-pressed={Boolean(file.starred)} onClick={() => onStar(file)} sx={glassButton}>
+                {file.starred ? <StarRounded sx={{ color: '#ffd58a' }} /> : <StarBorderRounded />}
+              </IconButton>
+            </Tooltip>
+          )}
           <Tooltip title={t('Teilen')}>
             <IconButton
               aria-label={t('Teilen')}
@@ -645,6 +678,32 @@ export function Viewer({
             </ListItemIcon>
             {t('QR-Code')}
           </MenuItem>
+          {onCodes && (
+            <MenuItem
+              onClick={() => {
+                setShareAnchor(null);
+                onCodes(file);
+              }}
+            >
+              <ListItemIcon>
+                <CodeRounded />
+              </ListItemIcon>
+              {t('Einbetten und Codes')}
+            </MenuItem>
+          )}
+          {onEmail && !isSealedName(file.filename) && !file.blocked && (
+            <MenuItem
+              onClick={() => {
+                setShareAnchor(null);
+                onEmail(file);
+              }}
+            >
+              <ListItemIcon>
+                <ForwardToInboxRounded />
+              </ListItemIcon>
+              {t('Per E-Mail senden')}
+            </MenuItem>
+          )}
         </Menu>
         <QrDialog
           url={qrOpen ? file.urls.view : null}
@@ -698,6 +757,17 @@ export function Viewer({
                 <HistoryRounded />
               </ListItemIcon>
               {file.versions ? t('Versionen ({count})', { count: file.versions + 1 }) : t('Versionen')}
+            </MenuItem>
+          )}
+          {onStar && phone && (
+            <MenuItem
+              onClick={() => {
+                setMoreAnchor(null);
+                onStar(file);
+              }}
+            >
+              <ListItemIcon>{file.starred ? <StarRounded /> : <StarBorderRounded />}</ListItemIcon>
+              {file.starred ? t('Aus Favoriten entfernen') : t('Zu Favoriten')}
             </MenuItem>
           )}
           {onWarning && (

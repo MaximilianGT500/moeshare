@@ -78,24 +78,24 @@ async function inspect(input) {
   }
 }
 
-async function encode(input, { animated, area }) {
+async function encode(input, { animated, area, size = SIZE }) {
   const pipeline = sharp(input, { animated, limitInputPixels: MAX_PIXELS });
   if (!animated) pipeline.rotate();
   return pipeline
     .extract(area)
-    .resize(SIZE, SIZE, { fit: 'cover' })
+    .resize(size, size, { fit: 'cover' })
     .webp({ quality: 86, effort: 4, ...(animated ? { loop: 0 } : {}) })
     .toBuffer();
 }
 
-async function render(input, crop) {
+async function render(input, crop, { size = SIZE, animate = true } = {}) {
   const meta = await inspect(input);
   if (!meta || !FORMATS.has(meta.format)) {
     throw badRequest('Das Bild lässt sich nicht lesen. Nimm ein JPG, PNG, WebP, AVIF oder GIF.', { field: 'image' });
   }
   const pages = Number(meta.pages) || 1;
   const frameHeight = pages > 1 ? Number(meta.pageHeight) || Math.round(meta.height / pages) : meta.height;
-  const canAnimate = pages > 1 && ['gif', 'webp'].includes(meta.format) && settings.get('profiles.animatedAvatars');
+  const canAnimate = animate && pages > 1 && ['gif', 'webp'].includes(meta.format) && settings.get('profiles.animatedAvatars');
   const swap = !canAnimate && (Number(meta.orientation) || 1) >= 5;
   const width = swap ? frameHeight : meta.width;
   const height = swap ? meta.width : frameHeight;
@@ -104,11 +104,11 @@ async function render(input, crop) {
   }
   const area = region(crop, width, height);
   if (canAnimate) {
-    const moving = await encode(input, { animated: true, area });
+    const moving = await encode(input, { animated: true, area, size });
     if (moving.length <= MAX_OUTPUT_BYTES) return { image: moving, animated: true };
     log.debug('Bewegtes Profilbild zu groß, nehme das erste Bild', { bytes: moving.length });
   }
-  return { image: await encode(input, { animated: false, area }), animated: false };
+  return { image: await encode(input, { animated: false, area, size }), animated: false };
 }
 
 function assertEnabled() {
@@ -194,5 +194,7 @@ module.exports = {
   read,
   file,
   render,
+  cropOf,
+  hiddenByModeration,
   assertFound,
 };

@@ -13,7 +13,7 @@ const PATTERN = /^[a-z0-9](?:[a-z0-9_-]{0,30}[a-z0-9])?$/;
 const RESERVED = new Set(
   (
     'a about account accounts admin administrator api app apps assets auth avatar avatars billing blog cdn changelog contact css ' +
-    'dashboard datenschutz delete design dev docs download downloads edit embed explore favicon.ico favicon.svg feed file files ' +
+    'dashboard datenschutz delete design dev docs download downloads edit embed explore favicon.ico favicon.svg feed file files frame oembed ' +
     'help home i i18n icons images img impressum imprint info js legal login logout manifest.webmanifest media moderation news ' +
     'oauth oembed p password privacy profile profiles public raw register report reports reset robots.txt root rss s search ' +
     'security settings setup share share-target shares sharex signin signup sitemap.xml static status support sw.js system terms ' +

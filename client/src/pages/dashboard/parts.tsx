@@ -1,3 +1,8 @@
+import StarRounded from '@mui/icons-material/StarRounded';
+import StarBorderRounded from '@mui/icons-material/StarBorderRounded';
+import CodeRounded from '@mui/icons-material/CodeRounded';
+import ForwardToInboxRounded from '@mui/icons-material/ForwardToInboxRounded';
+import { isSealedName } from '../../lib/sealed';
 import { useState } from 'react';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -70,6 +75,9 @@ export function FileMenu({
   onSubtitles,
   onVersions,
   onWarning,
+  onStar,
+  onFrame,
+  onEmail,
   trash = false,
 }: {
   file: FileItem | null;
@@ -86,6 +94,9 @@ export function FileMenu({
   onSubtitles?: (file: FileItem) => void;
   onVersions?: (file: FileItem) => void;
   onWarning?: (file: FileItem) => void;
+  onStar?: (file: FileItem) => void;
+  onFrame?: (file: FileItem) => void;
+  onEmail?: (file: FileItem) => void;
   trash?: boolean;
 }) {
   const open = !!file && !!anchor;
@@ -114,6 +125,52 @@ export function FileMenu({
           </ListItemIcon>
           {t('Vorschau')}
         </MenuItem>,
+        ...(onStar
+          ? [
+              <MenuItem
+                key="star"
+                onClick={() => {
+                  onClose();
+                  onStar(file);
+                }}
+              >
+                <ListItemIcon>{file.starred ? <StarRounded /> : <StarBorderRounded />}</ListItemIcon>
+                {file.starred ? t('Aus Favoriten entfernen') : t('Zu Favoriten')}
+              </MenuItem>,
+            ]
+          : []),
+        ...(onFrame
+          ? [
+              <MenuItem
+                key="frame"
+                onClick={() => {
+                  onClose();
+                  onFrame(file);
+                }}
+              >
+                <ListItemIcon>
+                  <CodeRounded />
+                </ListItemIcon>
+                {t('Einbetten und Codes')}
+              </MenuItem>,
+            ]
+          : []),
+        ...(onEmail && !isSealedName(file.filename) && !file.blocked
+          ? [
+              <MenuItem
+                key="email"
+                onClick={() => {
+                  onClose();
+                  onEmail(file);
+                }}
+              >
+                <ListItemIcon>
+                  <ForwardToInboxRounded />
+                </ListItemIcon>
+                {t('Per E-Mail senden')}
+              </MenuItem>,
+            ]
+          : []),
         ...(onEdit
           ? [
               <MenuItem
@@ -288,7 +345,7 @@ export function FileMenu({
 }
 
 export type BulkAction = 'tag' | 'untag' | 'expire' | 'protect' | 'unprotect' | 'warn';
-export type QuickAction = 'list' | 'unlist' | 'unwarn';
+export type QuickAction = 'list' | 'unlist' | 'unwarn' | 'star' | 'unstar';
 
 export function SelectionBar({
   count,
@@ -410,6 +467,23 @@ export function SelectionBar({
             anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
             transformOrigin={{ vertical: 'top', horizontal: 'right' }}
           >
+            {onQuick && (
+              <MenuItem onClick={() => quick('star')}>
+                <ListItemIcon>
+                  <StarRounded fontSize="small" />
+                </ListItemIcon>
+                {t('Zu Favoriten')}
+              </MenuItem>
+            )}
+            {onQuick && (
+              <MenuItem onClick={() => quick('unstar')}>
+                <ListItemIcon>
+                  <StarBorderRounded fontSize="small" />
+                </ListItemIcon>
+                {t('Aus Favoriten entfernen')}
+              </MenuItem>
+            )}
+            {onQuick && <Divider />}
             <MenuItem onClick={() => bulk('tag')}>
               <ListItemIcon>
                 <SellOutlined />

@@ -28,6 +28,8 @@ const subtitles = require('../services/subtitleService');
 const archives = require('../services/archiveService');
 const { isSealedName } = require('../lib/sealed');
 const hotlink = require('../services/hotlinkService');
+const reactions = require('../services/reactionService');
+const designs = require('../services/designService');
 const { displayPath } = require('../lib/slugs');
 
 const router = express.Router();
@@ -38,6 +40,7 @@ const USED = 'Diese Datei ließ sich nur einmal abrufen und ist nicht mehr verf�
 const BLOCKED = 'Diese Datei wurde von der Moderation gesperrt.';
 
 const unlockLimiter = limiter({ windowMs: 15 * 60 * 1000, limit: 30 });
+const reactLimiter = limiter({ windowMs: 60 * 1000, limit: 30 });
 
 async function existing(req, slug) {
   const record = await files.findBySlug(slug);
@@ -45,14 +48,28 @@ async function existing(req, slug) {
   return domains.servesOwner(req, record.username) ? record : null;
 }
 
-function refuse(res, access) {
+function scheduledText(req, at) {
+  const locale = req.language === 'en' ? 'en-GB' : 'de-DE';
+  const date = new Intl.DateTimeFormat(locale, { timeZone: 'Europe/Berlin', dateStyle: 'long' }).format(new Date(at));
+  const time = new Intl.DateTimeFormat(locale, { timeZone: 'Europe/Berlin', timeStyle: 'short' }).format(new Date(at));
+  return { date, time };
+}
+
+function refuse(req, res, access) {
+  if (access.state === 'scheduled') {
+    return renderMessage(res, 404, 'Diese Datei erscheint am {date} um {time} Uhr.', {
+      title: 'Noch nicht veröffentlicht',
+      params: scheduledText(req, access.at),
+      data: { scheduled: true },
+    });
+  }
   if (access.state === 'expired') return renderMessage(res, 410, EXPIRED, { title: 'Abgelaufen' });
   if (access.state === 'blocked') return renderMessage(res, 451, BLOCKED, { title: 'Inhalt gesperrt' });
   if (access.state === 'missing') return renderMessage(res, 404, MISSING);
   return renderMessage(res, 410, USED, { title: 'Nicht mehr verfügbar' });
 }
 
-const unavailable = (access) => ['expired', 'used', 'blocked', 'missing'].includes(access.state);
+const unavailable = (access) => ['expired', 'used', 'blocked', 'missing', 'scheduled'].includes(access.state);
 
 async function movedTarget(req, slug, variant = 'view') {
   const entry = await redirects.moved('file', `/${variant}/${slug}`);
@@ -66,7 +83,7 @@ async function movedTarget(req, slug, variant = 'view') {
 
 async function showFile(req, res, record) {
   const access = protection.fileAccess(req, record);
-  if (unavailable(access)) return refuse(res, access);
+  if (unavailable(access)) return refuse(req, res, access);
 
   const domain = domains.requestOrigin(req);
   const page = await viewPage(record, { access, domain, locale: req.language === 'en' ? 'en_GB' : 'de_DE' });
@@ -176,7 +193,7 @@ router.get('/download/:slug', async (req, res) => {
     throw notFound('Datei nicht gefunden');
   }
   const access = protection.fileAccess(req, record);
-  if (unavailable(access)) return refuse(res, access);
+  if (unavailable(access)) return refuse(req, res, access);
   if (access.state !== 'open') return res.redirect(302, `/view/${encodeURIComponent(record.slug || record.filename)}`);
   if (!access.owner) stats.track(req, 'f', record.id, 'downloads');
   const relative = `${record.username}/${record.filename}`;
@@ -196,6 +213,21 @@ async function openArchive(req, slug) {
   if (access.state !== 'open') throw forbidden('Diese Datei ist geschützt. Öffne sie über ihre Ansichtsseite.', { code: 'protected' });
   return { record, access };
 }
+
+router.post('/view/:slug/react', sameOriginOnly, reactLimiter, async (req, res) => {
+  if (!reactions.enabled()) throw forbidden('Reaktionen sind auf diesem Server abgeschaltet.');
+  const record = await existing(req, req.params.slug);
+  if (!record || isSealedName(record.filename)) throw notFound('Datei nicht gefunden');
+  const access = protection.fileAccess(req, record);
+  if (access.state === 'expired') throw gone(EXPIRED);
+  if (access.state === 'blocked') throw new HttpError(451, BLOCKED);
+  if (access.state !== 'open') throw forbidden('Diese Datei ist geschützt. Öffne sie über ihre Ansichtsseite.', { code: 'protected' });
+  const { design } = await designs.forOwner(record.username);
+  if (design.show && design.show.reactions === false) throw forbidden('Für diese Datei sind Reaktionen abgeschaltet.');
+  res.set('Cache-Control', 'no-store');
+  const owner = await db.get('SELECT id FROM users WHERE username = ?', [record.username]);
+  res.json(await reactions.react({ kind: 'f', id: record.id, ownerId: owner && owner.id }, String((req.body || {}).reaction || ''), req));
+});
 
 router.get('/view/:slug/zip', async (req, res) => {
   const { record } = await openArchive(req, req.params.slug);
@@ -282,7 +314,7 @@ function serveUpload(kind) {
     }
     const access = protection.fileAccess(req, record);
     if (access.state === 'expired') throw gone(EXPIRED);
-    if (access.state === 'missing') throw notFound('Datei nicht gefunden');
+    if (access.state === 'missing' || access.state === 'scheduled') throw notFound('Datei nicht gefunden');
     if (access.state === 'blocked') throw new HttpError(451, BLOCKED);
     if (access.state !== 'open') throw forbidden('Diese Datei ist geschützt. Öffne sie über ihre Ansichtsseite.', { code: 'protected' });
     if (hotlink.enabled()) res.vary('Referer');
@@ -295,7 +327,8 @@ function serveUpload(kind) {
         .send(tr(req, 'Diese Datei darf nicht auf anderen Seiten eingebunden werden.'));
     }
 
-    const guarded = protection.isProtected(record) || Boolean(record.expires_at) || Boolean(record.deleted_at);
+    const guarded =
+      protection.isProtected(record) || Boolean(record.expires_at) || Boolean(record.deleted_at) || Boolean(record.publish_at);
     const cacheControl = guarded ? 'private, no-store' : name.endsWith('.m3u8') ? 'no-cache' : storage.IMMUTABLE;
     const relative = `${user}/${FOLDERS[kind]}${name}`;
     const file = path.join(config.paths.uploads, relative);

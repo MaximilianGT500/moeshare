@@ -498,7 +498,7 @@ export function RequestsView() {
   useEffect(() => {
     load();
     listAlbums()
-      .then((result) => setAlbums(result.albums))
+      .then((result) => setAlbums(result.albums.filter((album) => album.role !== 'member' && !album.rule)))
       .catch(() => {});
   }, [load]);
 

@@ -42,6 +42,8 @@ const EVENTS = {
   settings_updated: 'Einstellungen geändert',
   file_deleted: 'Datei eines anderen Kontos gelöscht',
   embed_updated: 'Embed geändert',
+  autoshare_updated: 'Automatisches Teilen geändert',
+  file_emailed: 'Per E-Mail geteilt',
   design_updated: 'Design der Vorschauseite geändert',
   email_changed: 'E-Mail-Adresse bestätigt',
   email_removed: 'E-Mail-Adresse entfernt',

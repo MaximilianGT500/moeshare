@@ -32,6 +32,7 @@ Offizielle Instance: [v3.moeshare.eu](https://v3.moeshare.eu).
 - [Andere Programme](#andere-programme)
 - [Bildschirm aufnehmen](#bildschirm-aufnehmen)
 - [Discord-App](#discord-app)
+- [Automatisch teilen](#automatisch-teilen)
 - [Texte, Kurzlinks und Alben](#texte-kurzlinks-und-alben)
 - [Vorschau für PDF, Markdown, CSV und ZIP](#vorschau-für-pdf-markdown-csv-und-zip)
 - [Datei-Anfragen](#datei-anfragen)
@@ -43,6 +44,11 @@ Offizielle Instance: [v3.moeshare.eu](https://v3.moeshare.eu).
 - [Gemeinsame Alben](#gemeinsame-alben)
 - [Duplikate und Volltextsuche](#duplikate-und-volltextsuche)
 - [Aufräumen](#aufräumen)
+- [Favoriten und Rückblick](#favoriten-und-rückblick)
+- [Später veröffentlichen](#später-veröffentlichen)
+- [Smarte Alben](#smarte-alben)
+- [Tags verwalten](#tags-verwalten)
+- [Jahresrückblick](#jahresrückblick)
 - [Befehlspalette](#befehlspalette)
 - [Bilder bearbeiten](#bilder-bearbeiten)
 - [Bilder optimieren und Wasserzeichen](#bilder-optimieren-und-wasserzeichen)
@@ -50,6 +56,10 @@ Offizielle Instance: [v3.moeshare.eu](https://v3.moeshare.eu).
 - [Videos für alle Browser](#videos-für-alle-browser)
 - [Untertitel](#untertitel)
 - [Inhaltswarnungen](#inhaltswarnungen)
+- [Beschreibung und Alternativtext](#beschreibung-und-alternativtext)
+- [Reaktionen](#reaktionen)
+- [Einbetten](#einbetten)
+- [Per E-Mail teilen](#per-e-mail-teilen)
 - [Vorschauseiten gestalten](#vorschauseiten-gestalten)
 - [Profilseiten](#profilseiten)
 - [Profilbilder](#profilbilder)
@@ -108,11 +118,23 @@ Offizielle Instance: [v3.moeshare.eu](https://v3.moeshare.eu).
 - **Volltextsuche** in Texten, Code und anderen Textdateien
 - **Papierkorb**: Gelöschtes lässt sich 30 Tage lang zurückholen
 - **Aufräumen**: große, nie aufgerufene und lange nicht mehr aufgerufene Dateien auf einen Blick, gesammelt löschen oder ablaufen lassen
+- **Favoriten**: wichtige Dateien mit einem Stern markieren und mit einem Klick herausfiltern, beim Aufräumen bleiben sie außen vor
+- **Rückblick „An diesem Tag“**: Das Dashboard zeigt, was du am selben Tag vor einem oder mehreren Jahren hochgeladen hast, auf Wunsch kommt morgens eine E-Mail oder Push-Benachrichtigung
+- **Später veröffentlichen**: Uploads erscheinen erst zu einem gewählten Zeitpunkt, bis dahin sehen Besucher nur, wann es so weit ist
+- **Smarte Alben**, die sich selbst füllen: alle Uploads mit einem Tag, eines Dateityps, nur Favoriten oder aus den letzten Tagen
+- **Tags verwalten**: umbenennen, zusammenführen und löschen, smarte Alben und Teilen-Regeln ziehen mit
+- **Jahresrückblick** mit Uploads pro Monat, Wochentag und Uhrzeit, längster Serie, fleißigstem Tag und den beliebtesten Dateien
+- **Alternativtexte nachtragen**: Bilder und Videos ohne Beschreibung der Reihe nach durchgehen, Bild für Bild
 - **Statistiken** pro Datei, Kurzlink und Album: Aufrufe, Vorschauen in Discord und Co., Downloads und woher die Besucher kommen, ganz ohne IP-Adressen
 - **Adressen nach Wahl**: lange ID, kurze Zeichenfolge, Wörter, Emojis, unsichtbare Zeichen oder der Originalname, auf Wunsch über mehrere Domains
 - **Ansichtsseiten** mit Bild-, Video- und Audioplayer in sechs Designs, mit Farben aus der Datei oder eigener Akzentfarbe, wählbarer Schrift, ein- und ausblendbaren Angaben und auf Wunsch eigenem CSS
+- **Beschreibung und Alternativtext** für jede Datei: stehen auf der Ansichtsseite und in Link-Vorschauen, helfen Menschen mit Screenreader und werden durchsucht, auch direkt aus ShareX
+- **Reaktionen** auf Dateien und Alben: Besucher reagieren mit 👍 ❤️ 😂 😮 🔥 👏, ohne Konto und ohne dass MoeShare IP-Adressen speichert. Neue Reaktionen kommen gesammelt per E-Mail oder Push
+- **Einbetten**: Bilder, Videos, Audio, Alben und die Profilkarte mit einem iframe-Code in Blogs und Foren einbauen, dazu fertige Codes für Markdown, BBCode und HTML und **oEmbed** für WordPress, Ghost und Co.
+- **Automatisch teilen**: Neue Uploads landen als Link bei Discord, Slack, Telegram, ntfy, Matrix oder Mastodon, mit bis zu zehn Regeln, Filtern nach Tag und Dateityp und eigener Nachricht
+- **Per E-Mail teilen**: Dateien und Alben direkt aus dem Dashboard an bis zu fünf Adressen schicken, mit persönlicher Nachricht
 - **Embed Builder** mit Live-Vorschau: eine Standardvorlage für alle und auf Wunsch eigene Vorlagen pro Benutzer, mit Platzhaltern wie `{dateiname}` oder `{größe}`
-- **Profilseiten** mit Beschreibung, Links, ausgewählten Dateien und öffentlichen Alben
+- **Profilseiten** als Link-in-Bio-Seite: bis zu 30 Links mit Symbolen (automatisch, über 80 Dienste, Emojis oder eigene Bilder), Überschriften und Zeitplan, dazu Klickzahlen und „Kontakt speichern“, ausgewählte Dateien und öffentliche Alben
 - **Profilbilder** mit Zuschnitt im Browser, aus einer Datei oder den eigenen Uploads, bewegte GIFs bleiben bewegt
 - **Diashow** für Alben im Vollbild, mit Tastatur und Wischen, und **RSS-Feeds** für Profile und Alben
 - **Eigene Adressen** für Dateien, Kurzlinks und Alben wie `/view/urlaub`, dazu ein **eigener Pfad** statt `/view/`, etwa `/max/JrinQR99`. Alte Adressen leiten weiter
@@ -300,11 +322,14 @@ Wer Uploads aus ShareX gleich schützen oder einsortieren will, ergänzt in der 
 | `X-Max-Views` | `5` | Höchstens so viele Abrufe |
 | `X-Url-Style` | `words` | Adressstil: `uuid`, `random`, `words`, `emoji`, `invisible` oder `original` |
 | `X-Domain` | `https://img.example.com` | Eine der unter **Admin › Einstellungen** eingetragenen Domains oder eine [eigene Domain](#eigene-domains), `random` für eine zufällige |
-| `X-Title` | `Mein Skript` | Titel für Texte und Dateien |
+| `X-Title` | `Mein Skript` | Titel für Texte und Dateien, Umlaute URL-kodiert |
+| `X-Description` | `Urlaub%20am%20See` | [Beschreibung](#beschreibung-und-alternativtext) mit bis zu 2000 Zeichen, URL-kodiert, `%0A` für einen Zeilenumbruch |
+| `X-Alt` | `Steg%20im%20Abendlicht` | [Alternativtext](#beschreibung-und-alternativtext) für Bilder und Videos, bis zu 500 Zeichen, URL-kodiert |
 | `X-Syntax` | `python` | Sprache für die Hervorhebung von Texten |
 | `X-Tags` | `urlaub,2026` | Tags, durch Kommas getrennt |
 | `X-Album` | `aB3dE9` | Code oder ID eines eigenen oder mit dir geteilten Albums |
 | `X-Warning` | `Spoiler` | [Inhaltswarnung](#inhaltswarnungen) mit diesem Text, `true` für eine Warnung ohne Text |
+| `X-Publish-At` | `+2h` | [Später veröffentlichen](#später-veröffentlichen): in Minuten (`30m`), Stunden (`2h`), Tagen (`1d`) oder Wochen (`1w`), als Datum wie `2026-12-24T18:00:00+01:00` oder als Unix-Zeit in Millisekunden, höchstens ein Jahr im Voraus |
 | `X-Optimize` | `false` | Bild [optimieren](#bilder-optimieren-und-wasserzeichen) (`true`) oder unverändert speichern (`false`), sofern der Server optimiert |
 | `X-Watermark` | `false` | Mit `false` bekommt dieses Bild kein [Wasserzeichen](#bilder-optimieren-und-wasserzeichen) |
 | `X-Slug` | `urlaub` | [Eigene Adresse](#eigene-adressen-und-eigener-pfad) für Datei oder Text, etwa `/view/urlaub`. Umlaute URL-kodiert |
@@ -349,6 +374,27 @@ Einrichten, mit derselben Anwendung wie für die [Anmeldung über Discord](#anme
 2. Die dort angezeigte Adresse `https://share.example.com/api/discord/interactions` im Developer Portal als **Interactions Endpoint URL** eintragen. Discord prüft sie beim Speichern.
 3. Unter **Installation** „User Install“ einschalten, damit die App auf jedem Server und in DMs geht, und die App über den Installationslink zu deinem Discord-Konto hinzufügen.
 4. In MoeShare auf **Befehle bei Discord eintragen** klicken. Nach einer Namensänderung deiner Instanz das noch einmal tun, damit der Rechtsklick-Befehl den neuen Namen trägt.
+
+## Automatisch teilen
+
+Wer neue Uploads ohnehin in einem Kanal oder auf Mastodon teilt, lässt das MoeShare erledigen. Unter **Konto › Einstellungen › Automatisch teilen** legst du bis zu zehn **Regeln** an. Jede Regel schickt passende Uploads als Link an genau ein Ziel, mit dem Titel der Datei, falls sie einen hat. Diese Ziele gibt es:
+
+| Ziel | Was du brauchst |
+| --- | --- |
+| Discord | Webhook-Adresse: Kanal bearbeiten › Integrationen › Webhooks › „Webhook-URL kopieren“. Discord zeigt darunter dieselbe Vorschau wie bei einem kopierten Link |
+| Slack | Webhook-Adresse einer App mit „Incoming Webhooks“ (`https://hooks.slack.com/…`) |
+| Telegram | Bot-Token von @BotFather und die Chat-ID (Zahl oder `@kanalname`). Der Bot muss im Kanal oder in der Gruppe sein |
+| ntfy | Server (leer für ntfy.sh), Thema und auf Wunsch ein Zugangstoken für geschützte Themen. Ein Tipp auf die Benachrichtigung öffnet die Datei |
+| Matrix | Homeserver, Raum (`!id:server` oder `#alias:server`) und das Zugangstoken eines Kontos, das im Raum ist |
+| Mastodon | Instanz und ein Zugangstoken einer Anwendung mit dem Recht `write:statuses`, dazu die Sichtbarkeit (öffentlich, nicht gelistet oder nur für Follower) |
+
+- **Filter**: Mit einem Tag wie `urlaub` gehen nur Uploads mit diesem Tag raus, etwa aus ShareX mit `X-Tags: urlaub`. Dazu wählst du auf Wunsch Dateitypen, etwa nur Bilder und Videos. So landen Fotos in der Familiengruppe und Texte im Arbeitskanal.
+- **Eigene Nachricht**: Eine Vorlage mit Platzhaltern bestimmt den Text, etwa `📸 Neu von {konto}: {titel}` und darunter `{link}`. Es gibt `{link}`, `{titel}`, `{beschreibung}`, `{datei}`, `{tags}` und `{konto}`, auf Englisch auch `{title}`, `{description}`, `{file}` und `{account}`. `{link}` muss vorkommen. Eine Vorschau mit Beispielwerten zeigt das Ergebnis, Formatierungszeichen aus Titeln und Beschreibungen werden für jedes Ziel passend maskiert.
+- **Nie geteilt** werden Dateien mit Passwort, mit Aufruflimit, [Ende-zu-Ende verschlüsselte](#ende-zu-ende-verschlüsselt-teilen) Dateien, neue Fassungen, Dateien aus [Datei-Anfragen](#datei-anfragen), Uploads über die [Discord-App](#discord-app) und alles aus dem Import. [Geplante Dateien](#später-veröffentlichen) gehen raus, sobald sie erscheinen.
+- **Testen** schickt sofort eine Testnachricht. Lehnt ein Ziel zehnmal hintereinander ab oder meldet es, dass Webhook, Token oder Kanal nicht mehr gelten, pausiert MoeShare die Regel und zeigt den Grund an. Wieder einschalten setzt den Fehler zurück, bei zu vielen Nachrichten auf einmal wartet MoeShare einfach.
+- Webhooks und Tokens liegen verschlüsselt in der Datenbank, angezeigt wird nur ein Hinweis wie die letzten Ziffern oder das Thema. Beim Bearbeiten bleibt ein gespeichertes Token erhalten, solange du das Feld leer lässt. Erwähnungen wie `@everyone` sind in Discord-Nachrichten abgeschaltet.
+
+Admins schalten die Funktion unter **Admin › Einstellungen › Funktionen › Teilen und Reaktionen** für alle ab. Das ist unabhängig von den [Benachrichtigungen](#benachrichtigungen), die Admins über Ereignisse auf dem ganzen Server informieren. Über die [API](#api) verwaltest du die Regeln unter `/api/account/autoshare`.
 
 ## Texte, Kurzlinks und Alben
 
@@ -453,11 +499,39 @@ Unter **Dashboard › Aufräumen** findest du Dateien, die viel Platz brauchen o
 - **Nie aufgerufen**: älter als zwei Wochen und noch kein einziges Mal geöffnet, auch nicht über den Direktlink
 - **Lange nicht aufgerufen**: seit einem halben Jahr nicht mehr geöffnet, die ältesten zuerst. Ist die [Statistik](#papierkorb-statistiken-und-zip) abgeschaltet, weiß MoeShare nicht, wann eine Datei zuletzt aufgerufen wurde, und zeigt alle Dateien, die älter als ein halbes Jahr sind.
 
-Über jeder Liste steht, wie viele Dateien es sind und wie viel Platz sie zusammen belegen. Markierte Dateien legst du gesammelt in den [Papierkorb](#papierkorb-statistiken-und-zip) oder lässt sie in einem Tag, einer Woche oder 30 Tagen ablaufen. Über die [API](#api) liefert `GET /api/files/cleanup` dieselben Listen.
+Über jeder Liste steht, wie viele Dateien es sind und wie viel Platz sie zusammen belegen. Markierte Dateien legst du gesammelt in den [Papierkorb](#papierkorb-statistiken-und-zip) oder lässt sie in einem Tag, einer Woche oder 30 Tagen ablaufen. [Favoriten](#favoriten-und-rückblick) tauchen in keiner Liste auf. Über die [API](#api) liefert `GET /api/files/cleanup` dieselben Listen.
+
+## Favoriten und Rückblick
+
+**Favoriten**: Im Menü einer Datei, in der großen Ansicht oder für mehrere markierte Dateien auf einmal setzt „Zu Favoriten“ einen Stern. Über den Dateien erscheint dann der Filter **Favoriten**, der nur noch diese Dateien zeigt, auch zusammen mit Suche, Dateityp und Tag. Die Befehlspalette kennt „Favoriten zeigen“. Favoriten bleiben beim [Aufräumen](#aufräumen) außen vor, damit dort nichts Wichtiges aus Versehen gelöscht wird. Über die API liefert `GET /api/files?starred=1` nur Favoriten, `PATCH /api/files/:id` mit `{ "starred": true }` setzt den Stern.
+
+**Rückblick**: Hast du am heutigen Tag vor einem oder mehreren Jahren etwas hochgeladen, zeigt das Dashboard oben die Karte **An diesem Tag**, nach Jahren sortiert und bis zu zehn Jahre zurück. Ein Klick öffnet die Datei in der großen Ansicht, mit den Pfeiltasten blätterst du durch alle Erinnerungen. „Für heute ausblenden“ schließt die Karte bis morgen. Dateien im Papierkorb und gesperrte Dateien erscheinen nicht. Die Liste gibt es unter `GET /api/files/memories`. Wer die Erinnerungen nicht verpassen will, schaltet unter **Konto › Einstellungen** „An diesem Tag“ ein, per [E-Mail](#e-mail) oder als [Push-Benachrichtigung](#push-benachrichtigungen) auf einzelnen Geräten. Die Nachricht kommt einmal am Tag ab 9 Uhr deutscher Zeit, und nur, wenn es etwas zu erinnern gibt.
+
+## Später veröffentlichen
+
+Ein Upload muss nicht sofort sichtbar sein. Unter **Bearbeiten** schaltest du „Später veröffentlichen“ ein und wählst Datum und Uhrzeit, Knöpfe wie „In 1 Stunde“, „Morgen 9 Uhr“ oder „In einer Woche“ sparen das Tippen. In den **Upload-Optionen** gilt das für alles, was du in diesem Fenster hochlädst, ShareX schickt dafür den Header `X-Publish-At`, etwa `+2h`. Höchstens ein Jahr im Voraus ist möglich.
+
+Bis dahin siehst nur du die Datei. Besucher, die den Link schon haben, lesen „Diese Datei erscheint am … um … Uhr“. Der Direktlink antwortet bis dahin nicht, eine Einbettung zeigt nur eine Karte mit dem Zeitpunkt, Profil, öffentliche Alben und Feeds lassen die Datei aus. Im Dashboard trägt die Kachel eine Uhr, und der Filter **Geplant** zeigt alle geplanten Dateien auf einen Blick. Zum gewählten Zeitpunkt erscheint die Datei von selbst, und erst dann gehen die [Regeln zum automatischen Teilen](#automatisch-teilen) los. „Später veröffentlichen“ auszuschalten veröffentlicht sie sofort. Über die API setzt `PATCH /api/files/:id` mit `{ "publishAt": "2026-12-24T18:00:00+01:00" }` den Zeitpunkt, `{ "publishAt": null }` veröffentlicht sofort, `GET /api/files?scheduled=1` listet geplante Dateien.
+
+## Smarte Alben
+
+Ein smartes Album füllt sich selbst. Beim Anlegen eines Albums wählst du „Füllt sich selbst“ und legst die Regel fest: ein Tag, ein Dateityp, nur Favoriten und ein Zeitraum wie die letzten 7, 30 oder 90 Tage oder das letzte Jahr, einzeln oder kombiniert. Ohne Angaben zeigt es alle deine Uploads. Neue passende Uploads erscheinen sofort, ohne dass du sie hineinlegen musst, die neuesten zuerst und höchstens 500.
+
+Dateien mit Passwort oder Aufruflimit und verschlüsselte Dateien bleiben draußen, Besucher sehen geplante und gesperrte Dateien erst, wenn sie öffentlich sind. Smarte Alben teilst du wie jedes andere Album, mit Link, öffentlich im Profil, mit Passwort, als ZIP, Diashow, RSS-Feed oder zum [Einbetten](#einbetten). Von Hand hinzufügen, entfernen, umsortieren, mit anderen Konten füllen oder hineinladen geht nicht, dafür gibt es die Regel. Ein normales Album, das du mit niemandem teilst, lässt sich unter **Bearbeiten** in ein smartes umwandeln und zurück. Die von Hand hineingelegten Dateien verlassen dabei das Album, in deinem Konto bleiben sie. Über die API legt `POST /api/albums` mit `{ "title": "Urlaub", "rule": { "tag": "urlaub", "type": "image", "starred": false, "days": 30 } }` ein smartes Album an.
+
+## Tags verwalten
+
+Im Tag-Menü über den Dateien öffnet **Tags verwalten** die Liste aller Tags mit der Zahl der Dateien. Einen Tag umzubenennen ändert ihn bei allen Dateien auf einmal. Heißt der neue Name wie ein vorhandener Tag, werden beide zusammengeführt, ohne dass eine Datei den Tag doppelt trägt. Löschen entfernt den Tag von allen Dateien, die Dateien selbst bleiben. [Smarte Alben](#smarte-alben) und [Regeln zum automatischen Teilen](#automatisch-teilen) ziehen beim Umbenennen und Zusammenführen mit. Nach dem Löschen eines Tags finden sie nichts mehr, statt plötzlich alles zu zeigen. Über die API: `PATCH /api/tags/:tag` mit `{ "name": "neu" }` und `DELETE /api/tags/:tag`.
+
+## Jahresrückblick
+
+Unter **Statistik** zeigt der **Jahresrückblick**, wie dein Jahr mit MoeShare aussah: wie viele Dateien du hochgeladen hast und wie groß sie zusammen sind, Aufrufe und Reaktionen, aktive Tage, die längste Serie an Tagen in Folge und den fleißigsten Tag. Diagramme zeigen die Uploads pro Monat, nach Wochentag und nach Uhrzeit, ein Balken die Mischung aus Bildern, Videos, Audio, Texten und anderen Dateien. Dazu kommen die meistgesehenen Dateien, die mit den meisten Reaktionen und dein erster Upload im Jahr. Frühere Jahre wählst du oben rechts, gezählt wird nach deutscher Zeit. Die Zahlen gibt es auch unter `GET /api/files/year?year=2025`.
+
+Unter dem Rückblick weist ein Hinweis auf Bilder und Videos ohne [Alternativtext](#beschreibung-und-alternativtext) hin. „Nachtragen“ geht sie der Reihe nach durch, Bild für Bild mit großer Vorschau, „Anzeigen“ filtert die Dateien im Dashboard.
 
 ## Befehlspalette
 
-Mit Strg+K, auf dem Mac mit ⌘K, öffnet sich im Dashboard, im Konto und im Admin-Bereich ein Suchfeld für alles Wichtige: Dateien hochladen, einen Text anlegen, einen Link kürzen, den Bildschirm aufnehmen, zu jedem Bereich wechseln oder zwischen hellem und dunklem Design umschalten. Ab zwei Buchstaben findet es auch deine Dateien. Mit den Pfeiltasten wählst du aus, Enter führt aus. Auf dem Handy stehen die Befehle im Menü deines Kontos.
+Mit Strg+K, auf dem Mac mit ⌘K, öffnet sich im Dashboard, im Konto und im Admin-Bereich ein Suchfeld für alles Wichtige: Dateien hochladen, einen Text anlegen, einen Link kürzen, den Bildschirm aufnehmen, geplante Uploads zeigen, Tags verwalten, Alternativtexte nachtragen, den Jahresrückblick öffnen, zu jedem Bereich wechseln oder zwischen hellem und dunklem Design umschalten. Ab zwei Buchstaben findet es auch deine Dateien. Mit den Pfeiltasten wählst du aus, Enter führt aus. Auf dem Handy stehen die Befehle im Menü deines Kontos.
 
 ## Bilder bearbeiten
 
@@ -491,6 +565,41 @@ Eine Inhaltswarnung legt sich über Dateien, die nicht alle sofort sehen sollen,
 
 Wer die Ansichtsseite öffnet, sieht zuerst den Hinweis über einer verschwommenen Fassung und entscheidet selbst, ob der Inhalt erscheint. In Discord, Telegram und Co. zeigt die Vorschau nur das verschwommene Bild mit der Warnung, ShareX kopiert statt des Direktlinks den Link zur Ansichtsseite. In Alben und auf Profilseiten bleiben solche Dateien verschwommen, bis jemand sie aufdeckt, im Dashboard sind sie in der Übersicht verschwommen.
 
+## Beschreibung und Alternativtext
+
+Jede Datei kann eine **Beschreibung** mit bis zu 2000 Zeichen bekommen, Zeilenumbrüche bleiben erhalten. Sie steht auf der Ansichtsseite unter dem Titel, im Aufbau Magazin als Vorspann, und ersetzt in Link-Vorschauen bei Discord, Telegram und Co. die Beschreibung aus dem [Embed Builder](#vorschauseiten-gestalten). Der **Alternativtext** beschreibt in bis zu 500 Zeichen, was auf einem Bild oder Video zu sehen ist. Screenreader lesen ihn vor, Suchmaschinen und Link-Vorschauen nutzen ihn (`og:image:alt`), und die Codes zum [Einbetten](#einbetten) übernehmen ihn.
+
+Beides trägst du im Dashboard unter „Bearbeiten“ ein. ShareX und andere Programme schicken es beim Hochladen mit `X-Description` und `X-Alt`, die API als Felder `description` und `alt`. Die Suche im Dashboard findet Dateien auch über Beschreibung und Alternativtext. Bei Dateien mit Passwort, Aufruflimit oder Inhaltswarnung und bei verschlüsselten Dateien landet die Beschreibung nicht in der Link-Vorschau.
+
+Für ältere Uploads hilft **Alternativtexte nachtragen** (unter **Statistik** oder in der Befehlspalette): Es zeigt jedes Bild und Video ohne Alternativtext groß an, du tippst, was zu sehen ist, und mit Strg+Enter geht es zum nächsten. Überspringen und später weitermachen ist jederzeit möglich. Der Filter **Ohne Alternativtext** zeigt dieselben Dateien im Dashboard, über die API `GET /api/files?alt=missing`.
+
+## Reaktionen
+
+Unter jeder Datei und auf Albumseiten können Besucher mit 👍 ❤️ 😂 😮 🔥 👏 reagieren, ohne Konto. Gespeichert werden nur die Summen pro Emoji. Damit niemand die Zahlen in die Höhe treibt, zählt jedes Emoji pro Besucher einmal am Tag. Dafür merkt sich MoeShare für 24 Stunden einen Fingerabdruck aus IP-Adresse und Browser, verschlüsselt mit einem Schlüssel, der jeden Tag wechselt, und nur im Arbeitsspeicher. IP-Adressen landen nirgends.
+
+Dateien mit Aufruflimit und verschlüsselte Dateien zeigen keine Reaktionen, Dateien und Alben mit Passwort erst nach dem Entsperren, private Alben nie. Unter **Gestalten › Vorschauseite** blendest du die Reaktionen für deine Seiten und Alben aus, Admins schalten sie unter **Admin › Einstellungen › Funktionen › Teilen und Reaktionen** für alle ab.
+
+Im Dashboard steht die Zahl der Reaktionen auf jeder Kachel und in den Details, die Sortierung **Meiste Reaktionen** zeigt die beliebtesten Dateien zuerst und die **Statistik** listet sie mit der Gesamtzahl. Unter **Konto › Einstellungen** schaltest du Hinweise auf neue Reaktionen ein, per [E-Mail](#e-mail) oder [Push](#push-benachrichtigungen). Damit nicht jedes Emoji einzeln klingelt, sammelt MoeShare die Reaktionen zehn Minuten lang und schickt dann eine Nachricht für alle Dateien und Alben zusammen. Eigene Reaktionen lösen keinen Hinweis aus.
+
+## Einbetten
+
+Bilder, Videos, Audio, Alben und deine Profilkarte lassen sich in andere Websites einbauen, etwa in einen Blog, ein Forum oder eine Wiki-Seite. Im Dashboard öffnet „Einbetten und Codes“ im Menü einer Datei oder unter „Teilen“ in der großen Ansicht einen Dialog mit fertigen Codes, ein Album hat dafür den Knopf „Einbetten“, die Profilseite unter **Gestalten › Profilseite** ebenso. Besucher finden denselben Knopf auf der Ansichtsseite.
+
+- **Einbetten** liefert einen `<iframe>` mit Breite und Farben nach Wahl (hell, dunkel oder wie das Gerät). Darin steht die Datei mit Player, darunter ein Link zur Ansichtsseite. Eine Vorschau zeigt, wie es aussieht.
+- **Markdown**, **BBCode** und **HTML** binden ein Bild direkt ein, mit dem [Alternativtext](#beschreibung-und-alternativtext) und einem Link zur Ansichtsseite. **Link** ist die Adresse der Ansichtsseite.
+
+Die **Profilkarte** unter `/frame/u/:benutzer` zeigt Profilbild, Namen, Beschreibung und bis zu sechs Links mit ihren Symbolen, gedacht für eine Seitenleiste oder eine „Über mich“-Seite.
+
+Seiten, die **oEmbed** verstehen, etwa WordPress, Ghost, Notion oder Discourse, brauchen gar keinen Code: Der Link zur Ansichtsseite, zu einem Album oder einem Profil reicht, den Rest holen sie sich unter `/oembed?url=…`. Bilder kommen dabei als Foto, mit eingeschaltetem Hotlink-Schutz und für andere Dateien als iframe. Autor und Seitenname übernimmt MoeShare aus dem [Embed Builder](#vorschauseiten-gestalten).
+
+Die eingebettete Seite unter `/frame/:dateiname` bzw. `/frame/a/:code` lädt keine Skripte und darf auf jeder Website in einem iframe stehen. Sie zählt als Aufruf in der [Statistik](#papierkorb-statistiken-und-zip). Dateien mit Passwort oder Aufruflimit erscheinen nur als Karte mit einem Link, ohne dass dabei ein Aufruf verbraucht wird, verschlüsselte Dateien und Inhaltswarnungen ebenso. Private Alben lassen sich nicht einbetten. Weil die Bilder aus dem iframe von deinem Server kommen, funktioniert Einbetten auch mit eingeschaltetem [Hotlink-Schutz](#hotlink-schutz). Mit einer [eigenen Domain](#eigene-domains) steht sie auch dort bereit. Unter **Gestalten › Vorschauseite** blendest du den Knopf auf deinen Seiten aus, Admins schalten das Einbetten unter **Admin › Einstellungen › Funktionen › Teilen und Reaktionen** ab.
+
+## Per E-Mail teilen
+
+Ist der [E-Mail-Versand](#e-mail) eingerichtet, schickt „Per E-Mail senden“ im Menü einer Datei, unter „Teilen“ in der großen Ansicht oder bei einem Album den Link an bis zu fünf Adressen auf einmal, mit einer persönlichen Nachricht von bis zu 500 Zeichen. Die E-Mail kommt vom Absender des Servers, trägt deinen Namen und einen Knopf zum Öffnen. Hast du eine bestätigte E-Mail-Adresse, gehen Antworten direkt an dich. Bei Dateien mit Passwort steht in der E-Mail, dass sie geschützt ist, das Passwort selbst nie. Verschlüsselte Dateien und private Alben lassen sich so nicht teilen.
+
+Damit niemand den Server zum Verschicken von Werbung nutzt, sind es höchstens 30 E-Mails pro Stunde und Konto. Jede Sendung steht im Aktivitätsprotokoll. Admins schalten die Funktion unter **Admin › Einstellungen › Funktionen › Teilen und Reaktionen** ab. Über die API: `POST /api/files/:id/email` bzw. `POST /api/albums/:id/email` mit `{ "to": ["a@example.org"], "message": "Schau mal" }`.
+
 ## Vorschauseiten gestalten
 
 Unter **Gestalten › Vorschauseite** baut jede Person ihr eigenes Design für die Seiten ihrer Dateien. Es gilt auch für Alben und die Profilseite. Eine Live-Vorschau zeigt jede Änderung sofort, wahlweise mit einer eigenen Datei und in Handy- oder PC-Größe.
@@ -504,7 +613,7 @@ Unter **Gestalten › Vorschauseite** baut jede Person ihr eigenes Design für d
 | Sofortbild | Die Datei liegt wie ein Polaroid leicht schräg auf dem Tisch |
 | Magazin | Großer Titel wie in einer Zeitschrift, die Datei darunter in voller Breite |
 
-Dazu kommen Akzentfarbe (aus der Datei, die Farbe der Seite oder eine eigene), hell, dunkel oder nach Wahl der Besucher, vier Hintergründe, vier Schriften und drei Eckenformen. Titel, Uploader, Datum, Größe, Aufrufe und die einzelnen Knöpfe lassen sich ausblenden. Eine kurze Notiz und ein eigener Knopf, etwa zu deinem Portfolio, stehen unter jeder Datei.
+Dazu kommen Akzentfarbe (aus der Datei, die Farbe der Seite oder eine eigene), hell, dunkel oder nach Wahl der Besucher, vier Hintergründe, vier Schriften und drei Eckenformen. Titel, [Beschreibung](#beschreibung-und-alternativtext), Uploader, Datum, Größe, Aufrufe, [Reaktionen](#reaktionen) und die einzelnen Knöpfe, auch „Einbetten“, lassen sich ausblenden. Eine kurze Notiz und ein eigener Knopf, etwa zu deinem Portfolio, stehen unter jeder Datei.
 
 Admins legen unter **Gestalten › Vorschauseite › Standard** fest, wie die Seiten aussehen, solange jemand kein eigenes Design gebaut hat. Dort schalten sie eigene Designs ab, dann gilt für alle der Standard, und bestimmen, wer **eigenes CSS** schreiben darf: niemand (Standard), nur Admins oder alle. MoeShare beschränkt das CSS auf die eigenen Seiten, lädt keine fremden Dateien (`url()` und `@import` gehen nicht) und erlaubt nur `@media`, `@supports` und `@container`. Klassen wie `.ms-title`, `.ms-media`, `.ms-actions` und `.ms-meta` stehen im Editor.
 
@@ -512,9 +621,30 @@ Der Embed Builder für die Vorschau in Discord liegt jetzt ebenfalls unter **Ges
 
 ## Profilseiten
 
-Unter **Gestalten › Profilseite** schaltet jede Person ihre öffentliche Seite unter `/u/<benutzername>` ein: mit Anzeigename, kurzer Beschreibung, bis zu sechs Links, den öffentlichen Alben und ausgewählten Dateien. Welche Dateien dort erscheinen, legst du pro Datei mit „Im Profil zeigen“ fest. Dateien mit Passwort oder begrenzten Abrufen tauchen dort nie auf. Die Profilseite übernimmt das Design der Vorschauseiten und ist die Startseite einer [eigenen Domain](#eigene-domains).
+Unter **Gestalten › Profilseite** schaltet jede Person ihre öffentliche Seite unter `/u/<benutzername>` ein: mit Anzeigename, kurzer Beschreibung, Links, den öffentlichen Alben und ausgewählten Dateien. Welche Dateien dort erscheinen, legst du pro Datei mit „Im Profil zeigen“ fest. Dateien mit Passwort oder begrenzten Abrufen tauchen dort nie auf. Die Profilseite übernimmt das Design der Vorschauseiten und ist die Startseite einer [eigenen Domain](#eigene-domains).
 
-Unter **Admin › Einstellungen › Funktionen** lassen sich Profilseiten für alle abschalten.
+### Links und Symbole
+
+Eine Profilseite hat bis zu 30 Einträge: Links und Überschriften, die sie in Abschnitte teilen. Die Reihenfolge änderst du mit den Pfeilen, „Ausblenden“ nimmt einen Link von der Seite, ohne ihn zu löschen. Mit „Sichtbar ab“ und „Sichtbar bis“ erscheint ein Link nur für eine bestimmte Zeit, etwa für eine Aktion oder einen Livestream. Neben Adressen mit `https://` gehen E-Mail-Adressen und Telefonnummern, MoeShare macht daraus `mailto:`- und `tel:`-Links. Fehlt `https://`, ergänzt MoeShare es.
+
+Jeder Link bekommt ein Symbol:
+
+- **Automatisch** (Standard): MoeShare erkennt über 80 Dienste an der Adresse, etwa Discord, YouTube, Twitch, GitHub, Instagram, Spotify oder Steam, dazu E-Mail, Telefon, Feeds und PDFs. Für alles andere gibt es eine Weltkugel.
+- **Vorgefertigt**: 50 allgemeine Symbole wie Shop, Blog, Podcast, Termine oder Unterstützen und die Symbole der Dienste zum Aussuchen, mit Suche.
+- **Emoji**: aus einer Auswahl oder ein beliebiges.
+- **Eigene Symbole**: ein Bild hochladen oder aus den eigenen Uploads nehmen und quadratisch zuschneiden. MoeShare speichert es als WebP mit 128 × 128 Pixeln in der Datenbank, so steckt es in jeder Sicherung. Bis zu 40 eigene Symbole pro Konto, jedes lässt sich für beliebig viele Links nutzen.
+
+Die Symbole der Dienste stammen von [Simple Icons](https://simpleicons.org), die Marken gehören ihren Inhabern.
+
+Ein Link erscheint als Knopf mit Beschriftung oder als runder Knopf in einer Symbolleiste unter der Beschreibung, praktisch für soziale Netzwerke. Einzelne Knöpfe lassen sich hervorheben. Unter **Darstellung** wählst du zwischen einer **Liste** mit großen Knöpfen untereinander, wie bei Link-in-Bio-Seiten, und einer kompakten **Reihe**. Links tragen `rel="me"`, so bestätigt etwa Mastodon, dass die Profilseite dir gehört. Für eigenes CSS gibt es die Klassen `.ms-links`, `.ms-link`, `.ms-link-highlight`, `.ms-link-heading` und `.ms-link-icons`.
+
+### Statistik und Kontakt
+
+Im Editor steht, wie oft die Profilseite in den letzten 30 Tagen aufgerufen wurde, und an jedem Link, wie oft er geklickt wurde. Wie bei den anderen [Statistiken](#papierkorb-statistiken-und-zip) bleiben nur Summen pro Tag, ohne IP-Adressen und Cookies, eigene Aufrufe und Klicks zählen nicht mit. Die Links zeigen dabei weiter direkt auf ihr Ziel, gezählt wird beim Klick nebenher. Ist die Statistik unter **Admin › Einstellungen › Funktionen** abgeschaltet, zählt MoeShare auch hier nichts.
+
+Mit **Kontakt speichern anbieten** steht auf der Profilseite ein Knopf, der eine vCard herunterlädt: Name, Profilbild, Beschreibung, die Links samt Beschriftung und die E-Mail-Adressen und Telefonnummern aus den Links. So landet das Profil mit einem Tipp im Adressbuch, etwa nach dem Scannen des [QR-Codes](#qr-codes).
+
+Unter **Admin › Einstellungen › Funktionen** lassen sich Profilseiten und eigene Symbole für alle abschalten. Vorgefertigte Symbole und Emojis gehen immer.
 
 ## Profilbilder
 
@@ -574,6 +704,8 @@ Unter **Admin › Einstellungen › E-Mail** trägst du einen SMTP-Server ein, e
 - **Einladungen** direkt an eine E-Mail-Adresse schicken.
 - **Hinweise zum Konto** verschicken, etwa wenn sich das Passwort oder die Zwei-Faktor-Anmeldung ändert, ein Passkey dazukommt oder sich jemand mit einem Einmal-Link anmeldet.
 - **Admins benachrichtigen** bei neuen Meldungen, neuen Konten und Anfragen für Einmal-Links.
+- **Hinweise auf Reaktionen** und die tägliche Erinnerung **An diesem Tag** verschicken, wenn die Person sie einschaltet.
+- Dateien und Alben [per E-Mail teilen](#per-e-mail-teilen).
 
 Jede Person trägt ihre Adresse unter **Konto › Einstellungen** ein und bestätigt sie über einen Link. Dort wählt sie auch, welche Hinweise sie per Mail bekommt. E-Mails kommen in der Sprache der Empfänger. Ohne E-Mail-Server kommen die wichtigsten Hinweise auf Wunsch als [Push-Benachrichtigung](#push-benachrichtigungen).
 
@@ -583,6 +715,8 @@ Hinweise kommen auf Wunsch direkt aufs Handy oder den Rechner, auch wenn MoeShar
 
 - **Sicherheitshinweise**: eine Anmeldung auf einem neuen Gerät und Änderungen an Passwort, Zwei-Faktor-Anmeldung oder Passkeys
 - **Uploads über Datei-Anfragen**, sofern bei der Anfrage „Mich bei neuen Dateien benachrichtigen“ eingeschaltet ist
+- **Reaktionen auf deine Uploads**, gesammelt für alle Dateien und Alben
+- **An diesem Tag**: morgens, wenn du am heutigen Tag in früheren Jahren etwas hochgeladen hast
 - für Admins außerdem **neue Meldungen**, **neue Benutzer** und **Systemmeldungen** wie ablaufende Zertifikate, Probleme mit Caddy oder eine neue Version
 
 Ein Tipp auf den Hinweis öffnet die passende Seite. „Test senden“ prüft die Zustellung, und Geräte, an denen du gerade nicht bist, schaltest du in derselben Liste ab. Auf iPhone und iPad klappt Push erst, wenn MoeShare als [App](#app-fürs-handy) auf dem Home-Bildschirm liegt, ab iOS 16.4. Pro Konto merkt sich MoeShare bis zu 20 Geräte, kommt ein weiteres dazu, fällt das am längsten unbenutzte heraus.
@@ -656,7 +790,7 @@ Die Sperre gilt für alle Upload-Wege, auch für Datei-Anfragen, Links und die D
 
 ## Hotlink-Schutz
 
-Mit dem Hotlink-Schutz binden andere Seiten deine Bilder, Videos und Dateien nicht mehr direkt von deinem Server ein und verbrauchen so keinen Traffic auf deine Kosten. Du schaltest ihn unter **Admin › Einstellungen › Uploads › Hotlink-Schutz** ein. Er gilt für die Direktlinks unter `/uploads/…`, Ansichtsseiten, Alben, Profile und der Download-Link bleiben für alle erreichbar.
+Mit dem Hotlink-Schutz binden andere Seiten deine Bilder, Videos und Dateien nicht mehr direkt von deinem Server ein und verbrauchen so keinen Traffic auf deine Kosten. Du schaltest ihn unter **Admin › Einstellungen › Uploads › Hotlink-Schutz** ein. Er gilt für die Direktlinks unter `/uploads/…`, Ansichtsseiten, Alben, Profile und der Download-Link bleiben für alle erreichbar. Wer eine Datei trotzdem auf einer anderen Seite zeigen will, nimmt den Code zum [Einbetten](#einbetten).
 
 - Deine eigenen Seiten, alle Domains der Instanz und die [eigenen Domains](#eigene-domains) der Konten dürfen immer einbinden. Weitere Seiten trägst du unter „Erlaubte Seiten“ ein, mit `*.example.org` gehören alle Subdomains dazu.
 - Link-Vorschauen von Discord, Telegram, WhatsApp, Slack, Mastodon und anderen Diensten funktionieren weiter.
@@ -668,7 +802,7 @@ MoeShare erkennt die Herkunft an den Headern `Sec-Fetch-Site` und `Referer`. Das
 
 ## Datenexport
 
-Unter **Konto › Konto › Deine Daten** lädt jede Person ein ZIP-Archiv mit allem herunter, was MoeShare über sie gespeichert hat: alle Dateien, ältere Fassungen und den Papierkorb, dazu `account.json` (Konto, Einstellungen, Profil, Design, Domains, Anmeldeverfahren), `files.json`, `albums.json`, `links.json` und `activity.json` sowie eine `LIESMICH.txt`, die den Inhalt erklärt. „Nur die Angaben“ lässt die Dateien weg. Passwörter, Tokens und andere Geheimnisse stehen nicht im Export. Vor dem Download fragt MoeShare noch einmal nach Passwort oder Passkey. Unter **Admin › Einstellungen › Funktionen** schaltest du den Export ab.
+Unter **Konto › Konto › Deine Daten** lädt jede Person ein ZIP-Archiv mit allem herunter, was MoeShare über sie gespeichert hat: alle Dateien, ältere Fassungen und den Papierkorb, dazu `account.json` (Konto, Einstellungen, Profil, Design, Domains, Anmeldeverfahren), `files.json` (mit Tags, Alben, Schutz, Versionen, Beschreibung, Alternativtext und Favoriten), `albums.json`, `links.json` und `activity.json`, das Profilbild und die eigenen Symbole für Links sowie eine `LIESMICH.txt`, die den Inhalt erklärt. „Nur die Angaben“ lässt die Dateien weg. Passwörter, Tokens und andere Geheimnisse stehen nicht im Export. Vor dem Download fragt MoeShare noch einmal nach Passwort oder Passkey. Unter **Admin › Einstellungen › Funktionen** schaltest du den Export ab.
 
 ## Import aus anderen Uploadern
 
@@ -761,7 +895,9 @@ Umgebungsvariablen sind nur noch optional. Du kannst sie als `.env` im Projektor
 | `TZ` | Systemzeit | Zeitzone für die Zeitstempel im Log, etwa `Europe/Berlin` |
 | `GLITCHTIP_DSN` | Projekt-GlitchTip | Ziel für Fehlerberichte, siehe [Protokoll und Fehlerberichte](#protokoll-und-fehlerberichte). `off` schaltet sie ganz ab. |
 | `UPDATE_CHECK_URL` | `https://moeshare.moestudio.net/version.json` | Woher die [Versionsprüfung](#versionsprüfung) die neueste Version holt. `off` schaltet sie fest ab. |
-| `URL_FETCH_ALLOW_PRIVATE` | `false` | „Hochladen per Link“ darf auch Adressen im internen Netz abrufen. Nur im eigenen Netz einschalten. |
+| `URL_FETCH_ALLOW_PRIVATE` | `false` | „Hochladen per Link“ darf auch Adressen im internen Netz abrufen, ebenso ntfy, Matrix und Mastodon beim [automatischen Teilen](#automatisch-teilen), dann auch ohne HTTPS. Nur im eigenen Netz einschalten. |
+| `MEMORY_NOTICE_HOUR` | `9` | Ab dieser Stunde (deutsche Zeit) gehen die täglichen Hinweise [An diesem Tag](#favoriten-und-rückblick) raus |
+| `REACTION_NOTICE_DELAY_MS` | `600000` | Wie lange MoeShare neue [Reaktionen](#reaktionen) sammelt, bevor es Bescheid gibt, in Millisekunden |
 | `DNS_SERVERS` | DNS des Systems | DNS-Server für die Prüfung [eigener Domains](#eigene-domains), durch Kommas getrennt, etwa `1.1.1.1,9.9.9.9` |
 | `PUID` / `PGID` | `1000` | Nur Docker: Benutzer und Gruppe, denen `db/` und `uploads/` gehören |
 | `DOMAIN` | | Nur Docker mit Caddy, siehe [Hinter einem Reverse-Proxy](#hinter-einem-reverse-proxy) |
@@ -991,13 +1127,13 @@ Abschalten lässt sich die Prüfung dort oder unter **Admin › Einstellungen �
 
 ```json
 {
-  "version": "3.6.0",
-  "date": "2026-11-11",
-  "changelog": "https://moeshare.moestudio.net/changelog.html#v3.6.0",
+  "version": "3.8.0",
+  "date": "2026-11-17",
+  "changelog": "https://moeshare.moestudio.net/changelog.html#v3.8.0",
   "security": false,
   "notes": {
-    "de": ["Push-Benachrichtigungen aufs Handy, auch ohne E-Mail-Server"],
-    "en": ["Push notifications to your phone, even without an email server"]
+    "de": ["Automatisch teilen an sechs Dienste, smarte Alben und Jahresrückblick"],
+    "en": ["Automatic sharing to six services, smart albums and year in review"]
   }
 }
 ```
@@ -1012,6 +1148,10 @@ Was neu ist und worauf du beim Update achten musst, steht im [Changelog](https:/
 4. MoeShare starten.
 
 Beim ersten Start sichert MoeShare die Datenbank automatisch nach `db/backups/` und bringt sie auf den neuen Stand. Bestehende Discord-Verknüpfungen bleiben dabei erhalten. Werte aus einer alten `.env` (zum Beispiel `SITE_TITLE` oder `MAX_FILE_SIZE_MB`) werden einmalig übernommen, danach meldet das Log, welche Variablen du entfernen kannst. Bisherige ShareX-Tokens funktionieren weiter. Für Konten aus älteren Versionen ist zunächst auch die Anmeldung mit dem Token möglich, damit sich alle ein Passwort setzen können. Unter **Admin › Einstellungen › Anmeldung** schaltest du das ab.
+
+Beim Update auf 3.8 legt MoeShare Tabellen für [Reaktionen](#reaktionen) auf Dateien und Alben, für gesammelte Hinweise auf Reaktionen und für die Regeln zum [automatischen Teilen](#automatisch-teilen) an. Dateien bekommen Beschreibung, Alternativtext, Favoriten und einen Zeitpunkt zum [späteren Veröffentlichen](#später-veröffentlichen), Alben eine Regel für [smarte Alben](#smarte-alben). Reaktionen, Einbetten, automatisches Teilen und [Teilen per E-Mail](#per-e-mail-teilen) sind danach erlaubt, Reaktionen und der Knopf „Einbetten“ erscheinen auf allen Ansichtsseiten und Alben, bis jemand sie unter **Gestalten** ausblendet. Hinweise auf Reaktionen und „An diesem Tag“ bleiben aus, bis jede Person sie selbst einschaltet. Wer im Reverse-Proxy eigene Header setzt, lässt für `/frame/` ein `X-Frame-Options` weg, sonst lassen sich Dateien nicht einbetten. Die Pfade `frame` und `oembed` sind ab jetzt als [eigener Pfad](#eigene-adressen-und-eigener-pfad) reserviert.
+
+Beim Update auf 3.7 legt MoeShare eine Tabelle für [eigene Symbole](#links-und-symbole) an. Bestehende Links auf Profilseiten bekommen ein automatisches Symbol und bleiben in der Reihe wie bisher, mit „Kein Symbol“ sehen sie aus wie vorher. Wer die Weboberfläche selbst baut, führt in `client/` einmal `npm install` aus, dort ist das Paket `simple-icons` dazugekommen.
 
 Beim Update auf 3.6 legt MoeShare eine Tabelle für Geräte mit [Push-Benachrichtigungen](#push-benachrichtigungen) an. Push ist danach erlaubt, einschalten muss es jede Person selbst auf ihren Geräten. [Verschlüsselte Uploads](#ende-zu-ende-verschlüsselt-teilen) sind ebenfalls erlaubt, der [Hotlink-Schutz](#hotlink-schutz) bleibt aus, bis du ihn einschaltest. Wer im Reverse-Proxy eine eigene Content Security Policy setzt, ergänzt `blob:` bei `connect-src` und `frame-src`, sonst bleiben entschlüsselte Dateien und PDFs in der Vorschau leer.
 
@@ -1069,7 +1209,7 @@ Mit Docker heißen die Befehle `docker compose exec moeshare moeshare register`,
 
 ## API
 
-Skripte und Uploader melden sich mit einem API-Token im Header `Authorization` an. Alle Upload-Wege verstehen die Angaben aus der Tabelle unter [ShareX verbinden](#sharex-verbinden), als Header oder als Feld im Formular bzw. im JSON (`expires`, `password`, `once`, `maxViews`, `urlStyle`, `domain`, `title`, `syntax`, `tags`, `album`, `warning`, `optimize`, `watermark`).
+Skripte und Uploader melden sich mit einem API-Token im Header `Authorization` an. Alle Upload-Wege verstehen die Angaben aus der Tabelle unter [ShareX verbinden](#sharex-verbinden), als Header oder als Feld im Formular bzw. im JSON (`expires`, `password`, `once`, `maxViews`, `urlStyle`, `domain`, `title`, `description`, `alt`, `syntax`, `tags`, `album`, `warning`, `optimize`, `watermark`, `publishAt`).
 
 | Methode | Pfad | Beschreibung |
 | --- | --- | --- |
@@ -1081,9 +1221,18 @@ Skripte und Uploader melden sich mit einem API-Token im Header `Authorization` a
 | `GET` | `/api/uploads` | Unfertige Uploads des eigenen Kontos |
 | `GET` | `/files` | Dateinamen des eigenen Kontos, neueste zuerst |
 | `GET` | `/api/files/cleanup` | Dateien zum [Aufräumen](#aufräumen), mit `kind=large`, `unseen` oder `stale` und `page`. Antwort: `{ files, total, summary: { count, bytes }, … }` |
+| `GET` | `/api/files?starred=1` | Nur [Favoriten](#favoriten-und-rückblick), auch mit `search`, `type`, `tag` und `page`. Dazu `scheduled=1` für [geplante Dateien](#später-veröffentlichen), `alt=missing` für Bilder und Videos ohne Alternativtext und `sort=reactions` für die meisten [Reaktionen](#reaktionen) zuerst |
+| `GET` | `/api/files/memories` | [Rückblick](#favoriten-und-rückblick) für heute: `{ memories: [{ years, files }] }` |
+| `GET` | `/api/files/year?year=2025` | [Jahresrückblick](#jahresrückblick): Uploads, Größe, Typen, Monate, Wochentage, Stunden, Serie, beliebteste Dateien und mehr, ohne `year` das laufende Jahr |
+| `PATCH` | `/api/files/:id` | Eigene Datei ändern, unter anderem `title`, `description`, `alt`, `starred`, `tags`, `warning` und `publishAt` (`null` veröffentlicht sofort). Antwort: `{ file }` |
+| `POST` | `/api/files/:id/email` | Datei [per E-Mail teilen](#per-e-mail-teilen): `{ to: [..], message }`. Antwort: `{ ok, sent }` |
+| `POST` | `/api/albums` | Album anlegen, mit `rule: { tag, type, starred, days }` als [smartes Album](#smarte-alben). `PATCH /api/albums/:id` ändert die Regel, `rule: null` macht es wieder zu einem normalen Album |
+| `POST` | `/api/albums/:id/email` | Album per E-Mail teilen, wie bei Dateien |
+| `PATCH` | `/api/tags/:tag` | [Tag](#tags-verwalten) umbenennen oder mit `{ name }` in einen vorhandenen zusammenführen. `DELETE /api/tags/:tag` löscht ihn |
+| `GET` | `/api/account/autoshare` | Regeln zum [automatischen Teilen](#automatisch-teilen): `{ enabled, rules, kinds, types, max }`. `POST` legt eine an (`kind` plus die Felder des Ziels, dazu `name`, `tag`, `types`, `template`), `PATCH /api/account/autoshare/:id` ändert sie, `DELETE` entfernt sie, `POST /api/account/autoshare/:id/test` schickt eine Testnachricht |
 | `DELETE` | `/file/:dateiname` | Eigene Datei in den Papierkorb legen, ohne Papierkorb sofort löschen. Antwort: `{ ok, trashed }` |
 
-Öffentlich erreichbar sind `/view/:dateiname` (Ansichtsseite), `/download/:dateiname`, `/view/:dateiname/zip` und `/view/:dateiname/zip/:nr` ([Inhalt von ZIP-Archiven](#vorschau-für-pdf-markdown-csv-und-zip) und einzelne Dateien daraus), `/uploads/:benutzer/:dateiname` (die Datei selbst), `/s/:code` (Kurzlinks), `/a/:code` (Alben), `/a/:code/zip` (Album als ZIP), `/u/:benutzer` (Profilseiten), `/a/:code/feed.xml` und `/u/:benutzer/feed.xml` ([RSS-Feeds](#diashow-und-rss-feeds)), `/r/:code` ([Datei-Anfragen](#datei-anfragen)), `/api/discord/interactions` (nur mit Signatur von Discord, siehe [Discord-App](#discord-app)), `/report` (Inhalt melden), `/oembed/:dateiname`, `/api/home` (Statistiken der Startseite), `/api/domains/tls` (Abfrage für Caddy), `/impressum`, `/datenschutz` und `/healthz` für Health-Checks. `/metrics` antwortet nur mit dem Token aus [Metriken für Prometheus](#metriken-für-prometheus). Geschützte Dateien liefert MoeShare erst nach Eingabe des Passworts auf der Ansichtsseite aus.
+Öffentlich erreichbar sind `/view/:dateiname` (Ansichtsseite), `/download/:dateiname`, `/view/:dateiname/zip` und `/view/:dateiname/zip/:nr` ([Inhalt von ZIP-Archiven](#vorschau-für-pdf-markdown-csv-und-zip) und einzelne Dateien daraus), `/uploads/:benutzer/:dateiname` (die Datei selbst), `/s/:code` (Kurzlinks), `/a/:code` (Alben), `/a/:code/zip` (Album als ZIP), `/u/:benutzer` (Profilseiten), `/u/:benutzer/icons/:schlüssel` (eigene Symbole), `/u/:benutzer/contact.vcf` ([Kontakt speichern](#statistik-und-kontakt)), `/frame/:dateiname`, `/frame/a/:code` und `/frame/u/:benutzer` ([Einbetten](#einbetten)), `/oembed?url=…` (oEmbed für Dateien, Alben und Profile), `POST /view/:dateiname/react` und `POST /a/:code/react` mit `{ "reaction": "love" }` ([Reaktionen](#reaktionen)), `/a/:code/feed.xml` und `/u/:benutzer/feed.xml` ([RSS-Feeds](#diashow-und-rss-feeds)), `/r/:code` ([Datei-Anfragen](#datei-anfragen)), `/api/discord/interactions` (nur mit Signatur von Discord, siehe [Discord-App](#discord-app)), `/report` (Inhalt melden), `/oembed/:dateiname`, `/api/home` (Statistiken der Startseite), `/api/domains/tls` (Abfrage für Caddy), `/impressum`, `/datenschutz` und `/healthz` für Health-Checks. `/metrics` antwortet nur mit dem Token aus [Metriken für Prometheus](#metriken-für-prometheus). Geschützte Dateien liefert MoeShare erst nach Eingabe des Passworts auf der Ansichtsseite aus.
 
 ```bash
 curl -H "Authorization: ms_…" -F "file=@bild.png" https://share.example.com/upload

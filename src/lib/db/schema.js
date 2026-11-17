@@ -95,6 +95,10 @@ const TABLES = [
       col('version_at', 'bigint'),
       col('request_id', 'bigint'),
       col('uploader', 'string', { length: 80 }),
+      col('description', 'text'),
+      col('alt_text', 'text'),
+      col('starred_at', 'bigint'),
+      col('publish_at', 'bigint'),
     ],
     indexes: [
       { name: 'idx_file_data_username_id', columns: ['username', 'id'] },
@@ -105,6 +109,7 @@ const TABLES = [
       { name: 'idx_file_data_created', columns: ['created_at'] },
       { name: 'idx_file_data_deleted', columns: ['deleted_at'] },
       { name: 'idx_file_data_hash', columns: ['username', 'sha256'] },
+      { name: 'idx_file_data_publish', columns: ['publish_at'] },
     ],
   },
   {
@@ -273,6 +278,7 @@ const TABLES = [
       col('updated_at', 'bigint', { notNull: true }),
       col('blocked_at', 'bigint'),
       col('blocked_reason', 'string', { length: 200 }),
+      col('rule', 'text'),
     ],
     indexes: [
       { name: 'idx_albums_code', columns: ['code'], unique: true },
@@ -644,6 +650,66 @@ const TABLES = [
     indexes: [
       { name: 'idx_push_subscriptions_endpoint', columns: ['endpoint_hash'], unique: true },
       { name: 'idx_push_subscriptions_user', columns: ['user_id'] },
+    ],
+  },
+  {
+    name: 'reactions',
+    columns: [
+      id(),
+      col('kind', 'string', { length: 1, notNull: true }),
+      col('ref_id', 'bigint', { notNull: true }),
+      col('reaction', 'string', { length: 16, notNull: true }),
+      col('count', 'bigint', { notNull: true, default: 0 }),
+    ],
+    indexes: [{ name: 'idx_reactions_ref', columns: ['kind', 'ref_id', 'reaction'], unique: true }],
+  },
+  {
+    name: 'reaction_notices',
+    columns: [
+      id(),
+      userRef(),
+      col('kind', 'string', { length: 1, notNull: true }),
+      col('ref_id', 'bigint', { notNull: true }),
+      col('reactions', 'int', { notNull: true, default: 0 }),
+      col('first_at', 'bigint', { notNull: true }),
+    ],
+    indexes: [
+      { name: 'idx_reaction_notices_ref', columns: ['user_id', 'kind', 'ref_id'], unique: true },
+      { name: 'idx_reaction_notices_first', columns: ['first_at'] },
+    ],
+  },
+  {
+    name: 'auto_shares',
+    columns: [
+      id(),
+      userRef(),
+      col('name', 'string', { length: 80 }),
+      col('kind', 'string', { length: 16, notNull: true }),
+      col('target', 'text', { notNull: true }),
+      col('tag', 'string', { length: 48 }),
+      col('types', 'string', { length: 64 }),
+      col('template', 'text'),
+      col('enabled', 'int', { notNull: true, default: 1 }),
+      col('created_at', 'bigint', { notNull: true }),
+      col('last_success_at', 'bigint'),
+      col('last_error', 'string', { length: 200 }),
+      col('failures', 'int', { notNull: true, default: 0 }),
+    ],
+    indexes: [{ name: 'idx_auto_shares_user', columns: ['user_id', 'id'] }],
+  },
+  {
+    name: 'profile_icons',
+    columns: [
+      id(),
+      userRef(),
+      col('icon_key', 'string', { length: 24, notNull: true }),
+      col('image', 'longblob', { notNull: true }),
+      col('size_bytes', 'bigint', { notNull: true, default: 0 }),
+      col('created_at', 'bigint', { notNull: true }),
+    ],
+    indexes: [
+      { name: 'idx_profile_icons_key', columns: ['icon_key'], unique: true },
+      { name: 'idx_profile_icons_user', columns: ['user_id'] },
     ],
   },
 ];

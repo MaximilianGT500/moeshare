@@ -25,12 +25,21 @@ const AUTOMATIC = /-auto\.tar\.gz$/;
 const LOCK = 'backup';
 const LOCK_MS = 6 * 60 * 60 * 1000;
 const BATCH = 400;
+const ARCHIVE_ATTEMPTS = 3;
 
 let current = null;
 
 const directory = () => path.join(config.paths.data, 'backups');
 const stamp = (date = new Date()) => date.toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15);
 const relative = (target) => path.relative(config.paths.root, target).split(path.sep).join('/');
+
+async function sweep(folder) {
+  const names = await fsp.readdir(folder).catch(() => []);
+  for (const name of names) {
+    if (name.startsWith('.staging-') || /\.tar\.gz(\.\d+)?\.partial$/.test(name))
+      await fsp.rm(path.join(folder, name), { recursive: true, force: true });
+  }
+}
 
 function s3Target() {
   return new S3Client({
@@ -75,8 +84,10 @@ async function countUploads() {
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) await walk(full);
       else if (entry.isFile()) {
+        const stat = await fsp.stat(full).catch(() => null);
+        if (!stat) continue;
         files += 1;
-        bytes += (await fsp.stat(full)).size;
+        bytes += stat.size;
       }
     }
   };
@@ -99,8 +110,9 @@ async function create({ includeUploads = settings.get('backup.includeUploads'), 
   const folder = directory();
   const staging = path.join(folder, `.staging-${process.pid}-${started}`);
   const target = path.join(folder, name);
-  const partial = `${target}.partial`;
+  const partials = [];
   try {
+    await sweep(folder);
     await fsp.mkdir(path.join(staging, 'database'), { recursive: true });
     const tables = {};
     for (const table of TABLES) tables[table.name] = await writeTable(path.join(staging, 'database', `${table.name}.jsonl`), table);
@@ -126,19 +138,31 @@ async function create({ includeUploads = settings.get('backup.includeUploads'), 
     const entries = [`${stagingPath}/manifest.json`, `${stagingPath}/database`];
     if (secret) entries.push(`${stagingPath}/secret`);
     if (includeUploads && fs.existsSync(config.paths.uploads)) entries.push(relative(config.paths.uploads));
-    await tar.c(
-      {
-        gzip: { level: includeUploads ? 1 : 6 },
-        file: partial,
-        cwd: config.paths.root,
-        portable: true,
-        onWriteEntry(entry) {
-          if (entry.path === stagingPath || entry.path.startsWith(`${stagingPath}/`)) entry.path = entry.path.slice(stagingPath.length + 1);
-        },
+    const options = {
+      gzip: { level: includeUploads ? 1 : 6 },
+      cwd: config.paths.root,
+      portable: true,
+      jobs: 1,
+      onWriteEntry(entry) {
+        if (entry.path === stagingPath || entry.path.startsWith(`${stagingPath}/`)) entry.path = entry.path.slice(stagingPath.length + 1);
       },
-      entries
-    );
-    await fsp.rename(partial, target);
+    };
+    for (;;) {
+      const partial = partials.length ? `${target}.${partials.length + 1}.partial` : `${target}.partial`;
+      partials.push(partial);
+      try {
+        await tar.c({ ...options, file: partial }, entries);
+        await fsp.rename(partial, target);
+        break;
+      } catch (error) {
+        if (error.code !== 'ENOENT' || partials.length >= ARCHIVE_ATTEMPTS) throw error;
+        log.warn('Eine Datei verschwand während der Sicherung, neuer Versuch', {
+          file: error.path ? relative(error.path) : null,
+          attempt: partials.length + 1,
+        });
+      }
+    }
+    for (const partial of partials.slice(0, -1)) await fsp.rm(partial, { force: true });
     const { size } = await fsp.stat(target);
     let location = 'local';
     if (useS3()) {
@@ -163,7 +187,7 @@ async function create({ includeUploads = settings.get('backup.includeUploads'), 
     });
     return result;
   } catch (error) {
-    await fsp.rm(partial, { force: true });
+    for (const partial of partials) await fsp.rm(partial, { force: true });
     await settings.writeMeta('backup', { name, at: started, ok: false, error: error.message }).catch(() => {});
     log.error('Die Sicherung ist fehlgeschlagen', { error });
     throw error;

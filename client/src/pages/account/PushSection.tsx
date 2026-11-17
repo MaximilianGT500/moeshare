@@ -20,7 +20,10 @@ import FlagOutlined from '@mui/icons-material/FlagOutlined';
 import PersonAddAltOutlined from '@mui/icons-material/PersonAddAltOutlined';
 import DnsOutlined from '@mui/icons-material/DnsOutlined';
 import MoveToInboxOutlined from '@mui/icons-material/MoveToInboxOutlined';
+import AddReactionOutlined from '@mui/icons-material/AddReactionOutlined';
+import EventRepeatOutlined from '@mui/icons-material/EventRepeatOutlined';
 import type { NotifyKey } from '../../lib/types';
+import { readBoot } from '../../lib/boot';
 import {
   ApiError,
   errorMessage,
@@ -65,6 +68,20 @@ const EVENTS: PushEvent[] = [
     icon: <MoveToInboxOutlined />,
     label: t('Uploads über Datei-Anfragen'),
     description: t('Wenn jemand über eine deiner Datei-Anfragen etwas hochlädt. Pro Anfrage schaltest du das extra ein.'),
+  },
+  {
+    key: 'reactions',
+    admin: false,
+    icon: <AddReactionOutlined />,
+    label: t('Reaktionen auf deine Uploads'),
+    description: t('Gesammelt, wenn Besucher auf deine Dateien oder Alben reagiert haben.'),
+  },
+  {
+    key: 'memories',
+    admin: false,
+    icon: <EventRepeatOutlined />,
+    label: t('An diesem Tag'),
+    description: t('Morgens, wenn du am heutigen Tag in früheren Jahren etwas hochgeladen hast.'),
   },
   {
     key: 'reports',
@@ -201,7 +218,8 @@ export function PushSection({ isAdmin }: { isAdmin: boolean }) {
 
   const current = hash ? state.devices.find((device) => device.endpointHash === hash) || null : null;
   const others = state.devices.filter((device) => device !== current);
-  const events = EVENTS.filter((event) => isAdmin || !event.admin);
+  const reactionsOn = Boolean(readBoot().site.reactions);
+  const events = EVENTS.filter((event) => (isAdmin || !event.admin) && (event.key !== 'reactions' || reactionsOn));
 
   const enable = async () => {
     if (!state.publicKey) return;

@@ -24,12 +24,15 @@ import PauseRounded from '@mui/icons-material/PauseRounded';
 import TimerOutlined from '@mui/icons-material/TimerOutlined';
 import LockOutlined from '@mui/icons-material/LockOutlined';
 import ArrowOutwardRounded from '@mui/icons-material/ArrowOutwardRounded';
+import CodeRounded from '@mui/icons-material/CodeRounded';
 import type { SiteInfo, ViewBoot, ViewFile, ViewUrls } from '../../lib/types';
 import { t, tn } from '../../lib/i18n';
 import { useDesign } from '../../lib/design';
 import { extensionOf, formatBytes, formatDateTime, formatNumber, parseServerDate, relativeFromServer, relativeMs } from '../../lib/format';
 import { mix } from '../../lib/color';
+import { react } from '../../lib/api';
 import { DesignBackdrop } from '../../components/OwnerPage';
+import { Reactions, SAMPLE_REACTIONS } from '../../components/Reactions';
 import { BrandMark } from '../../components/BrandMark';
 import { ThemeToggleButton } from '../../components/ThemeToggle';
 import { CopyIconButton, CopyTextButton, CopyTextLink } from '../../components/CopyButton';
@@ -40,6 +43,7 @@ import { Waveform } from '../../components/Waveform';
 import { fileIcon, typeDescription } from '../../components/FileIcons';
 import { FooterLinks, SiteFooter } from '../../components/SiteFooter';
 import { ReportButton } from '../../components/ReportDialog';
+import { ShareCodesDialog, type ShareTarget } from '../../components/ShareCodesDialog';
 import { TextStage } from './TextStage';
 import { PdfStage } from './PdfStage';
 import { SealedStage } from './SealedStage';
@@ -306,7 +310,7 @@ export function MediaStage({
         component="img"
         className="ms-media"
         src={urls.display}
-        alt={label}
+        alt={file.alt || label}
         width={file.width || undefined}
         height={file.height || undefined}
         onLoad={onLoaded}
@@ -404,6 +408,7 @@ export function Actions({ model, style = 'buttons' }: { model: ViewModel; style?
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const shareable = {
     filename: label,
+    alt: file.alt || null,
     type: file.type,
     urls: { view: urls.view, direct: file.protected || file.once || file.sealed ? urls.view : urls.direct },
   };
@@ -412,11 +417,29 @@ export function Actions({ model, style = 'buttons' }: { model: ViewModel; style?
   const saveAs = model.downloadName ? { download: model.downloadName } : {};
   const glass = style === 'glass';
   const iconSx = glass ? { color: '#fff', '&:hover': { bgcolor: 'rgb(255 255 255 / 0.14)' } } : {};
+  const [codes, setCodes] = useState<ShareTarget | null>(null);
+  const embeddable = shows('frame') && Boolean(model.site.frames && (model.boot.frame || model.boot.sample)) && !file.sealed;
+  const openCodes = () =>
+    model.boot.frame &&
+    setCodes({
+      kind: 'file',
+      name: label,
+      alt: file.alt || null,
+      view: urls.view,
+      direct: file.protected || file.once ? null : urls.direct,
+      frame: model.boot.frame || null,
+      type: file.type,
+      width: file.width,
+      height: file.height,
+    });
 
   const menu = (
-    <Menu anchorEl={anchor} open={!!anchor} onClose={() => setAnchor(null)} slotProps={{ root: { sx: { zIndex: 1500 } } }}>
-      <ShareMenuItems file={shareable} onDone={() => setAnchor(null)} />
-    </Menu>
+    <>
+      <Menu anchorEl={anchor} open={!!anchor} onClose={() => setAnchor(null)} slotProps={{ root: { sx: { zIndex: 1500 } } }}>
+        <ShareMenuItems file={shareable} onDone={() => setAnchor(null)} />
+      </Menu>
+      {embeddable && <ShareCodesDialog target={codes} onClose={() => setCodes(null)} zIndex={1550} />}
+    </>
   );
 
   if (style === 'compact' || glass) {
@@ -427,6 +450,13 @@ export function Actions({ model, style = 'buttons' }: { model: ViewModel; style?
           <Tooltip title={t('Teilen')}>
             <IconButton aria-label={t('Teilen')} aria-haspopup="menu" onClick={(event) => setAnchor(event.currentTarget)} sx={iconSx}>
               <ShareRounded />
+            </IconButton>
+          </Tooltip>
+        )}
+        {embeddable && (
+          <Tooltip title={t('Einbetten')}>
+            <IconButton aria-label={t('Einbetten')} aria-haspopup="dialog" onClick={openCodes} sx={iconSx}>
+              <CodeRounded />
             </IconButton>
           </Tooltip>
         )}
@@ -476,6 +506,11 @@ export function Actions({ model, style = 'buttons' }: { model: ViewModel; style?
             {t('Teilen')}
           </Link>
         )}
+        {embeddable && (
+          <Link component="button" type="button" underline="always" sx={link} onClick={openCodes}>
+            {t('Einbetten')}
+          </Link>
+        )}
         {original && (
           <Link href={urls.direct} target="_blank" rel="noopener" underline="always" sx={link}>
             {t('Original')}
@@ -513,6 +548,11 @@ export function Actions({ model, style = 'buttons' }: { model: ViewModel; style?
           sx={{ borderRadius: `${r(radius.full)}px` }}
         >
           {t('Teilen')}
+        </Button>
+      )}
+      {embeddable && (
+        <Button startIcon={<CodeRounded />} onClick={openCodes} aria-haspopup="dialog" sx={{ borderRadius: `${r(radius.full)}px` }}>
+          {t('Einbetten')}
         </Button>
       )}
       {original && (
@@ -679,6 +719,58 @@ export function TitleBlock({ model, size = 'normal' }: { model: ViewModel; size?
       </Box>
     </Box>
   );
+}
+
+export function DescriptionBlock({
+  model,
+  align = 'left',
+  size = 'normal',
+  tone = 'normal',
+}: {
+  model: ViewModel;
+  align?: 'left' | 'center';
+  size?: 'normal' | 'lede';
+  tone?: 'normal' | 'glass';
+}) {
+  const { shows } = useDesign();
+  const text = model.file.description;
+  if (!text || !shows('description')) return null;
+  return (
+    <Typography
+      component="p"
+      className="ms-description"
+      sx={{
+        m: 0,
+        maxWidth: '68ch',
+        mx: align === 'center' ? 'auto' : undefined,
+        textAlign: align,
+        whiteSpace: 'pre-line',
+        overflowWrap: 'anywhere',
+        fontSize: size === 'lede' ? { xs: '1.1rem', md: '1.3rem' } : '1rem',
+        lineHeight: size === 'lede' ? 1.5 : 1.6,
+        color: tone === 'glass' ? 'rgb(255 255 255 / 0.86)' : 'text.primary',
+      }}
+    >
+      {text}
+    </Typography>
+  );
+}
+
+export function ReactionBar({
+  model,
+  align = 'left',
+  tone = 'normal',
+}: {
+  model: ViewModel;
+  align?: 'left' | 'center';
+  tone?: 'normal' | 'glass';
+}) {
+  const { shows } = useDesign();
+  const { boot, file } = model;
+  const sample = Boolean(boot.sample || boot.preview);
+  const initial = sample ? (model.site.reactions ? (boot.reactions ?? SAMPLE_REACTIONS) : null) : boot.reactions;
+  if (!initial || !shows('reactions') || (file.sealed && !sample)) return null;
+  return <Reactions id={file.slug} counts={initial} send={(key) => react(file.slug, key)} sample={sample} align={align} tone={tone} />;
 }
 
 export function NoteBlock({ align = 'left' }: { align?: 'left' | 'center' }) {

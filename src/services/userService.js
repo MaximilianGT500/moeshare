@@ -262,6 +262,8 @@ async function remove(userId) {
   await db.run("DELETE FROM stats_daily WHERE kind = 'p' AND ref_id = ?", [user.id]);
   await db.run("DELETE FROM stats_sources WHERE kind = 'p' AND ref_id = ?", [user.id]);
   await db.run('DELETE FROM album_files WHERE album_id IN (SELECT id FROM albums WHERE user_id = ?)', [user.id]);
+  await db.run("DELETE FROM reactions WHERE kind = 'a' AND ref_id IN (SELECT id FROM albums WHERE user_id = ?)", [user.id]);
+  await db.run("DELETE FROM reaction_notices WHERE kind = 'a' AND ref_id IN (SELECT id FROM albums WHERE user_id = ?)", [user.id]);
   for (const table of [
     'sessions',
     'api_tokens',
@@ -276,6 +278,9 @@ async function remove(userId) {
     'login_links',
     'user_devices',
     'push_subscriptions',
+    'profile_icons',
+    'auto_shares',
+    'reaction_notices',
   ]) {
     await db.run(`DELETE FROM ${table} WHERE user_id = ?`, [user.id]);
   }

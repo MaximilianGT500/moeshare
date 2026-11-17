@@ -21,6 +21,7 @@ const rules = require('../services/uploadRules');
 const uploads = require('../services/uploadService');
 const viewer = require('../services/viewerService');
 const webhook = require('../services/webhookService');
+const audit = require('../services/auditService');
 const stats = require('../services/statsService');
 const storage = require('../services/storageService');
 const zips = require('../services/zipService');
@@ -34,9 +35,17 @@ const addresses = require('../services/addressService');
 const paths = require('../services/pathService');
 const domains = require('../services/domainService');
 const subtitles = require('../services/subtitleService');
+const publishing = require('../services/publishService');
+const years = require('../services/yearService');
+const mailShare = require('../services/mailShareService');
+const { limiter } = require('../lib/limiter');
+const reactions = require('../services/reactionService');
 const media = require('../lib/media');
 
 const router = express.Router();
+const mailLimiter = limiter({ windowMs: 60 * 1000, limit: 10 });
+const mailShareOn = (req, res, next) =>
+  next(mailShare.enabled() ? undefined : forbidden('Teilen per E-Mail ist auf diesem Server abgeschaltet.'));
 const signedIn = requireApi();
 
 const GALLERY_PAGE_SIZE = 40;
@@ -137,9 +146,22 @@ router.get('/api/files', signedIn, async (req, res) => {
       tag: text(req.query.tag, 40),
       album: req.query.album ? Number.parseInt(req.query.album, 10) || null : null,
       trash: req.query.trash === '1',
+      starred: req.query.starred === '1',
+      scheduled: req.query.scheduled === '1',
+      missingAlt: req.query.alt === 'missing',
       domain: displayDomain(prefs, req.user.username),
     })
   );
+});
+
+router.get('/api/files/year', signedIn, async (req, res) => {
+  const prefs = await preferences.get(req.user.id);
+  res.json(await years.review(req.user.username, req.query.year, { domain: displayDomain(prefs, req.user.username) }));
+});
+
+router.get('/api/files/memories', signedIn, async (req, res) => {
+  const prefs = await preferences.get(req.user.id);
+  res.json({ memories: await files.memoriesFor(req.user.username, { domain: displayDomain(prefs, req.user.username) }) });
 });
 
 router.get('/api/files/cleanup', signedIn, async (req, res) => {
@@ -189,7 +211,20 @@ router.get('/api/stats/overview', signedIn, async (req, res) => {
   const top = overview.top
     .map((entry, index) => ({ ...entry, file: records[index] ? files.toFile(records[index]) : null }))
     .filter((entry) => entry.file);
-  res.json({ ...overview, top });
+  const reacted = reactions.enabled() ? await reactions.top(req.user.username, { limit: 5 }) : [];
+  const reactedRecords = await Promise.all(reacted.map((entry) => files.findById(entry.id)));
+  res.json({
+    ...overview,
+    top,
+    reactions: reactions.enabled()
+      ? {
+          total: await reactions.sum(req.user.username),
+          top: reacted
+            .map((entry, index) => ({ ...entry, file: reactedRecords[index] ? files.toFile(reactedRecords[index]) : null }))
+            .filter((entry) => entry.file),
+        }
+      : null,
+  });
 });
 
 router.get('/api/trash', signedIn, async (req, res) => {
@@ -225,6 +260,17 @@ router.delete('/api/trash', signedIn, async (req, res) => {
 
 router.get('/api/tags', signedIn, async (req, res) => {
   res.json({ tags: await files.tagsFor(req.user.username) });
+});
+
+router.patch('/api/tags/:tag', signedIn, async (req, res) => {
+  const name = typeof (req.body || {}).name === 'string' ? req.body.name : '';
+  const result = await files.renameTag(req.user.username, req.params.tag, name);
+  res.json({ ok: true, ...result, tags: await files.tagsFor(req.user.username) });
+});
+
+router.delete('/api/tags/:tag', signedIn, async (req, res) => {
+  const removed = await files.deleteTag(req.user.username, req.params.tag);
+  res.json({ ok: true, files: removed, tags: await files.tagsFor(req.user.username) });
 });
 
 async function ownedFile(req) {
@@ -265,6 +311,13 @@ router.delete('/api/files/:id/subtitles/:subtitleId', signedIn, async (req, res)
   const record = await ownedVideo(req);
   await subtitles.remove(record.id, req.params.subtitleId);
   res.json({ ok: true, subtitles: await subtitles.list(record.id) });
+});
+
+router.post('/api/files/:id/email', signedIn, mailShareOn, mailLimiter, async (req, res) => {
+  const record = await ownedFile(req);
+  const result = await mailShare.shareFile(req.user, record, req.body || {});
+  audit.log('file_emailed', { userId: req.user.id, req, details: { file: record.filename, recipients: result.sent } });
+  res.json({ ok: true, ...result });
 });
 
 router.get('/api/files/:id/stats', signedIn, async (req, res) => {
@@ -373,6 +426,24 @@ router.patch('/api/files/:id', signedIn, async (req, res) => {
     fields.listed = body.listed ? 1 : 0;
   }
   if (body.warning !== undefined) fields.warning = warningValue(body.warning);
+  if (body.description !== undefined) {
+    if (body.description !== null && typeof body.description !== 'string')
+      throw badRequest('Ungültige Beschreibung.', { field: 'description' });
+    if (body.description && body.description.length > files.MAX_DESCRIPTION * 2) {
+      throw badRequest(`Höchstens ${files.MAX_DESCRIPTION} Zeichen.`, { field: 'description' });
+    }
+    fields.description = files.cleanDescription(body.description);
+  }
+  if (body.alt !== undefined) {
+    if (body.alt !== null && typeof body.alt !== 'string') throw badRequest('Ungültiger Alternativtext.', { field: 'alt' });
+    fields.alt_text = files.cleanAlt(body.alt);
+  }
+  if (body.starred !== undefined) {
+    if (typeof body.starred !== 'boolean') throw badRequest('Erwartet wird an oder aus.', { field: 'starred' });
+    fields.starred_at = body.starred ? record.starred_at || Date.now() : null;
+  }
+  const releaseNow = body.publishAt === null && Boolean(record.publish_at);
+  if (body.publishAt !== undefined && body.publishAt !== null) fields.publish_at = files.publishTime(body.publishAt);
   const renamed =
     typeof body.slug === 'string' && body.slug.trim() !== (record.slug || record.filename)
       ? await addresses.rename('file', record, body.slug)
@@ -382,6 +453,7 @@ router.patch('/api/files/:id', signedIn, async (req, res) => {
     await files.setTags(updated, body.tags);
     updated = await files.findById(record.id);
   }
+  if (releaseNow && (await publishing.publishNow(record))) updated = await files.findById(record.id);
   const [file] = await files.withTags([updated]);
   res.json({ file });
 });
@@ -393,7 +465,22 @@ function warningValue(value) {
   return value.replace(/\s+/g, ' ').trim().slice(0, 100);
 }
 
-const BULK_ACTIONS = ['delete', 'tag', 'untag', 'expire', 'protect', 'unprotect', 'list', 'unlist', 'restore', 'purge', 'warn', 'unwarn'];
+const BULK_ACTIONS = [
+  'delete',
+  'tag',
+  'untag',
+  'expire',
+  'protect',
+  'unprotect',
+  'list',
+  'unlist',
+  'restore',
+  'purge',
+  'warn',
+  'unwarn',
+  'star',
+  'unstar',
+];
 const TRASH_ACTIONS = ['restore', 'purge'];
 
 router.post('/api/files/bulk', signedIn, async (req, res) => {
@@ -428,6 +515,8 @@ router.post('/api/files/bulk', signedIn, async (req, res) => {
     else if (action === 'unprotect') await files.patch(record, { password_hash: null, max_views: null });
     else if (action === 'warn') await files.patch(record, { warning });
     else if (action === 'unwarn') await files.patch(record, { warning: null });
+    else if (action === 'star') await files.patch(record, { starred_at: record.starred_at || Date.now() });
+    else if (action === 'unstar') await files.patch(record, { starred_at: null });
   }
   if (action === 'delete' && records.length) {
     webhook.notify(

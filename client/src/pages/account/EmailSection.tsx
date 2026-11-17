@@ -11,7 +11,10 @@ import FlagOutlined from '@mui/icons-material/FlagOutlined';
 import PersonAddAltOutlined from '@mui/icons-material/PersonAddAltOutlined';
 import DnsOutlined from '@mui/icons-material/DnsOutlined';
 import MoveToInboxOutlined from '@mui/icons-material/MoveToInboxOutlined';
+import AddReactionOutlined from '@mui/icons-material/AddReactionOutlined';
+import EventRepeatOutlined from '@mui/icons-material/EventRepeatOutlined';
 import type { EmailState, NotifyKey, Preferences } from '../../lib/types';
+import { readBoot } from '../../lib/boot';
 import { ApiError, errorMessage, removeEmail, startEmailVerification } from '../../lib/api';
 import { relativeMs } from '../../lib/format';
 import { t } from '../../lib/i18n';
@@ -228,6 +231,28 @@ export function EmailSection({
           checked={notify.requests}
           disabled={saving}
           onChange={(on) => toggle('requests', on)}
+        />
+      )}
+      {state.email && state.verifiedAt && readBoot().site.reactions && (
+        <SwitchRow
+          id="notify-reactions"
+          icon={<AddReactionOutlined />}
+          label={t('Reaktionen auf deine Uploads')}
+          description={t('Eine gesammelte E-Mail, wenn Besucher auf deine Dateien oder Alben reagiert haben, höchstens alle paar Minuten.')}
+          checked={notify.reactions}
+          disabled={saving}
+          onChange={(on) => toggle('reactions', on)}
+        />
+      )}
+      {state.email && state.verifiedAt && (
+        <SwitchRow
+          id="notify-memories"
+          icon={<EventRepeatOutlined />}
+          label={t('An diesem Tag')}
+          description={t('Morgens eine E-Mail, wenn du am heutigen Tag in früheren Jahren etwas hochgeladen hast.')}
+          checked={notify.memories}
+          disabled={saving}
+          onChange={(on) => toggle('memories', on)}
         />
       )}
     </SettingsSection>

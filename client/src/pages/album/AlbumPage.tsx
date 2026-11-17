@@ -12,12 +12,14 @@ import EditRounded from '@mui/icons-material/EditRounded';
 import FolderZipOutlined from '@mui/icons-material/FolderZipOutlined';
 import UpdateRounded from '@mui/icons-material/UpdateRounded';
 import { readBoot } from '../../lib/boot';
-import type { AlbumBoot, AlbumItem } from '../../lib/types';
+import type { AlbumBoot, AlbumItem, ReactionKey } from '../../lib/types';
 import { formatBytes, formatDateTime, relativeMs } from '../../lib/format';
 import { meaningfulColor } from '../../lib/color';
 import { accentOf, useDesign, withDefaults } from '../../lib/design';
 import { t, tn } from '../../lib/i18n';
 import { CopyTextButton } from '../../components/CopyButton';
+import { Reactions } from '../../components/Reactions';
+import { reactAlbum } from '../../lib/api';
 import { LockedScreen } from '../../components/LockedScreen';
 import { OwnerPage } from '../../components/OwnerPage';
 import { PublicGallery, enterFullscreen, viewable } from '../../components/PublicGallery';
@@ -37,7 +39,14 @@ export function AlbumPage() {
   const accent = accentOf(design, meaningfulColor(items.find((item) => item.color)?.color), boot.site.seedColor);
   return (
     <OwnerPage site={boot.site} design={design} css={boot.css} accent={accent} cover={cover} page="album" report={boot.report}>
-      <AlbumView album={boot.album} items={items} owner={!!boot.owner} dashboard={boot.dashboard || null} feed={boot.feed || null} />
+      <AlbumView
+        album={boot.album}
+        items={items}
+        owner={!!boot.owner}
+        dashboard={boot.dashboard || null}
+        feed={boot.feed || null}
+        reactions={boot.reactions || null}
+      />
     </OwnerPage>
   );
 }
@@ -72,12 +81,14 @@ function AlbumView({
   owner,
   dashboard,
   feed,
+  reactions,
 }: {
   album: AlbumData;
   items: AlbumItem[];
   owner: boolean;
   dashboard: string | null;
   feed: string | null;
+  reactions: Record<ReactionKey, number> | null;
 }) {
   const { shows, r } = useDesign();
   const [play, setPlay] = useState(0);
@@ -192,6 +203,11 @@ function AlbumView({
             </Tooltip>
           )}
         </Box>
+        {reactions && shows('reactions') && (
+          <Box sx={{ mt: 2.5 }}>
+            <Reactions id={`a:${album.code}`} counts={reactions} send={(key) => reactAlbum(album.code, key)} />
+          </Box>
+        )}
       </m.section>
 
       <PublicGallery items={items} play={play} />

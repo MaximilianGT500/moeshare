@@ -26,7 +26,7 @@ export function ShareMenuItems({
   file,
   onDone,
 }: {
-  file: { filename: string; type: FileType; urls: { view: string; direct: string } };
+  file: { filename: string; alt?: string | null; type: FileType; urls: { view: string; direct: string } };
   onDone?: () => void;
 }) {
   const toast = useToast();

@@ -15,23 +15,56 @@ const audit = require('../services/auditService');
 const watermarks = require('../services/watermarkService');
 const { fileView, sampleRecord } = require('../services/viewService');
 const avatars = require('../services/avatarService');
+const profileIcons = require('../services/profileIconService');
+const stats = require('../services/statsService');
 const { DEFAULT_DESIGN, LAYOUTS, BACKGROUNDS, FONTS, CORNERS, SCHEMES, ELEMENTS, MAX_CSS } = require('../lib/viewDesign');
 
 const router = express.Router();
 const signedIn = requireApi();
 
+const STATS_DAYS = 30;
+
+async function profileStats(user, profile) {
+  const [clicks, visits] = await Promise.all([
+    stats.sums(
+      'pl',
+      profile.links.map((link) => link.id),
+      { days: STATS_DAYS }
+    ),
+    stats.sums('p', [user.id], { days: STATS_DAYS }),
+  ]);
+  const own = visits.get(Number(user.id));
+  return {
+    enabled: stats.enabled(),
+    days: STATS_DAYS,
+    views: own ? own.views : 0,
+    previews: own ? own.previews : 0,
+    clicks: Object.fromEntries([...clicks].map(([id, counts]) => [id, counts.views])),
+  };
+}
+
 async function profileData(user) {
-  const [profile, albums, listed] = await Promise.all([
+  const [profile, albums, listed, ownIcons] = await Promise.all([
     profiles.get(user.id),
     db.count("SELECT COUNT(*) FROM albums WHERE user_id = ? AND visibility = 'public'", [user.id]),
     db.count(`SELECT COUNT(*) FROM file_data WHERE username = ? AND listed = 1 AND ${files.LIVE}`, [user.username]),
+    profileIcons.list(user),
   ]);
   return {
     ...profile,
     available: settings.get('profiles.enabled'),
     urls: profiles.profileUrls(user.username),
     counts: { albums, files: listed },
+    maxLinks: profiles.MAX_LINKS,
+    icons: { enabled: profileIcons.enabled(), max: profileIcons.MAX_ICONS, items: ownIcons },
+    stats: await profileStats(user, profile),
   };
+}
+
+function elementChoices() {
+  return ELEMENTS.filter(
+    (element) => (element !== 'reactions' || settings.get('reactions.enabled')) && (element !== 'frame' || settings.get('frames.enabled'))
+  );
 }
 
 async function viewData(user) {
@@ -44,7 +77,7 @@ async function viewData(user) {
     cssMode: designs.cssMode(),
     cssAllowed: designs.cssAllowedFor(user.role),
     sampleFileId: sample ? Number(sample.id) : null,
-    choices: { layouts: LAYOUTS, backgrounds: BACKGROUNDS, fonts: FONTS, corners: CORNERS, schemes: SCHEMES, elements: ELEMENTS },
+    choices: { layouts: LAYOUTS, backgrounds: BACKGROUNDS, fonts: FONTS, corners: CORNERS, schemes: SCHEMES, elements: elementChoices() },
     maxCss: MAX_CSS,
   };
 }
