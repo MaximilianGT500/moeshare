@@ -46,6 +46,7 @@ import { ReportButton } from '../../components/ReportDialog';
 import { ShareCodesDialog, type ShareTarget } from '../../components/ShareCodesDialog';
 import { TextStage } from './TextStage';
 import { PdfStage } from './PdfStage';
+import { FONT_EXTENSIONS, FontStage } from '../../components/FontPreview';
 import { SealedStage } from './SealedStage';
 import type { SealedMeta } from '../../lib/sealed';
 import { ZipStage } from './ZipStage';
@@ -376,6 +377,13 @@ export function MediaStage({
           format={file.syntax === 'markdown' ? 'markdown' : ext === 'csv' || ext === 'tsv' ? 'csv' : null}
           filename={file.filename}
         />
+      </Box>
+    );
+  }
+  if (FONT_EXTENSIONS.includes(ext) && !file.blocked && !file.sealed) {
+    return (
+      <Box className="ms-media">
+        <FontStage src={urls.raw} />
       </Box>
     );
   }

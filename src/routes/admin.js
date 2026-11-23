@@ -49,6 +49,7 @@ const caddy = require('../services/caddyService');
 const metrics = require('../services/metricsService');
 const announcementService = require('../services/announcementService');
 const discordApp = require('../services/discordAppService');
+const telegram = require('../services/telegramService');
 
 const router = express.Router();
 const admin = requireApi({ admin: true });
@@ -75,6 +76,7 @@ const AUDIT_CATEGORIES = {
     'password_reset',
     'token_created',
     'token_revoked',
+    'token_updated',
     'sessions_revoked',
     'discord_linked',
     'discord_unlinked',
@@ -785,6 +787,19 @@ router.get('/api/admin/discord', admin, async (req, res) => res.json(await disco
 router.post('/api/admin/discord/commands', admin, async (req, res) => {
   await discordApp.register();
   res.json(await discordState(req));
+});
+
+const telegramState = async (req) => {
+  const state = await telegram.state();
+  return { ...state, error: state.error ? tr(req, state.error) : null };
+};
+
+router.get('/api/admin/telegram', admin, async (req, res) => res.json(await telegramState(req)));
+
+router.post('/api/admin/telegram/check', admin, async (req, res) => {
+  const candidate = typeof req.body.token === 'string' && req.body.token.trim() ? req.body.token.trim() : undefined;
+  await telegram.check(candidate);
+  res.json(await telegramState(req));
 });
 
 router.post('/api/admin/clamav/test', admin, async (req, res) => {

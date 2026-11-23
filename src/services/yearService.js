@@ -112,16 +112,14 @@ async function review(username, input, { domain = null, now = Date.now() } = {})
   const byId = new Map((await files.withTags(fileRows, { domain })).map((file) => [Number(file.id), file]));
 
   const [albums, links] = await Promise.all([
-    db.count('SELECT COUNT(*) FROM albums a JOIN users u ON u.id = a.user_id WHERE u.username = ? AND a.created_at >= ? AND a.created_at < ?', [
-      username,
-      start,
-      end,
-    ]),
-    db.count('SELECT COUNT(*) FROM links l JOIN users u ON u.id = l.user_id WHERE u.username = ? AND l.created_at >= ? AND l.created_at < ?', [
-      username,
-      start,
-      end,
-    ]),
+    db.count(
+      'SELECT COUNT(*) FROM albums a JOIN users u ON u.id = a.user_id WHERE u.username = ? AND a.created_at >= ? AND a.created_at < ?',
+      [username, start, end]
+    ),
+    db.count(
+      'SELECT COUNT(*) FROM links l JOIN users u ON u.id = l.user_id WHERE u.username = ? AND l.created_at >= ? AND l.created_at < ?',
+      [username, start, end]
+    ),
   ]);
 
   return {

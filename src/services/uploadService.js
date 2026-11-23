@@ -30,6 +30,7 @@ const versions = require('./versionService');
 const search = require('./searchService');
 const watermarks = require('./watermarkService');
 const addresses = require('./addressService');
+const similarity = require('../lib/similarity');
 
 const log = logger.scope('upload');
 
@@ -105,9 +106,28 @@ function decodedHeader(value) {
   }
 }
 
-function rawOptions(req) {
+const PRESET_FIELDS = ['tags', 'expires', 'urlStyle', 'warning'];
+
+function withPreset(raw, preset) {
+  if (!preset) return raw;
+  const merged = { ...raw };
+  for (const key of PRESET_FIELDS) {
+    if (first(merged[key]) === undefined && preset[key] !== undefined && preset[key] !== null) merged[key] = preset[key];
+  }
+  if (first(merged.album) === undefined && preset.album) {
+    merged.album = preset.album;
+    merged.presetAlbum = true;
+  }
+  return merged;
+}
+
+function rawOptions(req, { preset = true } = {}) {
   const body = req.body || {};
   const header = (name) => req.get(name);
+  return withPreset(readOptions(body, header), preset && req.token ? req.token.preset : null);
+}
+
+function readOptions(body, header) {
   return {
     slug: first(body.slug, decodedHeader(header('x-slug'))),
     code: first(body.code, decodedHeader(header('x-code'))),
@@ -176,8 +196,8 @@ async function resolveOptions(user, raw = {}, { kind = 'file' } = {}) {
 
   let album = null;
   if (raw.album !== undefined && raw.album !== null && raw.album !== '') {
-    album = user.id ? await albumFor(user, raw.album) : null;
-    if (!album) throw badRequest('Dieses Album gibt es nicht.', { field: 'album' });
+    album = user.id ? await albumFor(user, raw.album).catch((error) => (raw.presetAlbum ? null : Promise.reject(error))) : null;
+    if (!album && !raw.presetAlbum) throw badRequest('Dieses Album gibt es nicht.', { field: 'album' });
   }
 
   const wanted = kind === 'link' ? first(raw.code, raw.slug) : raw.slug;
@@ -234,7 +254,8 @@ function analyzeLater(record, type = files.typeOf(record.filename, record.syntax
   media
     .analyze(username, filename, type, options)
     .then(async ({ result, errors, info }) => {
-      await files.update(username, filename, result);
+      const colored = options.dominantColor && (type === 'image' || type === 'video');
+      await files.update(username, filename, { ...result, colorFamily: colored ? similarity.familyOf(result.dominantColor) : null });
       if (type === 'video') {
         const heavy = await media.transcode(username, filename, {
           hls: settings.get('uploads.hls'),
@@ -593,6 +614,7 @@ module.exports = {
   EDITABLE,
   newFilename,
   rawOptions,
+  withPreset,
   resolveOptions,
   linksFor,
   analyzeLater,

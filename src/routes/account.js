@@ -33,6 +33,8 @@ const paths = require('../services/pathService');
 const storage = require('../services/storageService');
 const legalService = require('../services/legalService');
 const push = require('../services/pushService');
+const telegram = require('../services/telegramService');
+const uploads = require('../services/uploadService');
 const { deviceLabel } = require('../lib/request');
 const { limiter } = require('../lib/limiter');
 const { filePaths } = require('../lib/storage');
@@ -66,6 +68,7 @@ const OWN_ACTIVITY = [
   'identity_unlinked',
   'token_created',
   'token_revoked',
+  'token_updated',
   'sessions_revoked',
   'user_registered',
   'user_created',
@@ -159,6 +162,7 @@ async function overview(req) {
     policy: { passwordMinLength: settings.get('auth.passwordMinLength'), passwordLogin: settings.get('auth.passwordLogin') },
     sessions: sessionList.map((session) => ({ ...session, device: tr(req, session.device) })),
     tokens: tokenList,
+    telegram: await telegram.accountState(req.user),
     activity,
     setup: sessions.pendingSetup(req.user),
     preferences: await preferences.get(row.id),
@@ -336,10 +340,49 @@ router.post('/api/account/sessions/revoke-others', signedIn, async (req, res) =>
   res.json({ ok: true, count });
 });
 
+function presetInput(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+  if (value.tags === undefined || value.tags === null || value.tags === '') return value;
+  return { ...value, tags: files.normalizeTags(value.tags) };
+}
+
+const presetCheck = (user) => async (preset) => {
+  await uploads.resolveOptions(user, { ...preset, warning: preset.warning === true ? 'ja' : preset.warning });
+};
+
 router.post('/api/account/tokens', sudo, async (req, res) => {
-  const { token, record } = await tokens.create(req.user.id, req.body.name);
+  const { token, record } = await tokens.create(req.user.id, req.body.name, {
+    scopes: req.body.scopes,
+    preset: presetInput(req.body.preset),
+    validate: presetCheck(req.user),
+  });
   audit.log('token_created', { userId: req.user.id, req, details: { name: record.name } });
   res.json({ ok: true, token, record });
+});
+
+router.patch('/api/account/tokens/:id', sudo, async (req, res) => {
+  const record = await tokens.update(
+    req.user.id,
+    integer(req.params.id),
+    { name: req.body.name, scopes: req.body.scopes, preset: presetInput(req.body.preset) },
+    { validate: presetCheck(req.user) }
+  );
+  audit.log('token_updated', { userId: req.user.id, req, details: { name: record.name } });
+  res.json({ ok: true, record, tokens: await tokens.listForUser(req.user.id) });
+});
+
+router.get('/api/account/telegram', signedIn, async (req, res) => {
+  res.json(await telegram.accountState(req.user));
+});
+
+router.post('/api/account/telegram/link', signedIn, async (req, res) => {
+  res.json(await telegram.startLink(req.user));
+});
+
+router.delete('/api/account/telegram', signedIn, async (req, res) => {
+  if (!(await telegram.unlink(req.user.id))) throw notFound('Telegram ist nicht verbunden.');
+  audit.log('identity_unlinked', { userId: req.user.id, req, details: { provider: telegram.PROVIDER } });
+  res.json({ ok: true, ...(await telegram.accountState(req.user)) });
 });
 
 router.delete('/api/account/tokens/:id', signedIn, async (req, res) => {

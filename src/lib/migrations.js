@@ -431,6 +431,16 @@ const MIGRATIONS = [
       await createIndexes(db, 'file_data');
     },
   },
+  {
+    version: 15,
+    name: 'Telegram-Bot, Rechte für Zugänge, ähnliche Bilder und Farben',
+    async up(db) {
+      await addColumns(db, 'api_tokens', ['scopes', 'preset']);
+      await addColumns(db, 'file_data', ['phash', 'color_family']);
+      await createTable(db, 'chat_links');
+      await createIndexes(db, 'file_data');
+    },
+  },
 ];
 
 const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

@@ -12,6 +12,7 @@ import { FileThumb } from '../../components/FileThumb';
 import { StatsPanel } from '../../components/StatsView';
 import { displayName } from './MediaTile';
 import { YearReviewSection } from './yearReview';
+import { UploadCalendarSection } from './calendar';
 import { c, css, radius } from '../../theme/tokens';
 
 function breakdown(entry: StatsOverview['top'][number]) {
@@ -144,11 +145,13 @@ function AltNudge({ count, onFix, onShow }: { count: number; onFix: () => void; 
 
 export function InsightsView({
   onOpen,
+  onDay,
   missingAlt = 0,
   onAltFix,
   onAltShow,
 }: {
   onOpen: (file: FileItem) => void;
+  onDay?: (day: string) => void;
   missingAlt?: number;
   onAltFix?: () => void;
   onAltShow?: () => void;
@@ -169,6 +172,7 @@ export function InsightsView({
         )}
       />
       {missingAlt > 0 && onAltFix && onAltShow && <AltNudge count={missingAlt} onFix={onAltFix} onShow={onAltShow} />}
+      <UploadCalendarSection onDay={onDay} />
       <YearReviewSection onOpen={onOpen} />
     </Box>
   );

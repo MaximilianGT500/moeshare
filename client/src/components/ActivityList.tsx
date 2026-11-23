@@ -226,6 +226,8 @@ function describeEvent(event: AuditEvent): Described {
       return { icon: <TokenRounded />, title: t('API-Token erstellt'), detail: str(d.name) || undefined, tone: 'neutral' };
     case 'token_revoked':
       return { icon: <TokenRounded />, title: t('API-Token widerrufen'), tone: 'neutral' };
+    case 'token_updated':
+      return { icon: <TokenRounded />, title: t('API-Token geändert'), detail: str(d.name) || undefined, tone: 'neutral' };
     case 'sessions_revoked':
       return {
         icon: <DevicesRounded />,

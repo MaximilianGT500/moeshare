@@ -1,5 +1,6 @@
 'use strict';
 
+const fs = require('fs');
 const db = require('../lib/db');
 const cache = require('../lib/cache');
 const logger = require('../lib/logger');
@@ -7,13 +8,14 @@ const { badRequest, notFound } = require('../lib/errors');
 const { durationOf } = require('../lib/expiry');
 const { berlinDate, berlinDay } = require('../lib/format');
 const { displayPath } = require('../lib/slugs');
-const { extensionOf, baseNameOf, userDirs, isSafeFilename } = require('../lib/storage');
+const { extensionOf, baseNameOf, userDirs, isSafeFilename, filePaths } = require('../lib/storage');
+const similarity = require('../lib/similarity');
 const settings = require('./settingsService');
 const storage = require('./storageService');
 const domains = require('./domainService');
 const paths = require('./pathService');
 
-const fsp = require('fs').promises;
+const fsp = fs.promises;
 
 const log = logger.scope('files');
 
@@ -334,11 +336,26 @@ function listForUser(
     starred = false,
     scheduled = false,
     missingAlt = false,
+    color = '',
+    from = null,
+    to = null,
     domain = null,
   } = {}
 ) {
   const conditions = ['file_data.username = ?', trash ? 'file_data.deleted_at IS NOT NULL' : 'file_data.deleted_at IS NULL'];
   const params = [username];
+  if (color && similarity.FAMILIES.includes(color)) {
+    conditions.push('file_data.color_family = ?');
+    params.push(color);
+  }
+  if (Number.isSafeInteger(from) && from > 0) {
+    conditions.push('file_data.created_at >= ?');
+    params.push(from);
+  }
+  if (Number.isSafeInteger(to) && to > 0) {
+    conditions.push('file_data.created_at < ?');
+    params.push(to);
+  }
   if (starred) conditions.push('file_data.starred_at IS NOT NULL');
   if (scheduled) {
     conditions.push('file_data.publish_at > ?');
@@ -379,13 +396,163 @@ function listForUser(
   return paginate({ conditions, params, order, page, limit, maxLimit: 100, domain, decorate });
 }
 
-const CLEANUP_KINDS = ['large', 'unseen', 'stale'];
+const CLEANUP_KINDS = ['large', 'unseen', 'stale', 'similar'];
+const SIMILAR_THRESHOLD = 6;
+const SIMILAR_LIMIT = 5000;
+const SIMILAR_GROUPS = 60;
+
+async function similarGroups(username, { domain = null } = {}) {
+  const rows = await db.all(
+    `SELECT * FROM file_data WHERE username = ? AND ${LIVE} AND phash IS NOT NULL AND phash <> '' ORDER BY id DESC LIMIT ${SIMILAR_LIMIT}`,
+    [username]
+  );
+  const found = similarity
+    .groups(
+      rows.map((row) => ({ hash: row.phash, row })),
+      { threshold: SIMILAR_THRESHOLD }
+    )
+    .map((list) => list.map((item) => item.row).sort((a, b) => Number(a.id) - Number(b.id)))
+    .sort((a, b) => b.length - a.length || Number(b[b.length - 1].id) - Number(a[a.length - 1].id))
+    .slice(0, SIMILAR_GROUPS);
+  const flat = found.flat();
+  const decorated = await withTags(flat, { domain });
+  const byId = new Map(decorated.map((file) => [file.id, file]));
+  const files = [];
+  found.forEach((list, index) => {
+    for (const row of list) {
+      const file = byId.get(Number(row.id));
+      if (file) files.push({ ...file, group: index + 1 });
+    }
+  });
+  return {
+    files,
+    total: files.length,
+    page: 1,
+    pages: 1,
+    limit: files.length,
+    hasNext: false,
+    groups: found.length,
+    summary: { count: files.length, bytes: flat.reduce((sum, row) => sum + (Number(row.size_bytes) || 0), 0) },
+  };
+}
+
+const QUARTER_HOUR = 15 * 60 * 1000;
+const ZONE_MARGIN_MS = 14 * 60 * 60 * 1000;
+
+function timeZoneOf(value) {
+  if (typeof value !== 'string' || !value || value.length > 64) return null;
+  try {
+    return Intl.DateTimeFormat('en-US', { timeZone: value }).resolvedOptions().timeZone;
+  } catch {
+    return null;
+  }
+}
+
+function dayReader({ timeZone, shift }) {
+  if (!timeZone) return (ms) => new Date(ms + shift).toISOString().slice(0, 10);
+  const format = new Intl.DateTimeFormat('en-US', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' });
+  const seen = new Map();
+  return (ms) => {
+    const key = Math.floor(ms / QUARTER_HOUR);
+    let day = seen.get(key);
+    if (!day) {
+      const parts = Object.fromEntries(format.formatToParts(new Date(ms)).map((part) => [part.type, part.value]));
+      day = `${parts.year}-${parts.month}-${parts.day}`;
+      seen.set(key, day);
+    }
+    return day;
+  };
+}
+
+async function calendar(username, { year = new Date().getFullYear(), offsetMinutes = 0, timeZone = null } = {}) {
+  const target = Number.isInteger(year) && year > 1990 && year < 3000 ? year : new Date().getFullYear();
+  const zone = timeZoneOf(timeZone);
+  const shift = zone ? 0 : Math.max(-14 * 60, Math.min(14 * 60, Number(offsetMinutes) || 0)) * 60 * 1000;
+  const dayOf = dayReader({ timeZone: zone, shift });
+  const margin = zone ? ZONE_MARGIN_MS : 0;
+  const rows = await db.all(
+    `SELECT created_at, size_bytes FROM file_data WHERE username = ? AND ${LIVE} AND created_at >= ? AND created_at < ?`,
+    [username, Date.UTC(target, 0, 1) - shift - margin, Date.UTC(target + 1, 0, 1) - shift + margin]
+  );
+  const prefix = `${target}-`;
+  const days = {};
+  let total = 0;
+  let bytes = 0;
+  for (const row of rows) {
+    const day = dayOf(Number(row.created_at));
+    if (!day.startsWith(prefix)) continue;
+    days[day] = (days[day] || 0) + 1;
+    total += 1;
+    bytes += Number(row.size_bytes) || 0;
+  }
+  const range = await db.get(`SELECT MIN(created_at) AS first, MAX(created_at) AS last FROM file_data WHERE username = ? AND ${LIVE}`, [
+    username,
+  ]);
+  const yearOf = (ms) => Number(dayOf(Number(ms)).slice(0, 4));
+  const firstYear = range && range.first ? yearOf(range.first) : target;
+  const lastYear = range && range.last ? yearOf(range.last) : target;
+  const years = [];
+  for (let value = Math.max(lastYear, target); value >= Math.min(firstYear, target); value -= 1) years.push(value);
+  const counts = Object.values(days);
+  return {
+    year: target,
+    timeZone: zone,
+    days,
+    total,
+    bytes,
+    max: counts.length ? Math.max(...counts) : 0,
+    activeDays: counts.length,
+    years: years.slice(0, 30),
+  };
+}
+
+async function backfillFingerprints({ limit = 30 } = {}) {
+  const image = typeFilter('image');
+  const rows = await db.all(
+    `SELECT * FROM file_data WHERE phash IS NULL AND deleted_at IS NULL AND ${image.sql} ORDER BY id DESC LIMIT ?`,
+    [...image.params, limit]
+  );
+  let done = 0;
+  for (const row of rows) {
+    let hash = '';
+    try {
+      const where = filePaths(row.username, row.filename);
+      if (fs.existsSync(where.preview)) hash = await similarity.differenceHash(where.preview);
+      else if (fs.existsSync(where.file)) hash = await similarity.differenceHash(where.file);
+      else if (row.storage === 's3' && Number(row.size_bytes) <= 40 * 1024 * 1024) {
+        const relative = `${row.username}/${storage.hasVariant(row, 'preview') ? 'preview/' : ''}${row.filename}`;
+        hash = await similarity.differenceHash(await storage.readRemote(relative));
+      }
+    } catch {
+      hash = '';
+    }
+    await db.run('UPDATE file_data SET phash = ? WHERE id = ? AND phash IS NULL', [hash, row.id]);
+    done += 1;
+  }
+  const visual = matchesAny([...formatsOf('image'), ...formatsOf('video')]);
+  const colors = await db.all(
+    `SELECT id, dominant_color FROM file_data WHERE color_family IS NULL AND resolution_width > 0 AND ${visual.sql} ORDER BY id DESC LIMIT 500`,
+    visual.params
+  );
+  if (colors.length && settings.get('uploads.dominantColor')) {
+    for (const row of colors) {
+      await db.run('UPDATE file_data SET color_family = ? WHERE id = ? AND color_family IS NULL', [
+        similarity.familyOf(row.dominant_color),
+        row.id,
+      ]);
+    }
+  }
+  if (done || colors.length) cache.clear();
+  return { fingerprints: done, colors: settings.get('uploads.dominantColor') ? colors.length : 0 };
+}
+
 const UNSEEN_AFTER_MS = 14 * 24 * 60 * 60 * 1000;
 const STALE_AFTER_MS = 180 * 24 * 60 * 60 * 1000;
 const ACTIVITY =
   "SELECT 1 FROM stats_daily s WHERE s.kind = 'f' AND s.ref_id = file_data.id AND (s.views > 0 OR s.downloads > 0 OR s.direct > 0)";
 
 async function cleanupFor(username, { kind = 'large', page = 1, limit = 50, domain = null, now = Date.now() } = {}) {
+  if (kind === 'similar') return similarGroups(username, { domain });
   const conditions = ['file_data.username = ?', 'file_data.deleted_at IS NULL', 'file_data.starred_at IS NULL'];
   const params = [username];
   let order = SORTS.size;
@@ -594,11 +761,13 @@ async function insert({
   return findById(id);
 }
 
-async function update(username, filename, { dominantColor, width, height }) {
-  await db.run('UPDATE file_data SET dominant_color = ?, resolution_width = ?, resolution_height = ? WHERE username = ? AND filename = ?', [
-    dominantColor,
-    width,
-    height,
+async function update(username, filename, { dominantColor, width, height, phash, colorFamily }) {
+  const fields = { dominant_color: dominantColor, resolution_width: width, resolution_height: height };
+  if (phash !== undefined) fields.phash = phash;
+  if (colorFamily !== undefined) fields.color_family = colorFamily;
+  const columns = Object.keys(fields);
+  await db.run(`UPDATE file_data SET ${columns.map((column) => `${column} = ?`).join(', ')} WHERE username = ? AND filename = ?`, [
+    ...columns.map((column) => fields[column]),
     username,
     filename,
   ]);
@@ -1062,6 +1231,8 @@ module.exports = {
   MAX_DESCRIPTION,
   MAX_ALT,
   CLEANUP_KINDS,
+  calendar,
+  backfillFingerprints,
   listAll,
   listListed,
   findByFilename,

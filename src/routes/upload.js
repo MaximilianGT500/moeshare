@@ -6,7 +6,7 @@ const multer = require('multer');
 const { badRequest, tooLarge, notFound } = require('../lib/errors');
 const { tr } = require('../lib/i18n');
 const { extensionOf, ensureUserDirs } = require('../lib/storage');
-const { apiAuth, requireApi } = require('../middleware/auth');
+const { apiAuth, tokenMay, requireApi } = require('../middleware/auth');
 const files = require('../services/fileService');
 const quota = require('../services/quotaService');
 const settings = require('../services/settingsService');
@@ -40,7 +40,7 @@ function receive(req, res, limit) {
 
 const originalNameOf = (file) => (file.originalname ? String(file.originalname).replace(/[\\/]/g, '_').slice(0, 255) : null);
 
-router.post('/upload', apiAuth, async (req, res) => {
+router.post('/upload', apiAuth, tokenMay('upload'), async (req, res) => {
   const limits = await quota.limitsFor(req.user);
   const declared = Number.parseInt(req.get('content-length'), 10);
   if (limits.remaining === 0 || (limits.limit && declared > limits.limit + MULTIPART_OVERHEAD)) throw tooLarge(limits.message);
@@ -90,17 +90,17 @@ async function createText(req, res) {
   res.json(await uploads.createText(req.user, content, uploads.rawOptions({ ...req, body, get: (name) => req.get(name) }), limits));
 }
 
-router.post('/api/texts', apiAuth, textParser, createText);
-router.post('/upload/text', apiAuth, textParser, createText);
+router.post('/api/texts', apiAuth, tokenMay('upload'), textParser, createText);
+router.post('/upload/text', apiAuth, tokenMay('upload'), textParser, createText);
 
-router.post('/api/shorten', apiAuth, async (req, res) => {
+router.post('/api/shorten', apiAuth, tokenMay('links'), async (req, res) => {
   if (!settings.get('links.enabled')) throw notFound('Der Link-Kürzer ist auf diesem Server abgeschaltet.');
-  const raw = uploads.rawOptions(req);
+  const raw = uploads.rawOptions(req, { preset: false });
   const target = req.body.url || req.body.link || req.get('x-url');
   res.json(await links.create(req.user, target, raw));
 });
 
-router.delete('/file/:filename', apiAuth, async (req, res) => {
+router.delete('/file/:filename', apiAuth, tokenMay('delete'), async (req, res) => {
   const { record, trashed } = await files.remove(req.user.username, req.params.filename, { actorId: req.user.id });
   webhook.notify(
     'delete',
@@ -134,7 +134,7 @@ router.post('/api/files/:id/replace', requireApi(), async (req, res) => {
   res.json({ ok: true, file: result });
 });
 
-router.post('/api/files/:id/versions', apiAuth, async (req, res) => {
+router.post('/api/files/:id/versions', apiAuth, tokenMay('upload'), async (req, res) => {
   const record = await files.findOwned(req.user.username, req.params.id);
   if (!record) throw notFound('Diese Datei gibt es nicht (mehr).');
   const limits = await quota.limitsFor(req.user);
@@ -152,40 +152,40 @@ router.post('/api/files/:id/versions', apiAuth, async (req, res) => {
   res.json({ ok: true, file: result });
 });
 
-router.post('/api/uploads', apiAuth, async (req, res) => {
+router.post('/api/uploads', apiAuth, tokenMay('upload'), async (req, res) => {
   res.status(201).json(await resumable.create(req.user, req.body || {}, uploads.rawOptions(req)));
 });
 
-router.get('/api/uploads', apiAuth, async (req, res) => {
+router.get('/api/uploads', apiAuth, tokenMay('upload'), async (req, res) => {
   res.json({ uploads: await resumable.list(req.user) });
 });
 
-router.get('/api/uploads/:id', apiAuth, async (req, res) => {
+router.get('/api/uploads/:id', apiAuth, tokenMay('upload'), async (req, res) => {
   const session = await resumable.get(req.user, req.params.id);
   res.set('Upload-Offset', String(session.received));
   res.set('Upload-Length', String(session.size));
   res.json(session);
 });
 
-router.patch('/api/uploads/:id', apiAuth, async (req, res) => {
+router.patch('/api/uploads/:id', apiAuth, tokenMay('upload'), async (req, res) => {
   const result = await resumable.append(req.user, req.params.id, req);
   res.set('Upload-Offset', String(result.received));
   res.json(result);
 });
 
-router.post('/api/uploads/:id/complete', apiAuth, async (req, res) => {
+router.post('/api/uploads/:id/complete', apiAuth, tokenMay('upload'), async (req, res) => {
   const result = await resumable.complete(req.user, req.params.id);
   if (result.links) return res.json(result.links);
   const [file] = await files.withTags([result.version]);
   return res.json({ ok: true, version: true, file });
 });
 
-router.delete('/api/uploads/:id', apiAuth, async (req, res) => {
+router.delete('/api/uploads/:id', apiAuth, tokenMay('upload'), async (req, res) => {
   await resumable.cancel(req.user, req.params.id);
   res.json({ ok: true });
 });
 
-router.get('/files', apiAuth, async (req, res) => {
+router.get('/files', apiAuth, tokenMay('read'), async (req, res) => {
   res.json({ files: await files.namesFor(req.user.username) });
 });
 

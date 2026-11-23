@@ -1,5 +1,11 @@
 import type { PublicKeyCredentialCreationOptionsJSON, PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/browser';
 import type {
+  TelegramAccount,
+  TelegramAdminState,
+  TokenPreset,
+  TokenScope,
+  UploadCalendar,
+  VersionDiff,
   AlbumRule,
   AutoShareInput,
   AutoShareKind,
@@ -503,6 +509,9 @@ export function listFiles(params: {
   starred?: boolean;
   scheduled?: boolean;
   missingAlt?: boolean;
+  color?: string;
+  from?: number | null;
+  to?: number | null;
 }) {
   const query = new URLSearchParams({
     page: String(params.page),
@@ -516,6 +525,9 @@ export function listFiles(params: {
   if (params.starred) query.set('starred', '1');
   if (params.scheduled) query.set('scheduled', '1');
   if (params.missingAlt) query.set('alt', 'missing');
+  if (params.color) query.set('color', params.color);
+  if (params.from) query.set('from', String(params.from));
+  if (params.to) query.set('to', String(params.to));
   return api<FileListResponse>(`/api/files?${query}`).then((res) => ({ ...res, files: res.files.map(withSavedKey) }));
 }
 
@@ -575,10 +587,11 @@ export const bulkFiles = (data: {
   password?: string;
   warning?: string | boolean;
 }) => post<{ ok: boolean; count: number; trashed: boolean }>('/api/files/bulk', data);
-export type CleanupKind = 'large' | 'unseen' | 'stale';
+export type CleanupKind = 'large' | 'unseen' | 'stale' | 'similar';
 
 export interface CleanupResponse extends FileListResponse {
   kind: CleanupKind;
+  groups?: number;
   summary: { count: number; bytes: number };
   stats: boolean;
   trash: boolean;
@@ -826,7 +839,28 @@ export const deletePasskey = (id: string) => del<{ ok: boolean }>(`/api/account/
 export const unlinkIdentity = (provider: string) => del<{ ok: boolean }>(`/api/account/identities/${encodeURIComponent(provider)}`);
 export const revokeSession = (id: string) => del<{ ok: boolean }>(`/api/account/sessions/${encodeURIComponent(id)}`);
 export const revokeOtherSessions = () => post<{ ok: boolean; count: number }>('/api/account/sessions/revoke-others');
-export const createToken = (name: string) => post<{ ok: boolean; token: string; record: ApiTokenInfo }>('/api/account/tokens', { name });
+export const createToken = (name: string, options: { scopes?: TokenScope[] | null; preset?: TokenPreset | null } = {}) =>
+  post<{ ok: boolean; token: string; record: ApiTokenInfo }>('/api/account/tokens', { name, ...options });
+export const updateToken = (id: number, data: { name?: string; scopes?: TokenScope[] | null; preset?: TokenPreset | null }) =>
+  patch<{ ok: boolean; record: ApiTokenInfo; tokens: ApiTokenInfo[] }>(`/api/account/tokens/${id}`, data);
+export const fetchTelegram = () => api<TelegramAccount>('/api/account/telegram');
+export const startTelegramLink = () => post<{ code: string; url: string; bot: string; expiresAt: number }>('/api/account/telegram/link');
+export const unlinkTelegram = () => del<TelegramAccount & { ok: boolean }>('/api/account/telegram');
+export const fetchTelegramAdmin = () => api<TelegramAdminState>('/api/admin/telegram');
+export const checkTelegram = (token?: string) => post<TelegramAdminState>('/api/admin/telegram/check', token ? { token } : {});
+function browserTimeZone() {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+  } catch {
+    return '';
+  }
+}
+
+export const fetchCalendar = (year: number) =>
+  api<UploadCalendar>(
+    `/api/stats/calendar?year=${year}&tz=${encodeURIComponent(browserTimeZone())}&offset=${-new Date().getTimezoneOffset()}`
+  );
+export const fetchVersionDiff = (fileId: number, versionId: number) => api<VersionDiff>(`/api/files/${fileId}/versions/${versionId}/diff`);
 export const revokeToken = (id: number) => del<{ ok: boolean }>(`/api/account/tokens/${id}`);
 export const fetchActivity = (before?: number) =>
   api<{ events: AuditEvent[] }>(`/api/account/activity${before ? `?before=${before}` : ''}`);

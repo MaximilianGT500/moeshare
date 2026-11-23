@@ -19,6 +19,7 @@ const { randomString, displayPath } = require('../lib/slugs');
 const { openSource } = require('../lib/importers/common');
 const settings = require('./settingsService');
 const users = require('./userService');
+const similarity = require('../lib/similarity');
 const files = require('./fileService');
 const storage = require('./storageService');
 const dedupe = require('./dedupeService');
@@ -276,7 +277,10 @@ async function analyze(record) {
       preview: settings.get('uploads.preview'),
       dominantColor: settings.get('uploads.dominantColor'),
     });
-    await files.update(record.username, record.filename, result);
+    await files.update(record.username, record.filename, {
+      ...result,
+      colorFamily: settings.get('uploads.dominantColor') ? similarity.familyOf(result.dominantColor) : null,
+    });
     if (type === 'video') await media.transcode(record.username, record.filename, { web: settings.get('uploads.webVideo'), info });
   }
   if (storage.activeDriver() === 's3') {

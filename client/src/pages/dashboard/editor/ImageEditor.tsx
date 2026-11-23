@@ -39,6 +39,8 @@ import RotateRightRounded from '@mui/icons-material/RotateRightRounded';
 import SaveOutlined from '@mui/icons-material/SaveOutlined';
 import TitleRounded from '@mui/icons-material/TitleRounded';
 import UndoRounded from '@mui/icons-material/UndoRounded';
+import WallpaperRounded from '@mui/icons-material/WallpaperRounded';
+import LayersClearRounded from '@mui/icons-material/LayersClearRounded';
 import type { FileItem } from '../../../lib/types';
 import { errorMessage, fileContentUrl, replaceFile } from '../../../lib/api';
 import { formatNumber } from '../../../lib/format';
@@ -47,8 +49,12 @@ import { useConfirm } from '../../../components/ConfirmDialog';
 import { useToast } from '../../../components/Toaster';
 import { c, css, radius } from '../../../theme/tokens';
 import {
+  DEFAULT_SHOWCASE,
   INITIAL_DOC,
+  SHOWCASE_BACKGROUNDS,
   TEXT_FONT,
+  composeShowcase,
+  showcaseSize,
   applyOrientation,
   drawCoverPreview,
   drawShape,
@@ -71,10 +77,13 @@ import {
   type Point,
   type Rect,
   type Shape,
+  type Showcase,
+  type ShowcaseBackground,
+  type ShowcaseRatio,
   type Size,
 } from './model';
 
-type Tool = 'crop' | 'pen' | 'arrow' | 'rect' | 'text' | 'cover';
+type Tool = 'crop' | 'pen' | 'arrow' | 'rect' | 'text' | 'cover' | 'frame';
 type Weight = 's' | 'm' | 'l';
 type RatioKey = 'free' | 'original' | '1:1' | '4:3' | '3:2' | '16:9' | '9:16';
 
@@ -106,6 +115,26 @@ const TOOLS: Array<{ key: Tool; label: () => string; icon: ReactNode; shortcut: 
   { key: 'rect', label: () => t('Rahmen'), icon: <CropSquareRounded />, shortcut: 'r' },
   { key: 'text', label: () => t('Text'), icon: <TitleRounded />, shortcut: 't' },
   { key: 'cover', label: () => t('Verdecken'), icon: <BlurOnRounded />, shortcut: 'v' },
+  { key: 'frame', label: () => t('Präsentieren'), icon: <WallpaperRounded />, shortcut: 'f' },
+];
+
+const BACKGROUND_NAMES: Record<ShowcaseBackground, () => string> = {
+  ocean: () => t('Meer'),
+  sunset: () => t('Abendrot'),
+  forest: () => t('Wald'),
+  candy: () => t('Flieder'),
+  dusk: () => t('Nachtblau'),
+  paper: () => t('Papier'),
+  graphite: () => t('Graphit'),
+  blur: () => t('Aus dem Bild'),
+};
+
+const SHOWCASE_RATIOS: Array<{ key: ShowcaseRatio; label: () => string }> = [
+  { key: 'auto', label: () => t('Passend') },
+  { key: '16:9', label: () => '16:9' },
+  { key: '4:3', label: () => '4:3' },
+  { key: '1:1', label: () => t('Quadrat') },
+  { key: '9:16', label: () => '9:16' },
 ];
 
 const extensionOf = (name: string) => (/\.([a-z0-9]+)$/i.exec(name)?.[1] || '').toLowerCase();
@@ -257,6 +286,8 @@ function Editor({ file, onClose, onSaveCopy, onReplaced, closer }: ImageEditorPr
   const [saveAnchor, setSaveAnchor] = useState<HTMLElement | null>(null);
   const [busy, setBusy] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [preview, setPreview] = useState<string | null>(null);
+  const previewUrl = useRef<string | null>(null);
 
   const history = useRef<{ list: Doc[]; index: number }>({ list: [INITIAL_DOC], index: 0 });
   const source = useRef<CanvasImageSource | null>(null);
@@ -460,7 +491,21 @@ function Editor({ file, onClose, onSaveCopy, onReplaced, closer }: ImageEditorPr
     if (textDraft) finishText();
     if (tool === 'crop') settleCrop();
     if (next === 'crop') resetDraft(history.current.list[history.current.index]);
+    if (next === 'frame') {
+      const current = history.current.list[history.current.index];
+      if (!current.showcase) commit({ ...current, showcase: DEFAULT_SHOWCASE });
+    }
     setTool(next);
+  };
+
+  const setShowcase = (patch: Partial<Showcase> | null) => {
+    const current = history.current.list[history.current.index];
+    if (patch === null) {
+      if (current.showcase) commit({ ...current, showcase: null });
+      return;
+    }
+    const next = { ...(current.showcase || DEFAULT_SHOWCASE), ...patch };
+    if (JSON.stringify(next) !== JSON.stringify(current.showcase)) commit({ ...current, showcase: next });
   };
 
   const undo = () => {
@@ -660,7 +705,8 @@ function Editor({ file, onClose, onSaveCopy, onReplaced, closer }: ImageEditorPr
     } else if (current !== history.current.list[history.current.index]) {
       commit(current);
     }
-    const output = exportImage(art, current, base);
+    const flat = exportImage(art, current, base);
+    const output = current.showcase ? composeShowcase(flat, current.showcase) : flat;
     const wanted = MIME[extensionOf(file.filename)] || 'image/png';
     const blob = await new Promise<Blob | null>((resolve) => output.toBlob(resolve, wanted, wanted === 'image/png' ? undefined : 0.92));
     if (!blob) return null;
@@ -753,9 +799,59 @@ function Editor({ file, onClose, onSaveCopy, onReplaced, closer }: ImageEditorPr
     return () => window.removeEventListener('keydown', onKey);
   });
 
+  const framing = tool === 'frame' && !!doc.showcase;
+
+  useEffect(
+    () => () => {
+      if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
+    },
+    []
+  );
+
+  useEffect(() => {
+    const art = composite.current;
+    const showcase = doc.showcase;
+    if (!framing || status !== 'ready' || !art || !base || !showcase) {
+      if (previewUrl.current) {
+        URL.revokeObjectURL(previewUrl.current);
+        previewUrl.current = null;
+        setPreview(null);
+      }
+      return undefined;
+    }
+    let alive = true;
+    const timer = window.setTimeout(() => {
+      const flat = exportImage(art, doc, base);
+      const factor = Math.min(1, 1400 / Math.max(flat.width, flat.height));
+      let source = flat;
+      if (factor < 1) {
+        source = document.createElement('canvas');
+        source.width = Math.max(1, Math.round(flat.width * factor));
+        source.height = Math.max(1, Math.round(flat.height * factor));
+        const ctx = source.getContext('2d');
+        if (ctx) {
+          ctx.imageSmoothingQuality = 'high';
+          ctx.drawImage(flat, 0, 0, source.width, source.height);
+        }
+      }
+      composeShowcase(source, showcase).toBlob((blob) => {
+        if (!alive || !blob) return;
+        const next = URL.createObjectURL(blob);
+        if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
+        previewUrl.current = next;
+        setPreview(next);
+      }, 'image/png');
+    }, 60);
+    return () => {
+      alive = false;
+      window.clearTimeout(timer);
+    };
+  }, [framing, status, doc, base]);
+
   const canUndo = history.current.index > 0 || !!textDraft;
   const canRedo = history.current.index < history.current.list.length - 1;
-  const output = region && (cropping && draft ? roundRect(draft) : region);
+  const area = region && (cropping && draft ? roundRect(draft) : region);
+  const output = area && doc.showcase && !cropping ? showcaseSize(area.w, area.h, doc.showcase) : area;
   const box = draft && scale ? { left: draft.x * scale, top: draft.y * scale, width: draft.w * scale, height: draft.h * scale } : null;
 
   const options = (
@@ -841,6 +937,78 @@ function Editor({ file, onClose, onSaveCopy, onReplaced, closer }: ImageEditorPr
               </Chip>
             )
           )}
+        </>
+      )}
+      {tool === 'frame' && doc.showcase && (
+        <>
+          {(Object.keys(SHOWCASE_BACKGROUNDS) as ShowcaseBackground[]).map((key) => {
+            const [from, to] = SHOWCASE_BACKGROUNDS[key];
+            return (
+              <ButtonBase
+                key={key}
+                onClick={() => setShowcase({ background: key })}
+                aria-label={BACKGROUND_NAMES[key]()}
+                aria-pressed={doc.showcase?.background === key}
+                title={BACKGROUND_NAMES[key]()}
+                sx={{
+                  width: 32,
+                  height: 32,
+                  flexShrink: 0,
+                  borderRadius: '50%',
+                  background: from
+                    ? `linear-gradient(135deg, ${from}, ${to})`
+                    : `conic-gradient(from 45deg, #f2709c, #ffd86f, #6dd5ed, #a18cd1, #f2709c)`,
+                  boxShadow:
+                    doc.showcase?.background === key
+                      ? `0 0 0 2px ${c.surfaceContainerLow}, 0 0 0 4px ${c.primary}`
+                      : 'inset 0 0 0 1px rgb(255 255 255 / 0.25)',
+                }}
+              />
+            );
+          })}
+          <Box sx={{ width: '1px', alignSelf: 'stretch', my: 0.5, mx: 0.5, bgcolor: c.outlineVariant, flexShrink: 0 }} />
+          {(['s', 'm', 'l'] as const).map((value) => (
+            <Chip key={value} selected={doc.showcase?.padding === value} onClick={() => setShowcase({ padding: value })}>
+              {{ s: t('Wenig Rand'), m: t('Mittlerer Rand'), l: t('Viel Rand') }[value]}
+            </Chip>
+          ))}
+          <Box sx={{ width: '1px', alignSelf: 'stretch', my: 0.5, mx: 0.5, bgcolor: c.outlineVariant, flexShrink: 0 }} />
+          {(['none', 'soft', 'round'] as const).map((value) => (
+            <Chip key={value} selected={doc.showcase?.corners === value} onClick={() => setShowcase({ corners: value })}>
+              {{ none: t('Eckig'), soft: t('Abgerundet'), round: t('Rund') }[value]}
+            </Chip>
+          ))}
+          <Box sx={{ width: '1px', alignSelf: 'stretch', my: 0.5, mx: 0.5, bgcolor: c.outlineVariant, flexShrink: 0 }} />
+          {(['none', 'soft', 'strong'] as const).map((value) => (
+            <Chip key={value} selected={doc.showcase?.shadow === value} onClick={() => setShowcase({ shadow: value })}>
+              {{ none: t('Ohne Schatten'), soft: t('Weicher Schatten'), strong: t('Starker Schatten') }[value]}
+            </Chip>
+          ))}
+          <Box sx={{ width: '1px', alignSelf: 'stretch', my: 0.5, mx: 0.5, bgcolor: c.outlineVariant, flexShrink: 0 }} />
+          {(['none', 'light', 'dark'] as const).map((value) => (
+            <Chip key={value} selected={doc.showcase?.window === value} onClick={() => setShowcase({ window: value })}>
+              {{ none: t('Ohne Fenster'), light: t('Helles Fenster'), dark: t('Dunkles Fenster') }[value]}
+            </Chip>
+          ))}
+          <Box sx={{ width: '1px', alignSelf: 'stretch', my: 0.5, mx: 0.5, bgcolor: c.outlineVariant, flexShrink: 0 }} />
+          {SHOWCASE_RATIOS.map((entry) => (
+            <Chip key={entry.key} selected={doc.showcase?.ratio === entry.key} onClick={() => setShowcase({ ratio: entry.key })}>
+              {entry.label()}
+            </Chip>
+          ))}
+          <Box sx={{ width: '1px', alignSelf: 'stretch', my: 0.5, mx: 0.5, bgcolor: c.outlineVariant, flexShrink: 0 }} />
+          <Button
+            size="small"
+            startIcon={<LayersClearRounded />}
+            onClick={() => {
+              setShowcase(null);
+              chooseTool('crop');
+            }}
+            disabled={busy}
+            sx={{ flexShrink: 0 }}
+          >
+            {t('Rahmen entfernen')}
+          </Button>
         </>
       )}
       {tool === 'cover' && (
@@ -939,7 +1107,25 @@ function Editor({ file, onClose, onSaveCopy, onReplaced, closer }: ImageEditorPr
             </Button>
           </Box>
         )}
-        {status === 'ready' && region && scale > 0 && (
+        {status === 'ready' && framing && (
+          <Box
+            component="img"
+            src={preview || undefined}
+            alt={t('Vorschau mit Rahmen')}
+            sx={{
+              display: preview ? 'block' : 'none',
+              maxWidth: stage.w,
+              maxHeight: stage.h,
+              width: 'auto',
+              height: 'auto',
+              objectFit: 'contain',
+              borderRadius: `${radius.sm}px`,
+              boxShadow: '0 12px 40px rgb(0 0 0 / 0.45)',
+            }}
+          />
+        )}
+        {status === 'ready' && framing && !preview && <CircularProgress aria-label={t('Vorschau wird erstellt')} />}
+        {status === 'ready' && !framing && region && scale > 0 && (
           <Box
             sx={{
               position: 'relative',

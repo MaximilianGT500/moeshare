@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, m } from 'motion/react';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -15,12 +15,24 @@ import TerminalRounded from '@mui/icons-material/TerminalRounded';
 import ScreenshotMonitorRounded from '@mui/icons-material/ScreenshotMonitorRounded';
 import LaptopMacRounded from '@mui/icons-material/LaptopMacRounded';
 import PhoneIphoneRounded from '@mui/icons-material/PhoneIphoneRounded';
-import type { ApiTokenInfo } from '../../lib/types';
-import { createToken, errorMessage, revokeToken } from '../../lib/api';
+import EditOutlined from '@mui/icons-material/EditOutlined';
+import LinkOffRounded from '@mui/icons-material/LinkOffRounded';
+import OpenInNewRounded from '@mui/icons-material/OpenInNewRounded';
+import Dialog from '@mui/material/Dialog';
+import DialogActions from '@mui/material/DialogActions';
+import DialogContent from '@mui/material/DialogContent';
+import DialogTitle from '@mui/material/DialogTitle';
+import LinearProgress from '@mui/material/LinearProgress';
+import { siTelegram } from 'simple-icons';
+import type { ApiTokenInfo, ExpiryChoice, TelegramAccount } from '../../lib/types';
+import { createToken, errorMessage, fetchTelegram, revokeToken, startTelegramLink, unlinkTelegram, updateToken } from '../../lib/api';
 import { formatDate, relativeMs } from '../../lib/format';
+import { TokenDialog, presetSummary, scopeLabel, type TokenDraft } from '../../components/TokenDialog';
+import { GrowTransition } from '../../components/transitions';
+import { CopyTextButton } from '../../components/CopyButton';
 import { downloadShareX, type ShareXFeatures } from '../../lib/sharex';
 import { SettingRow, SettingsSection } from '../../components/SettingsKit';
-import { TokenNameDialog, TokenRevealDialog } from '../../components/TokenReveal';
+import { TokenRevealDialog } from '../../components/TokenReveal';
 import { ClientSetupDialog } from '../../components/ClientSetupDialog';
 import { CLIENTS, type ClientKind } from '../../lib/clients';
 import { useConfirm } from '../../components/ConfirmDialog';
@@ -43,23 +55,201 @@ const STEPS = [
   { title: t('Als Ziel wählen'), text: t('In ShareX unter Ziele › Benutzerdefinierter Uploader diesen Server auswählen.') },
 ];
 
+function TelegramIcon({ size = 24 }: { size?: number }) {
+  return (
+    <Box component="svg" viewBox="0 0 24 24" aria-hidden sx={{ width: size, height: size, fill: 'currentColor', flexShrink: 0 }}>
+      <path d={siTelegram.path} />
+    </Box>
+  );
+}
+
+function TelegramSection({ initial }: { initial: TelegramAccount }) {
+  const toast = useToast();
+  const confirm = useConfirm();
+  const [state, setState] = useState(initial);
+  const [pending, setPending] = useState<{ url: string; code: string; bot: string; expiresAt: number } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const timer = useRef<number | null>(null);
+
+  useEffect(() => setState(initial), [initial]);
+
+  useEffect(() => {
+    if (!pending) return undefined;
+    const poll = async () => {
+      try {
+        const next = await fetchTelegram();
+        if (next.link) {
+          setState(next);
+          setPending(null);
+          toast(t('Telegram ist verbunden'), { variant: 'success' });
+          return;
+        }
+      } catch {
+        return;
+      }
+      if (Date.now() > pending.expiresAt) {
+        setPending(null);
+        toast(t('Der Code ist abgelaufen. Versuch es noch einmal.'), { variant: 'error' });
+        return;
+      }
+      timer.current = window.setTimeout(poll, 2000);
+    };
+    timer.current = window.setTimeout(poll, 2000);
+    return () => {
+      if (timer.current) window.clearTimeout(timer.current);
+    };
+  }, [pending, toast]);
+
+  const connect = async () => {
+    setBusy(true);
+    try {
+      setPending(await startTelegramLink());
+    } catch (failure) {
+      toast(errorMessage(failure), { variant: 'error' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const disconnect = async () => {
+    const ok = await confirm({
+      title: t('Telegram trennen?'),
+      message: t('Der Bot nimmt danach nichts mehr für dein Konto an. Verbinden kannst du ihn jederzeit wieder.'),
+      confirmLabel: t('Trennen'),
+      icon: <LinkOffRounded />,
+    });
+    if (!ok) return;
+    setBusy(true);
+    try {
+      const next = await unlinkTelegram();
+      setState({ enabled: next.enabled, bot: next.bot, link: next.link });
+      toast(t('Telegram getrennt'), { variant: 'success' });
+    } catch (failure) {
+      toast(errorMessage(failure), { variant: 'error' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!state.enabled) return null;
+  return (
+    <SettingsSection
+      id="telegram"
+      title={t('Telegram')}
+      description={t(
+        'Schick dem Bot Fotos, Videos, Dateien, Sprachnachrichten oder Text. Er legt alles in deinem Konto ab und antwortet mit dem Link.'
+      )}
+    >
+      <SettingRow
+        icon={<TelegramIcon />}
+        label={
+          state.link
+            ? t('Verbunden mit {name}', { name: state.link.name || t('deinem Telegram-Konto') })
+            : state.bot
+              ? `@${state.bot}`
+              : t('Telegram-Bot')
+        }
+        description={
+          state.link
+            ? t('Seit {date}, zuletzt benutzt {when}.', {
+                date: formatDate(new Date(state.link.createdAt)),
+                when: relativeMs(state.link.lastUsedAt),
+              })
+            : t('Noch nicht verbunden. Ein Klick, dann einmal „Start“ in Telegram.')
+        }
+      >
+        {state.link ? (
+          <Button onClick={disconnect} disabled={busy} sx={{ color: c.error }}>
+            {t('Trennen')}
+          </Button>
+        ) : (
+          <Button variant="tonal" onClick={connect} disabled={busy}>
+            {t('Verbinden')}
+          </Button>
+        )}
+      </SettingRow>
+      <Dialog
+        open={!!pending}
+        onClose={() => setPending(null)}
+        maxWidth="xs"
+        fullWidth
+        slots={{ transition: GrowTransition }}
+        aria-labelledby="telegram-link-title"
+      >
+        <DialogTitle id="telegram-link-title">{t('Mit Telegram verbinden')}</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+            {t('Öffne den Bot und tippe auf „Start“. Danach ist alles eingerichtet, dieses Fenster schließt sich von selbst.')}
+          </Typography>
+          <Button
+            variant="contained"
+            href={pending?.url ?? ''}
+            target="_blank"
+            rel="noopener"
+            startIcon={<TelegramIcon size={20} />}
+            endIcon={<OpenInNewRounded />}
+            fullWidth
+            sx={{ mt: 2.5 }}
+          >
+            {t('@{bot} öffnen', { bot: pending?.bot || '' })}
+          </Button>
+          <Typography variant="body2" sx={{ color: 'text.secondary', mt: 2.5 }}>
+            {t('Klappt der Knopf nicht, schick dem Bot diese Nachricht:')}
+          </Typography>
+          <Box
+            sx={{
+              mt: 1,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              p: 1,
+              pl: 1.5,
+              borderRadius: `${radius.md}px`,
+              bgcolor: c.surfaceContainerHigh,
+              fontFamily: fonts.mono,
+              fontSize: '0.8125rem',
+              wordBreak: 'break-all',
+            }}
+          >
+            <Box sx={{ flex: 1 }}>{pending ? `/start ${pending.code}` : ''}</Box>
+            {pending && (
+              <CopyTextButton value={`/start ${pending.code}`} message={t('Kopiert')}>
+                {t('Kopieren')}
+              </CopyTextButton>
+            )}
+          </Box>
+          <LinearProgress sx={{ mt: 2.5, borderRadius: 2 }} aria-label={t('Warte auf Telegram')} />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPending(null)}>{t('Abbrechen')}</Button>
+        </DialogActions>
+      </Dialog>
+    </SettingsSection>
+  );
+}
+
 export function ApiPanel({
   tokens,
   reload,
   siteTitle,
   baseUrl,
   features,
+  telegram,
+  maxExpiry,
 }: {
   tokens: ApiTokenInfo[];
   reload: () => Promise<void>;
   siteTitle: string;
   baseUrl: string;
   features?: ShareXFeatures;
+  telegram?: TelegramAccount;
+  maxExpiry: ExpiryChoice;
 }) {
   const toast = useToast();
   const confirm = useConfirm();
   const sudo = useSudo();
   const [naming, setNaming] = useState(false);
+  const [editing, setEditing] = useState<ApiTokenInfo | null>(null);
   const [revealed, setRevealed] = useState<string | null>(null);
   const [client, setClient] = useState<{ kind: ClientKind; token: string } | null>(null);
 
@@ -67,6 +257,25 @@ export function ApiPanel({
     try {
       const result = await sudo(() => createToken(name));
       setClient({ kind, token: result.token });
+      reload();
+    } catch (failure) {
+      if (!isCancelled(failure)) toast(errorMessage(failure), { variant: 'error' });
+    }
+  };
+
+  const save = async (draft: TokenDraft) => {
+    try {
+      if (editing) {
+        const target = editing;
+        await sudo(() => updateToken(target.id, draft));
+        setEditing(null);
+        toast(t('Token gespeichert'), { variant: 'success' });
+        reload();
+        return;
+      }
+      const result = await sudo(() => createToken(draft.name, { scopes: draft.scopes, preset: draft.preset }));
+      setNaming(false);
+      setRevealed(result.token);
       reload();
     } catch (failure) {
       if (!isCancelled(failure)) toast(errorMessage(failure), { variant: 'error' });
@@ -181,6 +390,8 @@ export function ApiPanel({
         ))}
       </SettingsSection>
 
+      {telegram && <TelegramSection initial={telegram} />}
+
       <SettingsSection
         id="tokens"
         title={t('API-Tokens')}
@@ -208,6 +419,18 @@ export function ApiPanel({
                   <>
                     {token.name}
                     {token.legacy && <Chip size="small" label={t('Aus der alten Version')} variant="outlined" />}
+                    {token.scopes && (
+                      <Chip size="small" variant="outlined" label={t('Darf: {list}', { list: token.scopes.map(scopeLabel).join(', ') })} />
+                    )}
+                    {token.preset && (
+                      <Tooltip title={presetSummary(token.preset).join(', ')}>
+                        <Chip
+                          size="small"
+                          label={t('Mit Vorgaben')}
+                          sx={{ bgcolor: c.secondaryContainer, color: c.onSecondaryContainer }}
+                        />
+                      </Tooltip>
+                    )}
                   </>
                 }
                 description={
@@ -222,6 +445,11 @@ export function ApiPanel({
                   </>
                 }
               >
+                <Tooltip title={t('Bearbeiten')}>
+                  <IconButton aria-label={t('{name} bearbeiten', { name: token.name })} onClick={() => setEditing(token)}>
+                    <EditOutlined />
+                  </IconButton>
+                </Tooltip>
                 <Tooltip title={t('Widerrufen')}>
                   <IconButton
                     aria-label={t('{name} widerrufen', { name: token.name })}
@@ -243,7 +471,16 @@ export function ApiPanel({
         )}
       </SettingsSection>
 
-      <TokenNameDialog open={naming} onClose={() => setNaming(false)} onCreate={(name) => create(name)} />
+      <TokenDialog
+        open={naming || !!editing}
+        token={editing}
+        maxExpiry={maxExpiry}
+        onClose={() => {
+          setNaming(false);
+          setEditing(null);
+        }}
+        onSubmit={save}
+      />
       <TokenRevealDialog token={revealed} onClose={() => setRevealed(null)} siteTitle={siteTitle} baseUrl={baseUrl} features={features} />
       <ClientSetupDialog
         kind={client?.kind ?? null}

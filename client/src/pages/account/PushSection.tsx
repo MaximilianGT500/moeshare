@@ -22,6 +22,9 @@ import DnsOutlined from '@mui/icons-material/DnsOutlined';
 import MoveToInboxOutlined from '@mui/icons-material/MoveToInboxOutlined';
 import AddReactionOutlined from '@mui/icons-material/AddReactionOutlined';
 import EventRepeatOutlined from '@mui/icons-material/EventRepeatOutlined';
+import InsightsOutlined from '@mui/icons-material/InsightsOutlined';
+import StorageOutlined from '@mui/icons-material/StorageOutlined';
+import TimerOutlined from '@mui/icons-material/TimerOutlined';
 import type { NotifyKey } from '../../lib/types';
 import { readBoot } from '../../lib/boot';
 import {
@@ -82,6 +85,27 @@ const EVENTS: PushEvent[] = [
     icon: <EventRepeatOutlined />,
     label: t('An diesem Tag'),
     description: t('Morgens, wenn du am heutigen Tag in früheren Jahren etwas hochgeladen hast.'),
+  },
+  {
+    key: 'digest',
+    admin: false,
+    icon: <InsightsOutlined />,
+    label: t('Wochenbericht'),
+    description: t('Montags eine kurze Übersicht über die letzte Woche.'),
+  },
+  {
+    key: 'quota',
+    admin: false,
+    icon: <StorageOutlined />,
+    label: t('Speicher fast voll'),
+    description: t('Sobald dein Speicher zu 90 % belegt ist.'),
+  },
+  {
+    key: 'expiring',
+    admin: false,
+    icon: <TimerOutlined />,
+    label: t('Dateien laufen bald ab'),
+    description: t('Einen Tag bevor Uploads mit Ablaufdatum gelöscht werden.'),
   },
   {
     key: 'reports',

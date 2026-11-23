@@ -23,6 +23,7 @@ import EditOutlined from '@mui/icons-material/EditOutlined';
 import ForumOutlined from '@mui/icons-material/ForumOutlined';
 import SellOutlined from '@mui/icons-material/SellOutlined';
 import SendRounded from '@mui/icons-material/SendRounded';
+import WebhookRounded from '@mui/icons-material/WebhookRounded';
 import { siDiscord, siMastodon, siMatrix, siNtfy, siTelegram, type SimpleIcon } from 'simple-icons';
 import type { AccountBoot, AutoShareInput, AutoShareKind, AutoShareRule, FileType, MastodonVisibility, TagCount } from '../../lib/types';
 import {
@@ -44,7 +45,7 @@ import { useToast } from '../../components/Toaster';
 import { GrowTransition } from '../../components/transitions';
 import { c, fileTypeColor, fonts, radius } from '../../theme/tokens';
 
-type FieldKey = 'url' | 'token' | 'chatId' | 'server' | 'topic' | 'homeserver' | 'room' | 'instance';
+type FieldKey = 'url' | 'token' | 'chatId' | 'server' | 'topic' | 'homeserver' | 'room' | 'instance' | 'secret';
 
 interface FieldSpec {
   key: FieldKey;
@@ -184,9 +185,29 @@ const KINDS: Record<AutoShareKind, KindSpec> = {
       },
     ],
   },
+  webhook: {
+    label: t('Eigener Webhook'),
+    fields: [
+      {
+        key: 'url',
+        label: () => t('Adresse'),
+        placeholder: 'https://example.com/hooks/moeshare',
+        helper: () => t('Bekommt bei jedem passenden Upload ein JSON per POST, mit Link, Titel, Tags und Dateityp.'),
+        inputMode: 'url',
+      },
+      {
+        key: 'secret',
+        label: () => t('Signatur-Schlüssel (optional)'),
+        placeholder: '',
+        helper: () => t('Damit signiert MoeShare jede Nachricht. Der Empfänger prüft den Header X-Webhook-Signature (sha256=…).'),
+        secret: true,
+        optional: true,
+      },
+    ],
+  },
 };
 
-const KIND_ORDER: AutoShareKind[] = ['discord', 'slack', 'telegram', 'ntfy', 'matrix', 'mastodon'];
+const KIND_ORDER: AutoShareKind[] = ['discord', 'slack', 'telegram', 'ntfy', 'matrix', 'mastodon', 'webhook'];
 
 const TYPE_LABELS: Record<FileType, () => string> = {
   image: () => t('Bilder'),
@@ -219,6 +240,7 @@ const ALIASES: Record<string, string> = { title: 'titel', description: 'beschrei
 
 function KindIcon({ kind, size = 22 }: { kind: AutoShareKind; size?: number }) {
   const icon = KINDS[kind].icon;
+  if (kind === 'webhook') return <WebhookRounded sx={{ fontSize: size }} />;
   if (!icon) return <ForumOutlined sx={{ fontSize: size }} />;
   return (
     <Box component="svg" viewBox="0 0 24 24" aria-hidden sx={{ width: size, height: size, fill: 'currentColor', flexShrink: 0 }}>
@@ -286,6 +308,7 @@ const emptyFields = (): Record<FieldKey, string> => ({
   homeserver: '',
   room: '',
   instance: '',
+  secret: '',
 });
 
 function draftOf(rule: AutoShareRule | null, kind: AutoShareKind): Draft {
@@ -497,7 +520,7 @@ function RuleDialog({
                   ? t('Leer lassen, um den gespeicherten Wert zu behalten.')
                   : field.helper())
               }
-              type={field.secret && field.key === 'token' ? 'password' : 'text'}
+              type={field.secret && (field.key === 'token' || field.key === 'secret') ? 'password' : 'text'}
               autoComplete="off"
               spellCheck={false}
               slotProps={{ htmlInput: { inputMode: field.inputMode || 'text', style: { fontFamily: fonts.mono, fontSize: '0.875rem' } } }}

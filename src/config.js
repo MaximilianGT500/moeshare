@@ -129,6 +129,7 @@ module.exports = {
   tickMs: Math.max(1000, Number.parseInt(env.TICK_INTERVAL_MS, 10) || 60 * 1000),
   reactionNoticeMs: Math.max(1, Number.parseInt(env.REACTION_NOTICE_DELAY_MS, 10) || 10 * 60 * 1000),
   memoryHour: Math.min(23, Math.max(0, Number.parseInt(env.MEMORY_NOTICE_HOUR ?? '9', 10) || 0)),
+  digestDay: Math.min(6, Math.max(0, Number.parseInt(env.DIGEST_WEEKDAY ?? '1', 10) || 0)),
   glitchtip: glitchtip.target,
   database: databaseOptions(),
   databaseFile: DATABASE_FILE,
@@ -149,6 +150,7 @@ module.exports = {
   },
   telegram: {
     api: (env.TELEGRAM_API_BASE || 'https://api.telegram.org').replace(/\/+$/, ''),
+    pollSeconds: Math.min(50, Math.max(0, Number.parseInt(env.TELEGRAM_POLL_TIMEOUT ?? '25', 10) || 0)),
   },
   discord: {
     api: (env.DISCORD_API_BASE || 'https://discord.com/api').replace(/\/+$/, ''),

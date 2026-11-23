@@ -41,7 +41,8 @@ import { SHARE_ICONS, ShareMenuItems } from '../../components/ShareList';
 import { fileIcon, typeDescription } from '../../components/FileIcons';
 import { VideoPlayer } from '../../components/VideoPlayer';
 import { StatsPanel } from '../../components/StatsView';
-import { fetchFileStats, fetchSubtitles } from '../../lib/api';
+import { fetchFileStats, fetchSubtitles, fileContentUrl } from '../../lib/api';
+import { FontSample, isFontName } from '../../components/FontPreview';
 import { stopAudio } from './audioPlayer';
 import { c, ease, elevation, fonts, radius } from '../../theme/tokens';
 import { t, tn } from '../../lib/i18n';
@@ -252,6 +253,7 @@ function InfoPanel({ file, stats }: { file: FileItem; stats: boolean }) {
 
 function MediaCard({ file }: { file: FileItem }) {
   const isAudio = file.type === 'audio';
+  const font = isFontName(file.filename) && !file.blocked;
   return (
     <Box
       sx={{
@@ -264,21 +266,25 @@ function MediaCard({ file }: { file: FileItem }) {
         boxShadow: elevation[4],
       }}
     >
-      <Box
-        sx={{
-          width: 112,
-          height: 112,
-          mx: 'auto',
-          borderRadius: '32px',
-          display: 'grid',
-          placeItems: 'center',
-          bgcolor: isAudio ? c.tertiaryContainer : c.secondaryContainer,
-          color: isAudio ? c.onTertiaryContainer : c.onSecondaryContainer,
-          '& svg': { fontSize: 52 },
-        }}
-      >
-        {fileIcon(file.filename, file.type)}
-      </Box>
+      {font ? (
+        <FontSample url={fileContentUrl(file.id)} name={file.originalName || file.filename} />
+      ) : (
+        <Box
+          sx={{
+            width: 112,
+            height: 112,
+            mx: 'auto',
+            borderRadius: '32px',
+            display: 'grid',
+            placeItems: 'center',
+            bgcolor: isAudio ? c.tertiaryContainer : c.secondaryContainer,
+            color: isAudio ? c.onTertiaryContainer : c.onSecondaryContainer,
+            '& svg': { fontSize: 52 },
+          }}
+        >
+          {fileIcon(file.filename, file.type)}
+        </Box>
+      )}
       <Typography variant="h5" component="p" sx={{ mt: 2.5, fontWeight: 800 }}>
         .{extensionOf(file.filename) || 'datei'}
       </Typography>

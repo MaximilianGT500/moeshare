@@ -99,6 +99,8 @@ const TABLES = [
       col('alt_text', 'text'),
       col('starred_at', 'bigint'),
       col('publish_at', 'bigint'),
+      col('phash', 'string', { length: 16 }),
+      col('color_family', 'string', { length: 16 }),
     ],
     indexes: [
       { name: 'idx_file_data_username_id', columns: ['username', 'id'] },
@@ -110,6 +112,8 @@ const TABLES = [
       { name: 'idx_file_data_deleted', columns: ['deleted_at'] },
       { name: 'idx_file_data_hash', columns: ['username', 'sha256'] },
       { name: 'idx_file_data_publish', columns: ['publish_at'] },
+      { name: 'idx_file_data_color', columns: ['username', 'color_family'] },
+      { name: 'idx_file_data_phash', columns: ['username', 'phash'] },
     ],
   },
   {
@@ -143,6 +147,8 @@ const TABLES = [
       col('legacy', 'int', { notNull: true, default: 0 }),
       col('created_at', 'bigint', { notNull: true }),
       col('last_used_at', 'bigint'),
+      col('scopes', 'string', { length: 64 }),
+      col('preset', 'text'),
     ],
     indexes: [
       { name: 'idx_api_tokens_hash', columns: ['token_hash'], unique: true },
@@ -710,6 +716,22 @@ const TABLES = [
     indexes: [
       { name: 'idx_profile_icons_key', columns: ['icon_key'], unique: true },
       { name: 'idx_profile_icons_user', columns: ['user_id'] },
+    ],
+  },
+  {
+    name: 'chat_links',
+    columns: [
+      id(),
+      userRef(),
+      col('provider', 'string', { length: 16, notNull: true }),
+      col('chat_id', 'string', { length: 64, notNull: true }),
+      col('name', 'string', { length: 255 }),
+      col('created_at', 'bigint', { notNull: true }),
+      col('last_used_at', 'bigint'),
+    ],
+    indexes: [
+      { name: 'idx_chat_links_chat', columns: ['provider', 'chat_id'], unique: true },
+      { name: 'idx_chat_links_user', columns: ['user_id', 'provider'], unique: true },
     ],
   },
 ];

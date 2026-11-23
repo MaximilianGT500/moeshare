@@ -15,7 +15,7 @@ const settings = require('./settingsService');
 
 const log = logger.scope('autoshare');
 
-const KINDS = ['discord', 'slack', 'telegram', 'ntfy', 'matrix', 'mastodon'];
+const KINDS = ['discord', 'slack', 'telegram', 'ntfy', 'matrix', 'mastodon', 'webhook'];
 const TYPES = ['image', 'video', 'audio', 'text', 'file'];
 const VISIBILITIES = ['public', 'unlisted', 'private'];
 const MAX_RULES = 10;
@@ -32,6 +32,8 @@ const TELEGRAM_CHAT = /^(?:-?\d{1,20}|@[A-Za-z][\w]{4,31})$/;
 const NTFY_TOPIC = /^[\w-]{1,64}$/;
 const SECRET_TOKEN = /^[\w.~+/=:-]{8,500}$/;
 const MATRIX_ROOM = /^[!#][^\s:]{1,200}:[^\s]{1,200}$/;
+const SIGNING_SECRET = /^\S{8,200}$/;
+const MAX_HOOK_URL = 500;
 
 const enabled = () => Boolean(settings.get('autoShare.enabled'));
 
@@ -54,6 +56,22 @@ function serverUrl(value, field, { fallback = null, https = false } = {}) {
     throw badRequest(https ? 'Nur https-Adressen sind erlaubt.' : 'Nur http- und https-Adressen sind erlaubt.', { field });
   }
   return `${url.origin}${url.pathname.replace(/\/+$/, '')}`;
+}
+
+function hookUrl(value, previous) {
+  const raw = text(value) || previous || '';
+  if (!raw) throw badRequest('Bitte eine Adresse eingeben.', { field: 'url' });
+  let url;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw badRequest('Bitte eine vollständige Adresse wie https://example.com/hook eingeben.', { field: 'url' });
+  }
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.hash) {
+    throw badRequest('Nur http- und https-Adressen ohne Zugangsdaten sind erlaubt.', { field: 'url' });
+  }
+  if (url.href.length > MAX_HOOK_URL) throw badRequest(`Die Adresse darf höchstens ${MAX_HOOK_URL} Zeichen lang sein.`, { field: 'url' });
+  return url.href;
 }
 
 function token(value, field, { optional = false, pattern = SECRET_TOKEN } = {}) {
@@ -102,7 +120,10 @@ const TARGETS = {
   },
   matrix: {
     parse(input, previous) {
-      const homeserver = serverUrl(input.homeserver, 'homeserver', { fallback: previous && previous.homeserver, https: !config.allowPrivateFetch });
+      const homeserver = serverUrl(input.homeserver, 'homeserver', {
+        fallback: previous && previous.homeserver,
+        https: !config.allowPrivateFetch,
+      });
       const room = text(input.room) || (previous && previous.room) || '';
       if (!MATRIX_ROOM.test(room)) throw badRequest('Der Raum sieht nicht richtig aus (!id:server oder #name:server).', { field: 'room' });
       const secret = text(input.token) ? token(input.token, 'token') : previous && previous.token;
@@ -121,6 +142,20 @@ const TARGETS = {
       return { instance, token: secret, visibility };
     },
     hint: (target) => `@ ${new URL(target.instance).host}`,
+  },
+  webhook: {
+    parse(input, previous) {
+      const url = hookUrl(input.url, previous && previous.url);
+      let secret = previous ? previous.secret || null : null;
+      if (input.secret === null) secret = null;
+      else if (text(input.secret)) {
+        if (!SIGNING_SECRET.test(text(input.secret)))
+          throw badRequest('Der Schlüssel braucht 8 bis 200 Zeichen ohne Leerzeichen.', { field: 'secret' });
+        secret = text(input.secret);
+      }
+      return { url, secret };
+    },
+    hint: (target) => new URL(target.url).host,
   },
 };
 
@@ -156,6 +191,7 @@ function present(row) {
     template: row.template || null,
     hint,
     visibility: target && row.kind === 'mastodon' ? target.visibility : null,
+    signed: target && row.kind === 'webhook' ? Boolean(target.secret) : null,
     createdAt: Number(row.created_at),
     lastSuccessAt: row.last_success_at ? Number(row.last_success_at) : null,
     lastError: row.last_error || null,
@@ -171,7 +207,9 @@ async function list(user) {
 
 async function own(user, id) {
   const ruleId = Number(id);
-  const row = Number.isSafeInteger(ruleId) ? await db.get('SELECT * FROM auto_shares WHERE id = ? AND user_id = ?', [ruleId, user.id]) : null;
+  const row = Number.isSafeInteger(ruleId)
+    ? await db.get('SELECT * FROM auto_shares WHERE id = ? AND user_id = ?', [ruleId, user.id])
+    : null;
   if (!row) throw notFound('Diese Regel gibt es nicht.');
   return row;
 }
@@ -238,7 +276,7 @@ async function create(user, input = {}) {
   return present(await db.get('SELECT * FROM auto_shares WHERE id = ?', [id]));
 }
 
-const TARGET_FIELDS = ['url', 'token', 'chatId', 'server', 'topic', 'homeserver', 'room', 'instance', 'visibility'];
+const TARGET_FIELDS = ['url', 'token', 'chatId', 'server', 'topic', 'homeserver', 'room', 'instance', 'visibility', 'secret'];
 
 async function update(user, id, input = {}) {
   assertEnabled();
@@ -286,6 +324,7 @@ const FORMATS = {
   matrix: { escape: (value) => String(value), bold: (value) => value, literal: (value) => value },
   ntfy: { escape: (value) => String(value), bold: (value) => value, literal: (value) => value },
   mastodon: { escape: (value) => String(value), bold: (value) => value, literal: (value) => value },
+  webhook: { escape: (value) => String(value), bold: (value) => value, literal: (value) => value },
 };
 
 const ALIASES = { title: 'titel', description: 'beschreibung', file: 'datei', account: 'konto' };
@@ -367,6 +406,24 @@ const SENDERS = {
       data: { msgtype: 'm.text', body: message.text, format: 'org.matrix.custom.html', formatted_body: plainHtml(message.text) },
     });
   },
+  async webhook(target, message) {
+    const body = JSON.stringify({
+      event: message.event,
+      text: message.text,
+      link: message.link,
+      title: message.values.titel || null,
+      description: message.values.beschreibung || null,
+      file: message.values.datei || null,
+      type: message.values.type || null,
+      tags: message.values.tagList || [],
+      account: message.values.konto || null,
+      site: { title: settings.get('site.title'), url: settings.get('site.baseUrl') },
+      at: new Date().toISOString(),
+    });
+    const headers = { 'Content-Type': 'application/json', 'X-Webhook-Event': message.event };
+    if (target.secret) headers['X-Webhook-Signature'] = `sha256=${crypto.createHmac('sha256', target.secret).update(body).digest('hex')}`;
+    await request(safeHttp, { method: 'post', url: target.url, headers, data: body, transformRequest: [(data) => data] });
+  },
   async mastodon(target, message) {
     const status = message.text.length > 500 ? `${message.text.slice(0, 500 - message.link.length - 2)}…\n${message.link}` : message.text;
     await request(safeHttp, {
@@ -403,10 +460,16 @@ async function recordResult(row, error) {
   );
 }
 
-async function deliver(row, values) {
+async function deliver(row, values, event = 'upload') {
   const target = targetOf(row);
   if (!target) throw new Error('Das Ziel ließ sich nicht entschlüsseln.');
-  const message = { text: render(row.kind, row.template, values), title: values.titel || settings.get('site.title'), link: values.link };
+  const message = {
+    text: render(row.kind, row.template, values),
+    title: values.titel || settings.get('site.title'),
+    link: values.link,
+    event,
+    values,
+  };
   await SENDERS[row.kind](target, message);
 }
 
@@ -420,9 +483,11 @@ async function test(user, id) {
     datei: 'test.png',
     tags: '',
     konto: user.username,
+    type: 'image',
+    tagList: [],
   };
   try {
-    await deliver(row, values);
+    await deliver(row, values, 'test');
     await recordResult(row, null);
   } catch (error) {
     await recordResult(row, error);
@@ -456,6 +521,8 @@ async function shareUpload(user, record, link, { via = 'upload', tags = [] } = {
     datei: record.original_name || record.filename,
     tags: tags.map((tag) => `#${tag}`).join(' '),
     konto: user.username,
+    type,
+    tagList: tags,
   };
   let posted = 0;
   for (const row of rows.filter((candidate) => matches(candidate, type, tags))) {

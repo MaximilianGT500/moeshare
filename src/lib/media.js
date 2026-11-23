@@ -10,6 +10,7 @@ const config = require('../config');
 const logger = require('./logger');
 const { removeLocation } = require('./geotags');
 const { filePaths, baseNameOf, extensionOf } = require('./storage');
+const similarity = require('./similarity');
 
 const log = logger.scope('media');
 
@@ -485,6 +486,7 @@ async function analyze(username, filename, type, options) {
     if (options.preview) await attempt('Vorschau', () => imagePreview(paths.file, paths.preview));
     Object.assign(result, await attempt('Auflösung', () => imageSize(paths.file)));
     if (options.dominantColor) result.dominantColor = (await attempt('Farbe', () => accentColor(paths.file))) || result.dominantColor;
+    result.phash = await similarity.differenceHash(fs.existsSync(paths.preview) ? paths.preview : paths.file).catch(() => '');
   }
 
   if (type === 'video' && ffmpegPath) {

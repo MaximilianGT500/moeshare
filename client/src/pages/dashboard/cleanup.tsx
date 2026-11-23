@@ -28,16 +28,44 @@ import { FileThumb } from '../../components/FileThumb';
 import { displayName } from './MediaTile';
 import { c, ease, radius } from '../../theme/tokens';
 
-const KINDS: CleanupKind[] = ['large', 'unseen', 'stale'];
+const KINDS: CleanupKind[] = ['large', 'unseen', 'stale', 'similar'];
 const EXPIRIES = ['1d', '7d', '30d'] as const;
 const expiryText = (value: (typeof EXPIRIES)[number]) =>
   value === '1d' ? t('In einem Tag') : value === '7d' ? t('In einer Woche') : t('In 30 Tagen');
 
 const kindLabel = (kind: CleanupKind) =>
-  kind === 'large' ? t('Groß') : kind === 'unseen' ? t('Nie aufgerufen') : t('Lange nicht aufgerufen');
+  kind === 'large'
+    ? t('Groß')
+    : kind === 'unseen'
+      ? t('Nie aufgerufen')
+      : kind === 'similar'
+        ? t('Ähnliche Bilder')
+        : t('Lange nicht aufgerufen');
+
+const pixels = (file: FileItem) => (file.width || 0) * (file.height || 0);
+
+function keepers(files: FileItem[]) {
+  const best = new Map<number, FileItem>();
+  for (const file of files) {
+    if (!file.group) continue;
+    const current = best.get(file.group);
+    if (
+      !current ||
+      pixels(file) > pixels(current) ||
+      (pixels(file) === pixels(current) &&
+        (file.sizeBytes > current.sizeBytes || (file.sizeBytes === current.sizeBytes && file.id < current.id)))
+    )
+      best.set(file.group, file);
+  }
+  return new Set([...best.values()].map((file) => file.id));
+}
 
 function kindHint(kind: CleanupKind, stats: boolean) {
   if (kind === 'large') return t('Die größten Dateien zuerst. Hier lässt sich am meisten Platz schaffen.');
+  if (kind === 'similar')
+    return t(
+      'Bilder, die fast gleich aussehen, etwa mehrere Fotos einer Serie, verkleinerte oder neu gespeicherte Kopien. Verglichen wird ein Fingerabdruck des Bildes, nicht der Dateiname.'
+    );
   if (kind === 'unseen') return t('Älter als zwei Wochen und noch kein einziges Mal aufgerufen, auch nicht über den Direktlink.');
   return stats
     ? t('Seit einem halben Jahr nicht mehr aufgerufen, die ältesten zuerst.')
@@ -48,6 +76,7 @@ function kindHint(kind: CleanupKind, stats: boolean) {
 
 function detail(file: FileItem, kind: CleanupKind) {
   const parts = kind === 'large' ? [] : [formatBytes(file.sizeBytes)];
+  if (kind === 'similar' && file.width && file.height) parts.push(`${formatNumber(file.width)} × ${formatNumber(file.height)}`);
   if (file.createdAt) parts.push(t('hochgeladen {when}', { when: relativeMs(file.createdAt) }));
   if (kind !== 'unseen') parts.push(tn(file.views, '1 Aufruf', '{count} Aufrufe'));
   if (file.expiresAt) parts.push(t('läuft ab {when}', { when: relativeMs(file.expiresAt) }));
@@ -187,7 +216,12 @@ export function CleanupView({ onChanged }: { onChanged: () => void }) {
           <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
             {data
               ? data.summary.count
-                ? tn(data.summary.count, '1 Datei, {size}', '{count} Dateien, zusammen {size}', { size: formatBytes(data.summary.bytes) })
+                ? kind === 'similar' && data.groups
+                  ? tn(data.groups, '1 Gruppe mit {files} Bildern, {size}', '{count} Gruppen mit {files} Bildern, zusammen {size}', {
+                      files: formatNumber(data.summary.count),
+                      size: formatBytes(data.summary.bytes),
+                    })
+                  : tn(data.summary.count, '1 Datei, {size}', '{count} Dateien, zusammen {size}', { size: formatBytes(data.summary.bytes) })
                 : t('Hier gibt es nichts aufzuräumen')
               : kindLabel(kind)}
           </Typography>
@@ -228,6 +262,18 @@ export function CleanupView({ onChanged }: { onChanged: () => void }) {
               ? tn(chosen.length, '1 ausgewählt, {size}', '{count} ausgewählt, {size}', { size: formatBytes(chosenBytes) })
               : t('Alle angezeigten auswählen')}
           </Typography>
+          {kind === 'similar' && (
+            <Button
+              size="small"
+              onClick={() => {
+                const keep = keepers(files);
+                setSelected(new Set(files.filter((file) => !keep.has(file.id) && !file.starred).map((file) => file.id)));
+              }}
+              disabled={busy !== null}
+            >
+              {t('Pro Gruppe das beste behalten')}
+            </Button>
+          )}
           <Button
             size="small"
             onClick={(event) => setMenu(event.currentTarget)}
@@ -277,9 +323,20 @@ export function CleanupView({ onChanged }: { onChanged: () => void }) {
       ) : (
         <Box component="ul" sx={{ listStyle: 'none', p: 0, m: 0, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 1 }}>
           <AnimatePresence initial={false}>
-            {files.map((file) => {
+            {files.flatMap((file, index) => {
               const checked = selected.has(file.id);
-              return (
+              const header =
+                kind === 'similar' && file.group && (index === 0 || files[index - 1].group !== file.group) ? (
+                  <m.li key={`group-${file.group}`} layout initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                    <Typography variant="subtitle2" component="h3" sx={{ mt: index ? 2 : 0.5, mb: 0.25, color: 'text.secondary' }}>
+                      {t('Gruppe {number}: {count} ähnliche Bilder', {
+                        number: formatNumber(file.group),
+                        count: formatNumber(files.filter((item) => item.group === file.group).length),
+                      })}
+                    </Typography>
+                  </m.li>
+                ) : null;
+              const row = (
                 <m.li
                   key={file.id}
                   layout
@@ -311,7 +368,7 @@ export function CleanupView({ onChanged }: { onChanged: () => void }) {
                       onChange={() => toggle(file.id)}
                       slotProps={{ input: { 'aria-label': t('{name} auswählen', { name: displayName(file) }) } }}
                     />
-                    <FileThumb file={file} size={48} />
+                    <FileThumb file={file} size={kind === 'similar' ? 72 : 48} />
                     <Box sx={{ flex: 1, minWidth: 0 }}>
                       <Link
                         href={file.urls.view}
@@ -342,6 +399,7 @@ export function CleanupView({ onChanged }: { onChanged: () => void }) {
                   </Box>
                 </m.li>
               );
+              return header ? [header, row] : [row];
             })}
           </AnimatePresence>
         </Box>

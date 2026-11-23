@@ -204,7 +204,8 @@ function profileFrame(data, { theme = 'auto', locale = 'de' } = {}) {
     : `<span class="initial" aria-hidden="true">${escapeHtml((profile.name || profile.username).slice(0, 1).toUpperCase())}</span>`;
   const icon = (link) => {
     if (link.iconUrl) return `<img src="${escapeHtml(link.iconUrl)}" alt="">`;
-    if (typeof link.icon === 'string' && link.icon.startsWith('e:')) return `<span aria-hidden="true">${escapeHtml(link.icon.slice(2))}</span>`;
+    if (typeof link.icon === 'string' && link.icon.startsWith('e:'))
+      return `<span aria-hidden="true">${escapeHtml(link.icon.slice(2))}</span>`;
     return '';
   };
   const items = shown
@@ -213,7 +214,10 @@ function profileFrame(data, { theme = 'auto', locale = 'de' } = {}) {
         `<li><a href="${escapeHtml(link.url)}" target="_blank" rel="noopener nofollow">${icon(link)}<span>${escapeHtml(link.label)}</span></a></li>`
     )
     .join('');
-  const more = links.length > shown.length ? `<span class="more">${escapeHtml(t('und {count} weitere Links', { count: links.length - shown.length }))}</span>` : '';
+  const more =
+    links.length > shown.length
+      ? `<span class="more">${escapeHtml(t('und {count} weitere Links', { count: links.length - shown.length }))}</span>`
+      : '';
   const body = `<div class="profile">${avatar}<h1>${escapeHtml(profile.name || profile.username)}</h1><span class="handle">@${escapeHtml(profile.username)}</span>${
     profile.bio ? `<p>${escapeHtml(profile.bio)}</p>` : ''
   }${items ? `<ul>${items}</ul>` : ''}${more}</div>${bar(profile.url, t('Profil öffnen'), site)}`;

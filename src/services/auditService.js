@@ -29,6 +29,7 @@ const EVENTS = {
   identity_unlinked: 'Dienst getrennt',
   token_created: 'API-Token erstellt',
   token_revoked: 'API-Token widerrufen',
+  token_updated: 'API-Token geändert',
   sessions_revoked: 'Sitzungen beendet',
   user_registered: 'Registriert',
   user_created: 'Konto angelegt',

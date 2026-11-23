@@ -34,7 +34,10 @@ function recipientsOf(input) {
 function noteOf(value) {
   if (value === undefined || value === null) return '';
   if (typeof value !== 'string') throw badRequest('Ungültige Nachricht.', { field: 'message' });
-  const note = value.replace(/\r\n?/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+  const note = value
+    .replace(/\r\n?/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
   if (note.length > MAX_MESSAGE) throw badRequest(`Höchstens ${MAX_MESSAGE} Zeichen.`, { field: 'message' });
   return note;
 }
@@ -65,10 +68,14 @@ function message(language, { sender, title, note, url, kind, locked }) {
   const t = (text, values) => i18n.translate(language, text, values);
   const quoted = language === 'en' ? `“${title}”` : `„${title}“`;
   const subject =
-    kind === 'album' ? t('{name} teilt das Album {title} mit dir', { name: sender.name, title: quoted }) : t('{name} hat dir {title} geschickt', { name: sender.name, title: quoted });
+    kind === 'album'
+      ? t('{name} teilt das Album {title} mit dir', { name: sender.name, title: quoted })
+      : t('{name} hat dir {title} geschickt', { name: sender.name, title: quoted });
   const paragraphs = [];
   if (note) paragraphs.push(note);
-  paragraphs.push(kind === 'album' ? t('Mit dem Knopf öffnest du das Album im Browser.') : t('Mit dem Knopf öffnest du die Datei im Browser.'));
+  paragraphs.push(
+    kind === 'album' ? t('Mit dem Knopf öffnest du das Album im Browser.') : t('Mit dem Knopf öffnest du die Datei im Browser.')
+  );
   if (locked) paragraphs.push(t('Sie ist mit einem Passwort geschützt. Frag {name} danach.', { name: sender.name }));
   return {
     subject,

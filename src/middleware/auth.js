@@ -82,6 +82,13 @@ const bearer = (req) =>
     .replace(/^Bearer\s+/i, '')
     .trim();
 
+const SCOPE_LABELS = {
+  upload: 'Dateien und Texte hochladen',
+  links: 'Links kürzen',
+  read: 'die Dateiliste lesen',
+  delete: 'Dateien löschen',
+};
+
 async function apiAuth(req, res, next) {
   const token = bearer(req);
   if (token) {
@@ -89,6 +96,7 @@ async function apiAuth(req, res, next) {
     if (!resolved) throw unauthorized('Ungültiges Token!');
     if (resolved.user.status !== 'active') throw forbidden('Dieses Konto ist gesperrt.');
     req.user = resolved.user;
+    req.token = { id: resolved.tokenId, scopes: resolved.scopes, preset: resolved.preset };
     req.language = i18n.detect(req, settings);
     res.set('Content-Language', req.language);
     return next();
@@ -100,6 +108,15 @@ async function apiAuth(req, res, next) {
   return next();
 }
 
+function tokenMay(scope) {
+  return (req, res, next) => {
+    if (req.token && !tokens.allows(req.token.scopes, scope)) {
+      throw forbidden(`Dieses Token darf nicht: ${SCOPE_LABELS[scope]}.`, { code: 'scope', extra: { scope } });
+    }
+    next();
+  };
+}
+
 function assertRecentAuth(req) {
   if (!req.session || !req.session.elevated) throw forbidden('Bestätige zuerst, dass du es bist.', { code: 'reauth_required' });
 }
@@ -109,4 +126,4 @@ function requireRecentAuth(req, res, next) {
   next();
 }
 
-module.exports = { loadSession, requirePage, requireApi, sameOriginOnly, apiAuth, assertRecentAuth, requireRecentAuth };
+module.exports = { loadSession, requirePage, requireApi, sameOriginOnly, apiAuth, tokenMay, assertRecentAuth, requireRecentAuth };

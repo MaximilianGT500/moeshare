@@ -41,6 +41,7 @@ const mailShare = require('../services/mailShareService');
 const { limiter } = require('../lib/limiter');
 const reactions = require('../services/reactionService');
 const media = require('../lib/media');
+const { lineDiff } = require('../lib/diff');
 
 const router = express.Router();
 const mailLimiter = limiter({ windowMs: 60 * 1000, limit: 10 });
@@ -149,7 +150,21 @@ router.get('/api/files', signedIn, async (req, res) => {
       starred: req.query.starred === '1',
       scheduled: req.query.scheduled === '1',
       missingAlt: req.query.alt === 'missing',
+      color: text(req.query.color, 16),
+      from: req.query.from ? Number.parseInt(req.query.from, 10) || null : null,
+      to: req.query.to ? Number.parseInt(req.query.to, 10) || null : null,
       domain: displayDomain(prefs, req.user.username),
+    })
+  );
+});
+
+router.get('/api/stats/calendar', signedIn, async (req, res) => {
+  const year = Number.parseInt(req.query.year, 10);
+  res.json(
+    await files.calendar(req.user.username, {
+      year: Number.isInteger(year) ? year : undefined,
+      offsetMinutes: Number.parseInt(req.query.offset, 10) || 0,
+      timeZone: typeof req.query.tz === 'string' ? req.query.tz : null,
     })
   );
 });
@@ -381,6 +396,41 @@ router.get('/api/jobs/:id', signedIn, async (req, res) => {
   const job = await jobs.get(req.user, req.params.id, { admin: req.user.isAdmin });
   if (job.error) job.error = { ...job.error, message: tr(req, job.error.message) };
   res.json({ job });
+});
+
+const COMPARE_MAX_BYTES = 1024 * 1024;
+
+async function readText(entry) {
+  const relative = `${entry.username}/${entry.filename}`;
+  const local = path.join(config.paths.uploads, relative);
+  if (Number(entry.size_bytes) > COMPARE_MAX_BYTES) throw tooLarge('Zum Vergleichen sind die Fassungen zu groß (höchstens 1 MB).');
+  let buffer;
+  if (fs.existsSync(local)) buffer = await fs.promises.readFile(local);
+  else if (entry.storage === 's3') buffer = await storage.readRemote(relative);
+  else throw notFound('Diese Fassung gibt es nicht (mehr).');
+  if (buffer.includes(0)) throw badRequest('Nur Texte lassen sich Zeile für Zeile vergleichen.');
+  return buffer.toString('utf8');
+}
+
+router.get('/api/files/:id/versions/:versionId/diff', signedIn, async (req, res) => {
+  const { record, version } = await ownedVersion(req);
+  if (files.typeOf(record.filename, record.syntax).type !== 'text' || files.typeOf(version.filename, record.syntax).type !== 'text') {
+    throw badRequest('Nur Texte lassen sich Zeile für Zeile vergleichen.');
+  }
+  const [before, after] = await Promise.all([readText({ ...version, username: record.username }), readText(record)]);
+  res.json({
+    before: {
+      version: Number(version.version),
+      name: version.original_name || version.filename,
+      sizeBytes: Number(version.size_bytes) || 0,
+    },
+    after: {
+      version: Number(record.version) || 1,
+      name: record.original_name || record.filename,
+      sizeBytes: Number(record.size_bytes) || 0,
+    },
+    diff: lineDiff(before, after),
+  });
 });
 
 router.get('/api/files/:id/content', signedIn, async (req, res) => {

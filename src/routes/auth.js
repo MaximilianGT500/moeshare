@@ -304,6 +304,7 @@ router.post('/api/auth/login/token', guarded, async (req, res) => {
     log.warn('Anmeldung mit Token fehlgeschlagen', { ip: storedIp(req), reason: 'unbekanntes Token' });
     throw unauthorized('Dieses Token ist ungültig. Prüfe, ob du es vollständig eingefügt hast.');
   }
+  if (resolved.scopes) throw forbidden('Mit diesem Token kannst du dich nicht anmelden, weil es nur eingeschränkte Rechte hat.');
   const row = await users.findById(resolved.user.id);
   return signIn(req, res, row, { method: 'token', remember: flag(req.body.remember), next: text(req.body.next) });
 });

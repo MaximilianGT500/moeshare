@@ -73,6 +73,7 @@ import { ClipDialog } from './clip';
 import { DuplicatesDialog } from './duplicates';
 import { TrashView } from './trash';
 import { CleanupView } from './cleanup';
+import { dayRange, type DateRange } from './filters';
 import { InsightsView } from './insights';
 import { AltTextDialog } from './altText';
 import { TagManagerDialog } from './tagManager';
@@ -234,6 +235,8 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
   const [starredOnly, setStarredOnly] = useState(false);
   const [scheduledOnly, setScheduledOnly] = useState(false);
   const [altOnly, setAltOnly] = useState(false);
+  const [color, setColor] = useState('');
+  const [range, setRange] = useState<DateRange | null>(null);
   const [altOpen, setAltOpen] = useState(false);
   const [tagsOpen, setTagsOpen] = useState(false);
   const [emailTarget, setEmailTarget] = useState<EmailTarget | null>(null);
@@ -313,7 +316,7 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
   statusRef.current = status;
 
   const selecting = selectMode || selected.size > 0;
-  const filtered = !!search || type !== '' || !!tag || starredOnly || scheduledOnly || altOnly;
+  const filtered = !!search || type !== '' || !!tag || starredOnly || scheduledOnly || altOnly || !!color || !!range;
   const overlay = viewerIndex !== null || !!imageEdit || !!versionsFile || !!clipFile;
   const trashOn = boot.options.trash;
   const canEditImage = useCallback(
@@ -366,6 +369,9 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
           starred: starredOnly,
           scheduled: scheduledOnly,
           missingAlt: altOnly,
+          color,
+          from: range?.from ?? null,
+          to: range?.to ?? null,
         });
         if (id !== requestId.current) return;
         setFiles(res.files);
@@ -382,7 +388,7 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
         if (id === requestId.current) setStatus('idle');
       }
     },
-    [pageSize, search, type, sort, tag, starredOnly, scheduledOnly, altOnly, fail]
+    [pageSize, search, type, sort, tag, starredOnly, scheduledOnly, altOnly, color, range, fail]
   );
 
   const firstRun = useRef(true);
@@ -392,7 +398,7 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
       return;
     }
     reload();
-  }, [search, type, sort, tag, starredOnly, scheduledOnly, altOnly]);
+  }, [search, type, sort, tag, starredOnly, scheduledOnly, altOnly, color, range]);
 
   const loadMore = useCallback(async () => {
     if (statusRef.current !== 'idle' || !hasMore) return;
@@ -409,6 +415,9 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
         starred: starredOnly,
         scheduled: scheduledOnly,
         missingAlt: altOnly,
+        color,
+        from: range?.from ?? null,
+        to: range?.to ?? null,
       });
       if (id !== requestId.current) return;
       setFiles((prev) => {
@@ -423,7 +432,7 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
     } finally {
       if (id === requestId.current) setStatus('idle');
     }
-  }, [hasMore, page, pageSize, search, type, sort, tag, starredOnly, scheduledOnly, altOnly, fail]);
+  }, [hasMore, page, pageSize, search, type, sort, tag, starredOnly, scheduledOnly, altOnly, color, range, fail]);
 
   const sentinel = useInView(loadMore, hasMore && status === 'idle');
 
@@ -1095,6 +1104,10 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
       {section === 'stats' && (
         <InsightsView
           onOpen={openStats}
+          onDay={(day) => {
+            setRange(dayRange(day));
+            goSection('files');
+          }}
           missingAlt={stats.missingAlt || 0}
           onAltFix={() => setAltOpen(true)}
           onAltShow={() => {
@@ -1159,6 +1172,10 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
               onMissingAlt={setAltOnly}
               onManageTags={() => setTagsOpen(true)}
               reactionsSort={Boolean(boot.site.reactions)}
+              color={color}
+              onColor={setColor}
+              range={range}
+              onRange={setRange}
               selecting={selecting}
               onSelectMode={() => (selecting ? clearSelection() : setSelectMode(true))}
             />

@@ -26,15 +26,147 @@ export type Shape =
   | { kind: 'cover'; rect: Rect; mode: 'mosaic' | 'solid'; block: number }
   | { kind: 'text'; at: Point; text: string; color: string; size: number; rot: Rotation; flipX: boolean; flipY: boolean };
 
+export type ShowcaseBackground = 'ocean' | 'sunset' | 'forest' | 'candy' | 'dusk' | 'paper' | 'graphite' | 'blur';
+export type ShowcaseRatio = 'auto' | '16:9' | '4:3' | '1:1' | '9:16';
+
+export interface Showcase {
+  background: ShowcaseBackground;
+  padding: 's' | 'm' | 'l';
+  corners: 'none' | 'soft' | 'round';
+  shadow: 'none' | 'soft' | 'strong';
+  window: 'none' | 'light' | 'dark';
+  ratio: ShowcaseRatio;
+}
+
 export interface Doc {
   rot: Rotation;
   flipX: boolean;
   flipY: boolean;
   crop: Rect | null;
   shapes: Shape[];
+  showcase: Showcase | null;
 }
 
-export const INITIAL_DOC: Doc = { rot: 0, flipX: false, flipY: false, crop: null, shapes: [] };
+export const INITIAL_DOC: Doc = { rot: 0, flipX: false, flipY: false, crop: null, shapes: [], showcase: null };
+
+export const DEFAULT_SHOWCASE: Showcase = {
+  background: 'ocean',
+  padding: 'm',
+  corners: 'soft',
+  shadow: 'soft',
+  window: 'none',
+  ratio: 'auto',
+};
+
+export const SHOWCASE_BACKGROUNDS: Record<ShowcaseBackground, string[]> = {
+  ocean: ['#1f7ea1', '#6dd5ed'],
+  sunset: ['#f2709c', '#ff9472'],
+  forest: ['#11998e', '#38ef7d'],
+  candy: ['#a18cd1', '#fbc2eb'],
+  dusk: ['#141e30', '#35577d'],
+  paper: ['#f4efe6', '#e7dfd0'],
+  graphite: ['#2b2930', '#1a181e'],
+  blur: [],
+};
+
+const PADDING = { s: 0.05, m: 0.09, l: 0.14 };
+const CORNERS = { none: 0, soft: 0.022, round: 0.055 };
+const SHADOWS = { none: null, soft: { blur: 0.035, y: 0.012, alpha: 0.3 }, strong: { blur: 0.06, y: 0.028, alpha: 0.5 } };
+const RATIO_VALUES: Record<ShowcaseRatio, number | null> = { auto: null, '16:9': 16 / 9, '4:3': 4 / 3, '1:1': 1, '9:16': 9 / 16 };
+const SHOWCASE_MAX_SIDE = 8192;
+
+function showcaseLayout(width: number, height: number, show: Showcase) {
+  const bar = show.window === 'none' ? 0 : Math.max(22, Math.round(width * 0.04));
+  const contentW = width;
+  const contentH = height + bar;
+  const pad = Math.round(Math.max(width, height) * PADDING[show.padding]);
+  let total = { w: contentW + pad * 2, h: contentH + pad * 2 };
+  const ratio = RATIO_VALUES[show.ratio];
+  if (ratio)
+    total = total.w / total.h < ratio ? { w: Math.round(total.h * ratio), h: total.h } : { w: total.w, h: Math.round(total.w / ratio) };
+  const scale = Math.min(1, SHOWCASE_MAX_SIDE / Math.max(total.w, total.h));
+  return { bar, contentW, contentH, total, scale };
+}
+
+export function showcaseSize(width: number, height: number, show: Showcase): Size {
+  const { total, scale } = showcaseLayout(width, height, show);
+  return { w: Math.round(total.w * scale), h: Math.round(total.h * scale) };
+}
+
+function roundedPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+  const radius = Math.max(0, Math.min(r, w / 2, h / 2));
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.arcTo(x + w, y, x + w, y + h, radius);
+  ctx.arcTo(x + w, y + h, x, y + h, radius);
+  ctx.arcTo(x, y + h, x, y, radius);
+  ctx.arcTo(x, y, x + w, y, radius);
+  ctx.closePath();
+}
+
+export function composeShowcase(image: HTMLCanvasElement, show: Showcase): HTMLCanvasElement {
+  const { bar, contentW, contentH, total, scale } = showcaseLayout(image.width, image.height, show);
+  const out = document.createElement('canvas');
+  out.width = Math.max(1, Math.round(total.w * scale));
+  out.height = Math.max(1, Math.round(total.h * scale));
+  const ctx = out.getContext('2d');
+  if (!ctx) return image;
+  ctx.scale(scale, scale);
+  ctx.imageSmoothingQuality = 'high';
+  if (show.background === 'blur') {
+    const cover = Math.max(total.w / image.width, total.h / image.height) * 1.15;
+    const w = image.width * cover;
+    const h = image.height * cover;
+    ctx.save();
+    ctx.filter = `blur(${Math.round(Math.max(total.w, total.h) * 0.03)}px) saturate(1.2)`;
+    ctx.drawImage(image, (total.w - w) / 2, (total.h - h) / 2, w, h);
+    ctx.restore();
+    ctx.fillStyle = 'rgb(0 0 0 / 0.18)';
+    ctx.fillRect(0, 0, total.w, total.h);
+  } else {
+    const [from, to] = SHOWCASE_BACKGROUNDS[show.background];
+    const gradient = ctx.createLinearGradient(0, 0, total.w, total.h);
+    gradient.addColorStop(0, from);
+    gradient.addColorStop(1, to);
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, total.w, total.h);
+  }
+  const x = (total.w - contentW) / 2;
+  const y = (total.h - contentH) / 2;
+  const radius = Math.round(Math.min(contentW, contentH) * CORNERS[show.corners]);
+  const body = show.window === 'dark' ? '#1d1b22' : '#ffffff';
+  const shadow = SHADOWS[show.shadow];
+  if (shadow) {
+    const size = Math.max(total.w, total.h);
+    ctx.save();
+    ctx.shadowColor = `rgb(0 0 0 / ${shadow.alpha})`;
+    ctx.shadowBlur = size * shadow.blur;
+    ctx.shadowOffsetY = size * shadow.y;
+    roundedPath(ctx, x, y, contentW, contentH, radius);
+    ctx.fillStyle = body;
+    ctx.fill();
+    ctx.restore();
+  }
+  ctx.save();
+  roundedPath(ctx, x, y, contentW, contentH, radius);
+  ctx.clip();
+  ctx.fillStyle = body;
+  ctx.fillRect(x, y, contentW, contentH);
+  if (bar) {
+    ctx.fillStyle = show.window === 'dark' ? '#2e2b35' : '#ecebf0';
+    ctx.fillRect(x, y, contentW, bar);
+    const dot = bar * 0.16;
+    ['#ff5f57', '#febc2e', '#28c840'].forEach((color, index) => {
+      ctx.beginPath();
+      ctx.arc(x + bar * 0.55 + index * dot * 3.2, y + bar / 2, dot, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.fill();
+    });
+  }
+  ctx.drawImage(image, x, y + bar, image.width, image.height);
+  ctx.restore();
+  return out;
+}
 
 export const TEXT_FONT = fonts.sans;
 

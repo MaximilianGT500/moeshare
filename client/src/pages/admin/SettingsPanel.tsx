@@ -46,6 +46,7 @@ import { ImportTools } from './ImportTools';
 import { CaddyHint, DomainList } from './DomainTools';
 import { MetricsTools } from './MetricsTools';
 import { DiscordAppTools } from './DiscordAppTools';
+import { TelegramTools } from './TelegramTools';
 import { SaveBar, SettingRow, SettingsSection, SwitchRow } from '../../components/SettingsKit';
 import { BytesField, ColorField } from '../../components/Fields';
 import { formatNumber } from '../../lib/format';
@@ -99,6 +100,7 @@ const SECTIONS: Array<{ key: SectionKey; label: string; icon: ReactNode; prefixe
       'reactions.',
       'frames.',
       'autoShare.',
+      'telegram.',
     ],
   },
   { key: 'virenscan', label: t('Virenscan'), icon: <CoronavirusOutlined />, prefixes: ['clamav.'] },
@@ -1299,7 +1301,9 @@ export function SettingsPanel({
           {toggle(
             'autoShare.enabled',
             t('Automatisch teilen'),
-            t('Jeder kann bis zu zehn Regeln anlegen, die neue Uploads an Discord, Slack, Telegram, ntfy, Matrix oder Mastodon schicken.')
+            t(
+              'Jeder kann bis zu zehn Regeln anlegen, die neue Uploads an Discord, Slack, Telegram, ntfy, Matrix, Mastodon oder einen eigenen Webhook schicken.'
+            )
           )}
           {toggle(
             'sharing.email',
@@ -1308,6 +1312,23 @@ export function SettingsPanel({
               'Dateien und Alben lassen sich direkt aus dem Dashboard an bis zu fünf Adressen schicken. Braucht den E-Mail-Versand weiter unten.'
             )
           )}
+        </SettingsSection>
+        <SettingsSection
+          title={t('Telegram-Bot')}
+          description={t(
+            'Wer seinen Telegram-Account verbindet, schickt dem Bot einfach Fotos, Videos, Dateien oder Text und bekommt den Link zurück. Den Bot legst du bei @BotFather an.'
+          )}
+        >
+          {toggle(
+            'telegram.enabled',
+            t('Telegram-Bot einschalten'),
+            t('Der Bot holt neue Nachrichten selbst bei Telegram ab. Dafür muss der Server nicht von außen erreichbar sein.')
+          )}
+          {secret('telegram.token', t('Bot-Token'), t('Bekommst du von @BotFather mit /newbot, sieht aus wie 123456789:AA…'))}
+          <TelegramTools
+            unsaved={changedKeys.some((name) => name.startsWith('telegram.'))}
+            pendingToken={typeof secrets['telegram.token'] === 'string' ? secrets['telegram.token'] : undefined}
+          />
         </SettingsSection>
         <SettingsSection title={t('Suche und Daten')}>
           {toggle(

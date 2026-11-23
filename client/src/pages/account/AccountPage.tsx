@@ -251,6 +251,8 @@ function Account({ boot }: { boot: AccountBoot }) {
                   siteTitle={boot.site.title}
                   baseUrl={boot.site.baseUrl}
                   features={{ texts: account.choices.texts, links: account.choices.links }}
+                  telegram={account.telegram}
+                  maxExpiry={account.choices.maxExpiry}
                 />
               )}
               {tab === 'konto' && <ProfilePanel account={account} />}

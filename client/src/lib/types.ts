@@ -51,6 +51,7 @@ export interface FileItem {
   versions?: number;
   twins?: number;
   match?: SearchMatch;
+  group?: number;
   mine?: boolean;
   sealedKey?: string | null;
   urls: FileUrls;
@@ -443,7 +444,8 @@ export interface AlbumMember {
   addedAt: number;
 }
 
-export type NotifyKey = 'security' | 'reports' | 'users' | 'system' | 'requests' | 'reactions' | 'memories';
+export type NotifyKey =
+  'security' | 'reports' | 'users' | 'system' | 'requests' | 'reactions' | 'memories' | 'digest' | 'quota' | 'expiring';
 
 export interface Preferences {
   language: 'de' | 'en' | null;
@@ -492,6 +494,16 @@ export interface SessionInfo {
   persistent: boolean;
 }
 
+export type TokenScope = 'upload' | 'links' | 'read' | 'delete';
+
+export interface TokenPreset {
+  album?: number;
+  tags?: string;
+  expires?: string;
+  urlStyle?: string;
+  warning?: string | true;
+}
+
 export interface ApiTokenInfo {
   id: number;
   name: string;
@@ -499,6 +511,53 @@ export interface ApiTokenInfo {
   legacy: boolean;
   createdAt: number;
   lastUsedAt: number | null;
+  scopes: TokenScope[] | null;
+  preset: TokenPreset | null;
+}
+
+export interface TelegramAccount {
+  enabled: boolean;
+  bot: string | null;
+  link: { name: string | null; createdAt: number; lastUsedAt: number | null } | null;
+}
+
+export interface TelegramAdminState {
+  enabled: boolean;
+  configured: boolean;
+  bot: { id: number; username: string; name: string } | null;
+  error: string | null;
+  checkedAt: number | null;
+  lastMessageAt: number | null;
+  linked: number;
+}
+
+export interface UploadCalendar {
+  year: number;
+  timeZone: string | null;
+  days: Record<string, number>;
+  total: number;
+  bytes: number;
+  max: number;
+  activeDays: number;
+  years: number[];
+}
+
+export interface DiffLine {
+  type: 'same' | 'add' | 'del';
+  text: string;
+  before?: number;
+  after?: number;
+}
+
+export interface VersionDiff {
+  before: { version: number; name: string; sizeBytes: number };
+  after: { version: number; name: string; sizeBytes: number };
+  diff: {
+    tooLarge: boolean;
+    added: number | null;
+    removed: number | null;
+    hunks: { beforeStart: number; afterStart: number; lines: DiffLine[] }[];
+  };
 }
 
 export interface PasskeyInfo {
@@ -552,6 +611,7 @@ export interface AccountOverview {
   policy: { passwordMinLength: number; passwordLogin: boolean };
   sessions: SessionInfo[];
   tokens: ApiTokenInfo[];
+  telegram: TelegramAccount;
   activity: AuditEvent[];
   setup: SetupStep;
   preferences: Preferences;
@@ -1433,7 +1493,7 @@ export interface MemoryGroup {
   files: FileItem[];
 }
 
-export type AutoShareKind = 'discord' | 'slack' | 'telegram' | 'ntfy' | 'matrix' | 'mastodon';
+export type AutoShareKind = 'discord' | 'slack' | 'telegram' | 'ntfy' | 'matrix' | 'mastodon' | 'webhook';
 export type MastodonVisibility = 'public' | 'unlisted' | 'private';
 
 export interface AutoShareRule {
@@ -1468,6 +1528,7 @@ export interface AutoShareInput {
   room?: string;
   instance?: string;
   visibility?: MastodonVisibility;
+  secret?: string | null;
 }
 
 export interface AlbumItem {

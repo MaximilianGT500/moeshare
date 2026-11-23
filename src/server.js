@@ -34,6 +34,7 @@ const updates = require('./services/updateService');
 const caddy = require('./services/caddyService');
 const announcements = require('./services/announcementService');
 const scans = require('./services/scanService');
+const telegram = require('./services/telegramService');
 const { createApp } = require('./app');
 
 const log = logger.scope('server');
@@ -117,6 +118,7 @@ function scheduleMaintenance() {
       await dedupe.backfill();
       await publishing.tick();
       await notices.tick();
+      await files.backfillFingerprints();
     } catch (error) {
       log.error('Die minütliche Wartung ist fehlgeschlagen', { error });
     }
@@ -155,6 +157,7 @@ function logSummary(notifications) {
     ['Bilder optimieren', settings.get('images.optimize')],
     ['Volltextsuche', search.enabled()],
     ['Virenscan', scans.enabled()],
+    ['Telegram-Bot', telegram.enabled()],
   ];
   const active = features.filter(([, on]) => on).map(([name]) => name);
   const inactive = features.filter(([, on]) => !on).map(([name]) => name);
@@ -234,6 +237,7 @@ async function start() {
     if (error) return;
     logSummary(notifications);
     updates.start();
+    telegram.start();
     setup.prepare().catch((error) => log.error('Der Einrichtungslink konnte nicht erstellt werden', { error }));
   });
   server.on('error', (error) =>

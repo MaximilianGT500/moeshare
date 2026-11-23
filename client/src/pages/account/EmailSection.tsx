@@ -13,6 +13,9 @@ import DnsOutlined from '@mui/icons-material/DnsOutlined';
 import MoveToInboxOutlined from '@mui/icons-material/MoveToInboxOutlined';
 import AddReactionOutlined from '@mui/icons-material/AddReactionOutlined';
 import EventRepeatOutlined from '@mui/icons-material/EventRepeatOutlined';
+import InsightsOutlined from '@mui/icons-material/InsightsOutlined';
+import StorageOutlined from '@mui/icons-material/StorageOutlined';
+import TimerOutlined from '@mui/icons-material/TimerOutlined';
 import type { EmailState, NotifyKey, Preferences } from '../../lib/types';
 import { readBoot } from '../../lib/boot';
 import { ApiError, errorMessage, removeEmail, startEmailVerification } from '../../lib/api';
@@ -253,6 +256,41 @@ export function EmailSection({
           checked={notify.memories}
           disabled={saving}
           onChange={(on) => toggle('memories', on)}
+        />
+      )}
+      {state.email && state.verifiedAt && (
+        <SwitchRow
+          id="notify-digest"
+          icon={<InsightsOutlined />}
+          label={t('Wochenbericht')}
+          description={t('Montags eine E-Mail mit deinen Uploads, Aufrufen und dem belegten Speicher der letzten Woche.')}
+          checked={notify.digest}
+          disabled={saving}
+          onChange={(on) => toggle('digest', on)}
+        />
+      )}
+      {state.email && state.verifiedAt && (
+        <SwitchRow
+          id="notify-quota"
+          icon={<StorageOutlined />}
+          label={t('Speicher fast voll')}
+          description={t('Eine E-Mail, sobald dein Speicher zu 90 % belegt ist. Danach erst wieder, wenn du Platz geschaffen hast.')}
+          checked={notify.quota}
+          disabled={saving}
+          onChange={(on) => toggle('quota', on)}
+        />
+      )}
+      {state.email && state.verifiedAt && (
+        <SwitchRow
+          id="notify-expiring"
+          icon={<TimerOutlined />}
+          label={t('Dateien laufen bald ab')}
+          description={t(
+            'Eine E-Mail einen Tag bevor Uploads mit Ablaufdatum gelöscht werden. Gilt für Dateien, die länger als drei Tage online sind.'
+          )}
+          checked={notify.expiring}
+          disabled={saving}
+          onChange={(on) => toggle('expiring', on)}
         />
       )}
     </SettingsSection>

@@ -19,6 +19,8 @@ import DeleteOutlineRounded from '@mui/icons-material/DeleteOutlineRounded';
 import DownloadRounded from '@mui/icons-material/DownloadRounded';
 import OpenInNewRounded from '@mui/icons-material/OpenInNewRounded';
 import RestoreRounded from '@mui/icons-material/RestoreRounded';
+import CompareRounded from '@mui/icons-material/CompareRounded';
+import { CompareDialog, canCompare } from './compare';
 import {
   ApiError,
   deleteVersion,
@@ -106,6 +108,7 @@ export function VersionsDialog({
   const [upload, setUpload] = useState<{ name: string; progress: number; abort: () => void } | null>(null);
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState('');
+  const [comparing, setComparing] = useState<FileVersion | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const fileId = file?.id ?? null;
 
@@ -375,6 +378,17 @@ export function VersionsDialog({
                     </Typography>
                   </Box>
                   <Box sx={{ display: 'flex', flexShrink: 0 }}>
+                    {current && canCompare(version, current) && (
+                      <Tooltip title={t('Mit der aktuellen vergleichen')}>
+                        <IconButton
+                          size="small"
+                          onClick={() => setComparing(version)}
+                          aria-label={t('Version {version} mit der aktuellen vergleichen', { version: version.version })}
+                        >
+                          <CompareRounded fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    )}
                     <Tooltip title={t('Ansehen')}>
                       <IconButton
                         size="small"
@@ -432,6 +446,7 @@ export function VersionsDialog({
       <DialogActions>
         <Button onClick={closeDialog}>{upload ? t('Abbrechen und schließen') : t('Schließen')}</Button>
       </DialogActions>
+      <CompareDialog file={comparing ? current : null} version={comparing} onClose={() => setComparing(null)} />
     </Dialog>
   );
 }

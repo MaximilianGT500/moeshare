@@ -30,6 +30,7 @@ import { formatNumber } from '../../lib/format';
 import { t } from '../../lib/i18n';
 import { mix } from '../../lib/color';
 import { c, css, fileTypeColor, radius } from '../../theme/tokens';
+import { ActiveFilterChips, FilterMenu, type DateRange } from './filters';
 
 const SORT_OPTIONS: { key: SortKey; label: string }[] = [
   { key: 'newest', label: t('Neueste zuerst') },
@@ -140,6 +141,10 @@ export function FilterBar({
   onMissingAlt,
   onManageTags,
   reactionsSort = true,
+  color = '',
+  onColor,
+  range = null,
+  onRange,
 }: {
   type: TypeFilter;
   onType: (type: TypeFilter) => void;
@@ -169,6 +174,10 @@ export function FilterBar({
   onMissingAlt?: (value: boolean) => void;
   onManageTags?: () => void;
   reactionsSort?: boolean;
+  color?: string;
+  onColor?: (value: string) => void;
+  range?: DateRange | null;
+  onRange?: (value: DateRange | null) => void;
 }) {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const [tagAnchor, setTagAnchor] = useState<HTMLElement | null>(null);
@@ -228,6 +237,7 @@ export function FilterBar({
             sx={{ bgcolor: c.tertiaryContainer, color: c.onTertiaryContainer, fontWeight: 600, flexShrink: 0 }}
           />
         )}
+        {onColor && onRange && <ActiveFilterChips color={color} onColor={onColor} range={range} onRange={onRange} />}
         {tag && onTag && (
           <Chip
             label={`#${tag}`}
@@ -346,6 +356,7 @@ export function FilterBar({
           </Menu>
         </>
       )}
+      {onColor && onRange && <FilterMenu color={color} onColor={onColor} range={range} onRange={onRange} />}
       {onText && (
         <Tooltip title={t('Neuer Text')}>
           <IconButton aria-label={t('Neuer Text')} onClick={onText}>

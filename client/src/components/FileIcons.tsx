@@ -10,11 +10,13 @@ import CodeRounded from '@mui/icons-material/CodeRounded';
 import InsertDriveFileRounded from '@mui/icons-material/InsertDriveFileRounded';
 import NotesRounded from '@mui/icons-material/NotesRounded';
 import EnhancedEncryptionRounded from '@mui/icons-material/EnhancedEncryptionRounded';
+import FontDownloadRounded from '@mui/icons-material/FontDownloadRounded';
 import type { FileType } from '../lib/types';
 import { extensionOf } from '../lib/format';
 import { t } from '../lib/i18n';
 
 const ARCHIVES = new Set(['zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz']);
+const FONTS = new Set(['ttf', 'otf', 'woff', 'woff2']);
 const TEXT = new Set(['txt', 'md', 'log', 'csv', 'rtf', 'doc', 'docx', 'odt']);
 const CODE = new Set([
   'js',
@@ -46,6 +48,7 @@ export function fileIcon(filename: string, type: FileType, fontSize: 'small' | '
   if (type === 'text' && !CODE.has(ext) && ext !== 'json') return <NotesRounded fontSize={fontSize} />;
   if (ext === 'pdf') return <PictureAsPdfRounded fontSize={fontSize} />;
   if (ARCHIVES.has(ext)) return <FolderZipRounded fontSize={fontSize} />;
+  if (FONTS.has(ext)) return <FontDownloadRounded fontSize={fontSize} />;
   if (ext === 'json') return <DataObjectRounded fontSize={fontSize} />;
   if (CODE.has(ext)) return <CodeRounded fontSize={fontSize} />;
   if (TEXT.has(ext)) return <DescriptionRounded fontSize={fontSize} />;
@@ -63,5 +66,6 @@ const TYPE_LABEL: Record<FileType, string> = {
 export function typeDescription(filename: string, type: FileType, isGif = false) {
   const ext = extensionOf(filename).toUpperCase();
   if (isGif) return t('Animiertes GIF');
+  if (FONTS.has(ext.toLowerCase())) return `${t('Schriftart')} (${ext})`;
   return ext ? `${TYPE_LABEL[type]} (${ext})` : TYPE_LABEL[type];
 }

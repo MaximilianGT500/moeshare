@@ -195,6 +195,15 @@ const DEFINITIONS = {
   'auth.discord.roleIds': { type: 'list', item: snowflake, max: 20, default: [] },
   'auth.discord.guildSkipsInvite': { type: 'bool', default: true },
 
+  'telegram.enabled': { type: 'bool', default: false },
+  'telegram.token': {
+    type: 'secret',
+    default: '',
+    max: 100,
+    pattern: /^\d{5,15}:[\w-]{20,80}$/,
+    patternMessage: 'Das Bot-Token sieht so aus: 123456789:ABC… Du bekommst es von @BotFather.',
+  },
+
   'auth.github.enabled': { type: 'bool', default: false },
   'auth.github.clientId': clientId(100),
   'auth.github.clientSecret': { type: 'secret', default: '', max: 200 },
