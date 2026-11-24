@@ -8,6 +8,7 @@ const { translate } = require('../lib/i18n');
 const settings = require('./settingsService');
 const webhook = require('./webhookService');
 const mail = require('./mailService');
+const pulse = require('./pulseService');
 
 const log = logger.scope('server');
 
@@ -28,6 +29,11 @@ const blank = () => ({
   changelog: null,
   notes: { de: [], en: [] },
   security: false,
+  yanked: false,
+  behind: 0,
+  markdown: null,
+  releases: [],
+  source: null,
   checkedAt: null,
   error: null,
   notified: null,
@@ -46,6 +52,8 @@ function newer(a, b) {
 }
 
 const disabledBy = () => (!config.updateCheck.url ? 'env' : settings.get('system.updateCheck') ? null : 'setting');
+
+const viaPulse = () => !config.updateCheck.custom && !pulse.lockedBy();
 
 const invalid = () => Object.assign(new Error('Die Versionsangaben haben ein ungültiges Format.'), { code: 'invalid' });
 
@@ -86,7 +94,74 @@ function reasonOf(error) {
   return 'unreachable';
 }
 
+const plain = (text) =>
+  String(text)
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+function bulletsOf(markdown) {
+  if (typeof markdown !== 'string') return [];
+  return lines(
+    markdown
+      .split(/\r?\n/)
+      .map((line) => /^\s*[-*+]\s+(.+)$/.exec(line))
+      .filter(Boolean)
+      .map((match) => plain(match[1]))
+  );
+}
+
+const dayOf = (ms) => (typeof ms === 'number' && Number.isFinite(ms) ? new Date(ms).toISOString().slice(0, 10) : null);
+
+function releaseOf(entry) {
+  if (!entry || typeof entry.version !== 'string') return null;
+  const version = entry.version.replace(/^v/, '');
+  if (!VERSION.test(version)) return null;
+  return {
+    version,
+    title: typeof entry.title === 'string' ? entry.title.slice(0, 160) : null,
+    date: typeof entry.date === 'number' ? entry.date : null,
+    dateText: typeof entry.dateText === 'string' ? entry.dateText.slice(0, 60) : null,
+    url: typeof entry.url === 'string' && /^https:\/\/\S+$/i.test(entry.url) ? entry.url.slice(0, 300) : `${CHANGELOG}#v${version}`,
+    security: entry.security === true,
+    notes: typeof entry.notes === 'string' ? entry.notes.slice(0, 20000) : null,
+  };
+}
+
+async function fromPulse() {
+  const found = await pulse.checkUpdate({ force: true });
+  const latest = found && releaseOf(found.latest);
+  if (!latest) return null;
+  const releases = (Array.isArray(found.releases) ? found.releases : []).map(releaseOf).filter(Boolean).slice(0, 10);
+  const bullets = bulletsOf(latest.notes);
+  return {
+    latest: latest.version,
+    date: dayOf(latest.date),
+    changelog: latest.url,
+    notes: { de: bullets, en: [] },
+    security: found.security === true,
+    yanked: found.yanked === true,
+    behind: Number.isInteger(found.behind) ? found.behind : releases.length,
+    markdown: latest.notes,
+    releases: releases.length ? releases : [latest],
+    source: 'moepulse',
+  };
+}
+
 async function fetchLatest() {
+  if (viaPulse()) {
+    const found = await fromPulse().catch((error) => {
+      log.debug('MoePulse hat keine Versionsangaben geliefert', { error });
+      return null;
+    });
+    if (found) return found;
+  }
+  return { ...(await fetchWebsite()), yanked: false, behind: 0, markdown: null, releases: [], source: 'website' };
+}
+
+async function fetchWebsite() {
   const response = await axios.get(config.updateCheck.url, {
     timeout: 8000,
     maxRedirects: 3,
@@ -192,8 +267,8 @@ async function tick({ force = false } = {}) {
   }
 }
 
-async function check({ notify = true } = {}) {
-  if (disabledBy()) return info();
+async function check({ notify = true, language = 'de' } = {}) {
+  if (disabledBy()) return info(language);
   await load(true);
   if (!running) {
     running = run({ notify }).finally(() => {
@@ -201,7 +276,7 @@ async function check({ notify = true } = {}) {
     });
   }
   await running;
-  return info();
+  return info(language);
 }
 
 function start() {
@@ -223,7 +298,39 @@ const hostOf = (url) => {
   }
 };
 
-async function info() {
+const markdownOf = (items) => (items.length ? items.map((item) => `- ${item}`).join('\n') : null);
+
+function details(language) {
+  if (!state.latest) return null;
+  const update = newer(state.latest, config.version);
+  const fallback = {
+    version: state.latest,
+    title: null,
+    date: state.date ? Date.parse(`${state.date}T12:00:00Z`) : null,
+    dateText: null,
+    url: state.changelog || CHANGELOG,
+    security: state.security,
+    notes: state.markdown || markdownOf(notesFor(language)),
+  };
+  const releases = (state.releases.length ? state.releases : [fallback]).map((entry) => ({ ...entry, channel: 'stable' }));
+  const latest = releases.find((entry) => entry.version === state.latest) || { ...fallback, channel: 'stable' };
+  return {
+    app: pulse.APP,
+    version: config.version,
+    channel: 'stable',
+    latest,
+    update,
+    security: update && state.security,
+    yanked: state.yanked,
+    behind: update ? Math.max(1, state.behind || releases.length) : 0,
+    releases: update ? releases.filter((entry) => newer(entry.version, config.version)) : [],
+    checkedAt: state.checkedAt || 0,
+  };
+}
+
+const sourceOf = () => (viaPulse() ? 'MoeStudio' : config.updateCheck.url ? hostOf(config.updateCheck.url) : null);
+
+async function info(language = 'de') {
   await load().catch(() => state);
   const off = disabledBy();
   const latest = off ? null : state.latest;
@@ -240,7 +347,11 @@ async function info() {
     checkedAt: off ? null : state.checkedAt,
     error: off ? null : state.error,
     changelog: (!off && state.changelog) || CHANGELOG,
-    source: config.updateCheck.url ? hostOf(config.updateCheck.url) : null,
+    yanked: !off && state.yanked === true,
+    behind: off || !available ? 0 : Math.max(1, state.behind || 1),
+    via: off ? null : state.source,
+    details: off ? null : details(language),
+    source: sourceOf(),
     install: config.install,
   };
 }
@@ -254,8 +365,18 @@ function describe(error) {
 }
 
 function notice() {
-  if (disabledBy() || !state.latest || !newer(state.latest, config.version)) return null;
-  return { version: state.latest, security: state.security, changelog: state.changelog || CHANGELOG };
+  if (disabledBy() || !state.latest) return null;
+  const available = newer(state.latest, config.version);
+  if (!available && !state.yanked) return null;
+  return {
+    version: state.latest,
+    current: config.version,
+    security: available && state.security,
+    yanked: state.yanked === true,
+    changelog: state.changelog || CHANGELOG,
+  };
 }
 
-module.exports = { start, check, info, notice, describe, newer, parse, CHANGELOG };
+const disabled = () => Boolean(disabledBy());
+
+module.exports = { start, check, info, notice, describe, newer, parse, disabled, CHANGELOG };

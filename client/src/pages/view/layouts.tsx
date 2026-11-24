@@ -28,6 +28,7 @@ import {
   type ViewModel,
 } from './parts';
 import { c, ease, elevation, radius } from '../../theme/tokens';
+import { hasCamera, settingsText } from '../../lib/camera';
 
 export interface LayoutProps {
   model: ViewModel;
@@ -498,6 +499,8 @@ function MagazineLayout({ model, loaded, onLoaded, zooming, onZoom }: LayoutProp
   const facts = [
     shows('size') ? formatBytes(file.sizeBytes) : null,
     shows('resolution') && file.width ? `${formatNumber(file.width)} × ${formatNumber(file.height)}` : null,
+    hasCamera(file.camera) ? file.camera.camera || null : null,
+    hasCamera(file.camera) ? settingsText(file.camera) : null,
   ].filter(Boolean);
   return (
     <Box sx={page}>

@@ -468,6 +468,113 @@ async function transcode(username, filename, { hls = false, web = 'auto', info =
 
 const stripLocation = (file) => removeLocation(file);
 
+const PEAK_COUNT = 200;
+const PEAK_RATE = 4000;
+const PEAK_BLOCK = 20;
+const PEAK_LIMIT = 16384;
+const PEAK_TIMEOUT_MS = 120000;
+
+function downsample(blocks, count) {
+  const size = Math.min(count, blocks.length);
+  const values = [];
+  for (let index = 0; index < size; index++) {
+    const from = Math.floor((index * blocks.length) / size);
+    const to = Math.max(from + 1, Math.floor(((index + 1) * blocks.length) / size));
+    let peak = 0;
+    for (let at = from; at < to; at++) peak = Math.max(peak, blocks[at]);
+    values.push(peak);
+  }
+  const loudest = Math.max(0, ...values);
+  return values.map((value) => (loudest ? Math.max(1, Math.round((value / loudest) * 100)) : 0));
+}
+
+function audioPeaks(file, { count = PEAK_COUNT, timeoutMs = PEAK_TIMEOUT_MS } = {}) {
+  if (!ffmpegPath) return Promise.reject(new Error('FFmpeg ist nicht verfügbar.'));
+  const args = [
+    '-hide_banner',
+    '-nostdin',
+    '-v',
+    'error',
+    '-i',
+    file,
+    '-map',
+    '0:a:0',
+    '-vn',
+    '-sn',
+    '-dn',
+    '-ac',
+    '1',
+    '-ar',
+    String(PEAK_RATE),
+  ];
+  return new Promise((resolve, reject) => {
+    const child = spawn(ffmpegPath, [...args, '-f', 's16le', '-acodec', 'pcm_s16le', 'pipe:1'], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+    });
+    let blocks = [];
+    let block = PEAK_BLOCK;
+    let peak = 0;
+    let filled = 0;
+    let carry = null;
+    let stderr = '';
+    let late = false;
+    const compact = () => {
+      const merged = [];
+      for (let index = 0; index < blocks.length; index += 2) merged.push(Math.max(blocks[index], blocks[index + 1] || 0));
+      blocks = merged;
+      block *= 2;
+    };
+    const timer = setTimeout(() => {
+      late = true;
+      child.kill('SIGKILL');
+    }, timeoutMs);
+    timer.unref();
+    child.stdout.on('data', (chunk) => {
+      const data = carry ? Buffer.concat([carry, chunk]) : chunk;
+      const usable = data.length - (data.length % 2);
+      carry = usable < data.length ? data.subarray(usable) : null;
+      for (let offset = 0; offset < usable; offset += 2) {
+        const sample = Math.abs(data.readInt16LE(offset));
+        if (sample > peak) peak = sample;
+        filled += 1;
+        if (filled >= block) {
+          blocks.push(peak);
+          peak = 0;
+          filled = 0;
+          if (blocks.length >= PEAK_LIMIT) compact();
+        }
+      }
+    });
+    child.stderr.on('data', (chunk) => {
+      stderr = (stderr + chunk).slice(-4000);
+    });
+    child.on('error', (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    child.on('close', (code) => {
+      clearTimeout(timer);
+      if (filled) blocks.push(peak);
+      if (late) return reject(new Error('Die Wellenform hat zu lange gedauert.'));
+      if (code !== 0 && !blocks.length) return reject(new Error(lastLine(stderr)));
+      if (!blocks.length) return reject(new Error('Die Datei enthält keine Tonspur.'));
+      return resolve(downsample(blocks, count));
+    });
+  });
+}
+
+let peakChain = Promise.resolve();
+
+function waveformOf(file) {
+  const run = peakChain.then(
+    () => audioPeaks(file),
+    () => audioPeaks(file)
+  );
+  peakChain = run.catch(() => {});
+  return run;
+}
+
 async function analyze(username, filename, type, options) {
   const paths = filePaths(username, filename);
   const result = { dominantColor: '#ffffff', width: 0, height: 0 };
@@ -497,6 +604,11 @@ async function analyze(username, filename, type, options) {
       result.dominantColor = (await attempt('Farbe', () => accentColor(paths.poster))) || result.dominantColor;
   }
 
+  if (type === 'audio' && ffmpegPath) {
+    const peaks = await attempt('Wellenform', () => waveformOf(paths.file));
+    result.waveform = peaks && peaks.length ? peaks : '';
+  }
+
   return { result, errors, info };
 }
 
@@ -507,6 +619,7 @@ module.exports = {
   cutVideo,
   makeGif,
   analyze,
+  waveformOf,
   transcode,
   videoInfo,
   videoPoster,

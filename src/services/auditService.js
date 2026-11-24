@@ -41,6 +41,8 @@ const EVENTS = {
   invite_created: 'Einladung erstellt',
   invite_revoked: 'Einladung gelöscht',
   settings_updated: 'Einstellungen geändert',
+  pulse_forgotten: 'Gesendete Daten bei MoeStudio gelöscht',
+  storage_orphans_moved: 'Verwaiste Dateien verschoben',
   file_deleted: 'Datei eines anderen Kontos gelöscht',
   embed_updated: 'Embed geändert',
   autoshare_updated: 'Automatisches Teilen geändert',

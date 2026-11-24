@@ -37,7 +37,6 @@ const colorPreference = () => {
   return null;
 };
 
-const PROJECT_DSN = 'https://462365ce49a643f6b8269646dc173020@app.glitchtip.com/28998';
 const DISABLED = ['off', 'false', '0', 'none', 'aus'];
 
 function parseDsn(value) {
@@ -55,8 +54,7 @@ function parseDsn(value) {
 
 function glitchtipTarget() {
   const value = String(env.GLITCHTIP_DSN || '').trim();
-  if (!value) return { target: { ...parseDsn(PROJECT_DSN), source: 'project' }, problem: null };
-  if (DISABLED.includes(value.toLowerCase())) return { target: null, problem: null };
+  if (!value || DISABLED.includes(value.toLowerCase())) return { target: null, problem: null };
   const parsed = parseDsn(value);
   if (parsed) return { target: { ...parsed, source: 'custom' }, problem: null };
   return { target: null, problem: 'GLITCHTIP_DSN ist keine gültige DSN (https://schlüssel@host/projekt), Fehlerberichte bleiben aus.' };

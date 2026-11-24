@@ -284,7 +284,7 @@ async function findPublic(username) {
 }
 
 function publicFiles(list) {
-  return { items: list.files.map(albums.publicFile), page: list.page, hasNext: list.hasNext, total: list.total };
+  return { items: list.files.map((file) => albums.publicFile(file)), page: list.page, hasNext: list.hasNext, total: list.total };
 }
 
 async function filesPage(username, page, domain) {

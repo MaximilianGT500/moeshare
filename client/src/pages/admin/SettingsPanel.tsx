@@ -1222,6 +1222,22 @@ export function SettingsPanel({
         <SettingsSection title={t('Kurzlinks')} description={t('Lange Adressen kürzen, im Dashboard oder mit ShareX.')}>
           {toggle('links.enabled', t('Link-Kürzer'), t('Angemeldete können Kurzlinks anlegen. Sie leiten über /s/… zum Ziel weiter.'))}
           {select('links.urlStyle', t('Adressstil für Kurzlinks'), t('Wie neue Kurzlinks aussehen.'), styleOptions(LINK_STYLES))}
+          {toggle(
+            'links.check',
+            t('Ziele regelmäßig prüfen'),
+            t(
+              'Ruft das Ziel jedes Kurzlinks etwa einmal pro Woche auf und markiert Links, die ins Leere führen. Abgerufen wird nur der Kopf der Seite.'
+            )
+          )}
+          {select(
+            'links.interstitial',
+            t('Zwischenseite'),
+            t('Zeigt vor der Weiterleitung, wohin ein Kurzlink führt. Mit einem + am Ende sieht jeder diese Seite, etwa /s/abc+.'),
+            [
+              { value: 'off', label: t('Nur bei Links, die das so eingestellt haben') },
+              { value: 'always', label: t('Bei allen Kurzlinks') },
+            ]
+          )}
         </SettingsSection>
         <SettingsSection
           title={t('Eigene Links')}
@@ -1846,22 +1862,19 @@ export function SettingsPanel({
           )}
           {initial.environment.errorReports === 'off' ? (
             <SettingRow
-              label={t('Fehlerberichte')}
+              label={t('Eigenes GlitchTip')}
               description={t(
-                'Abgeschaltet über die Umgebungsvariable GLITCHTIP_DSN. Ohne sie gehen Berichte an das GlitchTip des MoeShare-Projekts, sobald du sie hier erlaubst.'
+                'Mit der Umgebungsvariable GLITCHTIP_DSN schickt {name} Fehlermeldungen an dein eigenes GlitchTip oder Sentry. Fehlerberichte an MoeStudio schaltest du unter System ein.',
+                { name: siteName() }
               )}
             />
           ) : (
             toggle(
               'system.errorReports',
-              initial.environment.errorReports === 'custom' ? t('Fehlerberichte an dein GlitchTip') : t('Fehlerberichte an die Entwickler'),
-              initial.environment.errorReports === 'custom'
-                ? t(
-                    'Schickt Fehlermeldungen und vom Browser blockierte Inhalte an das GlitchTip aus GLITCHTIP_DSN, damit Fehler schneller behoben werden. Benutzernamen, IP-Adressen, Dateinamen und Links werden vorher entfernt.'
-                  )
-                : t(
-                    'Schickt Fehlermeldungen und vom Browser blockierte Inhalte an das GlitchTip des MoeShare-Projekts, damit Fehler schneller behoben werden. Benutzernamen, IP-Adressen, Dateinamen und Links werden vorher entfernt.'
-                  )
+              t('Fehlerberichte an dein GlitchTip'),
+              t(
+                'Schickt Fehlermeldungen und vom Browser blockierte Inhalte an das GlitchTip aus GLITCHTIP_DSN, damit Fehler schneller behoben werden. Benutzernamen, IP-Adressen, Dateinamen und Links werden vorher entfernt.'
+              )
             )
           )}
         </SettingsSection>

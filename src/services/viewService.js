@@ -20,6 +20,8 @@ const protection = require('./protectionService');
 const frames = require('./frameService');
 const profiles = require('./profileService');
 const subtitles = require('./subtitleService');
+const preferences = require('./preferenceService');
+const exif = require('../lib/exif');
 
 const TEXT_PREVIEW_BYTES = 512 * 1024;
 
@@ -82,12 +84,15 @@ async function fileView(record, { access = { state: 'open' }, domain = null } = 
     typeof record.dominant_color === 'string' && record.dominant_color.toLowerCase() !== '#ffffff' ? record.dominant_color : null;
   const poster = `/uploads/${username}/preview/${baseNameOf(filename)}.jpg`;
   const slug = record.slug || filename;
-  const [style, profile, avatar, tracks] = await Promise.all([
+  const camera = type === 'image' ? exif.stored(record.exif) : null;
+  const [style, profile, avatar, tracks, visible] = await Promise.all([
     designs.forOwner(username),
     ownerProfile(username, domain),
     avatars.urlOf(username),
     type === 'video' ? subtitles.list(record.id) : [],
+    camera ? preferences.cameraVisible(username) : new Set(),
   ]);
+  const cameraPublic = visible.has(username);
   return {
     file: {
       id: record.id,
@@ -118,6 +123,9 @@ async function fileView(record, { access = { state: 'open' }, domain = null } = 
       warning: record.warning === null || record.warning === undefined ? null : record.warning,
       version: Number(record.version) || 1,
       sealed: isSealedName(filename),
+      camera: camera && (cameraPublic || access.owner) ? camera : null,
+      cameraPublic,
+      waveform: type === 'audio' ? files.peaksOf(record.waveform) : null,
     },
     urls: {
       view: urls.view,

@@ -9,7 +9,7 @@ const domains = require('./domainService');
 
 const LANGUAGES = ['de', 'en'];
 const NOTIFY_KEYS = ['security', 'reports', 'users', 'system', 'requests', 'reactions', 'memories', 'digest', 'quota', 'expiring'];
-const DEFAULTS = { language: null, urlStyle: null, domain: null, expiry: null, optimize: null };
+const DEFAULTS = { language: null, urlStyle: null, domain: null, expiry: null, optimize: null, camera: false };
 const NOTIFY_DEFAULTS = {
   security: true,
   reports: true,
@@ -55,6 +55,7 @@ function clean(stored, username) {
   if (typeof stored.domain === 'string' && domainAllowed(stored.domain, username)) preferences.domain = stored.domain;
   if (EXPIRY_CHOICES.includes(stored.expiry)) preferences.expiry = stored.expiry;
   if (typeof stored.optimize === 'boolean') preferences.optimize = stored.optimize;
+  if (typeof stored.camera === 'boolean') preferences.camera = stored.camera;
   preferences.notify = cleanNotify(stored.notify);
   return preferences;
 }
@@ -88,6 +89,8 @@ function validate(patch, username) {
   );
   check('expiry', (value) => EXPIRY_CHOICES.includes(value), 'Ungültige Ablaufzeit.');
   check('optimize', (value) => typeof value === 'boolean', 'Erwartet wird an oder aus.');
+  check('camera', (value) => typeof value === 'boolean', 'Erwartet wird an oder aus.');
+  if (next.camera === null) next.camera = false;
   if ('notify' in patch) {
     const notify = patch.notify;
     if (!notify || typeof notify !== 'object' || Array.isArray(notify)) throw badRequest('Ungültige Anfrage.', { field: 'notify' });
@@ -111,4 +114,11 @@ async function update(userId, patch) {
   return next;
 }
 
-module.exports = { LANGUAGES, NOTIFY_KEYS, cleanNotify, get, update, languageOf, notifyOf };
+async function cameraVisible(usernames) {
+  const names = [...new Set((Array.isArray(usernames) ? usernames : [usernames]).filter(Boolean))];
+  if (!names.length) return new Set();
+  const rows = await db.all(`SELECT username, preferences FROM users WHERE username IN (${names.map(() => '?').join(', ')})`, names);
+  return new Set(rows.filter((row) => parse(row.preferences).camera === true).map((row) => row.username));
+}
+
+module.exports = { LANGUAGES, NOTIFY_KEYS, cleanNotify, get, update, languageOf, notifyOf, cameraVisible };

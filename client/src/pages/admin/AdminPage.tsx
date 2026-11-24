@@ -8,8 +8,8 @@ import Tab from '@mui/material/Tab';
 import Typography from '@mui/material/Typography';
 import CloseRounded from '@mui/icons-material/CloseRounded';
 import { readBoot } from '../../lib/boot';
-import type { AdminBoot, GlobalStats, SettingsPayload, UpdateInfo } from '../../lib/types';
-import { fetchAdminStats } from '../../lib/api';
+import type { AdminBoot, GlobalStats, PulseAdminState, SettingsPayload, UpdateInfo } from '../../lib/types';
+import { fetchAdminStats, pulseSupport } from '../../lib/api';
 import { formatBytes, formatNumber, storageSummary } from '../../lib/format';
 import { AppShell } from '../../components/AppShell';
 import { AnimatedNumber } from '../../components/AnimatedNumber';
@@ -28,8 +28,11 @@ import { AccessPanel } from './AccessPanel';
 import { AccessProvider } from './LoginLinkDialog';
 import { NoticesPanel } from './NoticesPanel';
 import { CaddyPanel } from './CaddyPanel';
+import { HelpPanel } from './HelpPanel';
+import { StoragePanel } from './StoragePanel';
+import { PulseNotices } from '../../moepulse';
 import { c, ease, radius } from '../../theme/tokens';
-import { t, tn } from '../../lib/i18n';
+import { language, t, tn } from '../../lib/i18n';
 import { readDismissedUpdate, writeDismissedUpdate } from '../../lib/updates';
 
 type TabKey =
@@ -37,18 +40,21 @@ type TabKey =
   | 'einladungen'
   | 'zugaenge'
   | 'dateien'
+  | 'speicher'
   | 'meldungen'
   | 'startseite'
   | 'hinweise'
   | 'einstellungen'
   | 'aktivitaet'
   | 'caddy'
-  | 'system';
+  | 'system'
+  | 'hilfe';
 const ALL_TABS: TabKey[] = [
   'benutzer',
   'einladungen',
   'zugaenge',
   'dateien',
+  'speicher',
   'meldungen',
   'startseite',
   'hinweise',
@@ -56,16 +62,17 @@ const ALL_TABS: TabKey[] = [
   'aktivitaet',
   'caddy',
   'system',
+  'hilfe',
 ];
 
 function UpdateNotice({ info, onOpen }: { info: UpdateInfo; onOpen: () => void }) {
   const [dismissed, setDismissed] = useState(readDismissedUpdate);
   const version = info.available;
-  if (!info.enabled || !version || dismissed === version) return null;
+  if (!info.enabled || (!version && !info.yanked) || (!info.yanked && dismissed === version)) return null;
 
   return (
     <Alert
-      severity={info.security ? 'warning' : 'info'}
+      severity={info.yanked ? 'error' : info.security ? 'warning' : 'info'}
       sx={{ mt: 1, mb: 2, alignItems: 'center' }}
       action={
         <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
@@ -75,23 +82,27 @@ function UpdateNotice({ info, onOpen }: { info: UpdateInfo; onOpen: () => void }
           <Button color="inherit" size="small" onClick={onOpen}>
             {t('Aktualisieren')}
           </Button>
-          <IconButton
-            color="inherit"
-            size="small"
-            aria-label={t('Ausblenden')}
-            onClick={() => {
-              setDismissed(version);
-              writeDismissedUpdate(version);
-            }}
-          >
-            <CloseRounded fontSize="small" />
-          </IconButton>
+          {version && !info.yanked && (
+            <IconButton
+              color="inherit"
+              size="small"
+              aria-label={t('Ausblenden')}
+              onClick={() => {
+                setDismissed(version);
+                writeDismissedUpdate(version);
+              }}
+            >
+              <CloseRounded fontSize="small" />
+            </IconButton>
+          )}
         </Box>
       }
     >
-      {info.security
-        ? t('Sicherheitsupdate: Version {latest} ist erschienen. Hier läuft noch {current}.', { latest: version, current: info.current })
-        : t('Version {latest} ist erschienen. Hier läuft noch {current}.', { latest: version, current: info.current })}
+      {info.yanked
+        ? t('Version {current} wurde zurückgezogen. Spiel bitte bald ein Update ein.', { current: info.current })
+        : info.security
+          ? t('Sicherheitsupdate: Version {latest} ist erschienen. Hier läuft noch {current}.', { latest: version, current: info.current })
+          : t('Version {latest} ist erschienen. Hier läuft noch {current}.', { latest: version, current: info.current })}
     </Alert>
   );
 }
@@ -138,6 +149,8 @@ function Admin({ boot }: { boot: AdminBoot }) {
   const [settings, setSettings] = useState<SettingsPayload>(boot.settings);
   const [settingsSection, setSettingsSection] = useState<string | undefined>(undefined);
   const [update, setUpdate] = useState<UpdateInfo>(boot.update);
+  const [pulse, setPulse] = useState<PulseAdminState>(boot.pulse);
+  const [unread, setUnread] = useState(boot.pulse.unread);
   const values = settings.values;
 
   useEffect(() => {
@@ -194,6 +207,7 @@ function Admin({ boot }: { boot: AdminBoot }) {
     benutzer: t('Benutzer ({users})', { users: formatNumber(stats.users) }),
     einladungen: activeInvites ? t('Einladungen ({activeInvites})', { activeInvites }) : t('Einladungen'),
     dateien: t('Dateien ({fileTotal})', { fileTotal: formatNumber(fileTotal) }),
+    speicher: t('Speicher'),
     zugaenge: pendingLinks ? t('Zugänge ({count})', { count: formatNumber(pendingLinks) }) : t('Zugänge'),
     meldungen: openReports ? t('Meldungen ({count})', { count: formatNumber(openReports) }) : t('Meldungen'),
     startseite: t('Startseite'),
@@ -202,6 +216,7 @@ function Admin({ boot }: { boot: AdminBoot }) {
     aktivitaet: t('Aktivität'),
     caddy: t('Caddy'),
     system: t('System'),
+    hilfe: unread ? t('Hilfe ({count})', { count: formatNumber(unread) }) : t('Hilfe'),
   };
 
   const defaults = {
@@ -235,6 +250,11 @@ function Admin({ boot }: { boot: AdminBoot }) {
         accountSummary={storageSummary(boot.userStats)}
       >
         <UpdateNotice info={update} onOpen={() => select('system')} />
+        {!pulse.locked && (update.enabled || pulse.value.stats || pulse.value.errors) && (
+          <Box sx={{ mt: 1, mb: 2, '&:empty': { display: 'none' } }}>
+            <PulseNotices load={pulseSupport.notices} language={language === 'en' ? 'en' : 'de'} storageKey="ms-pulse-notices" />
+          </Box>
+        )}
         <Box
           sx={{
             display: 'grid',
@@ -310,6 +330,7 @@ function Admin({ boot }: { boot: AdminBoot }) {
             {tab === 'dateien' && (
               <FilesPanel initial={boot.files} onChanged={refreshStats} onTotal={setFileTotal} trashEnabled={!!values['trash.enabled']} />
             )}
+            {tab === 'speicher' && <StoragePanel />}
             {tab === 'meldungen' && <ReportsPanel enabled={!!values['reports.enabled']} onOpenCount={setOpenReports} />}
             {tab === 'startseite' && (
               <HomePanel
@@ -356,7 +377,12 @@ function Admin({ boot }: { boot: AdminBoot }) {
                 settings={settings}
                 onSettings={setSettings}
                 videos={boot.videos}
+                pulse={pulse}
+                onPulse={setPulse}
               />
+            )}
+            {tab === 'hilfe' && (
+              <HelpPanel pulse={pulse} defaults={boot.pulse.defaults} onUnread={setUnread} onOpenSystem={() => select('system')} />
             )}
           </m.div>
         </AnimatePresence>

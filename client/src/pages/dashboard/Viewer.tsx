@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, m, type PanInfo, type TargetAndTransition } from 'motion/react';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -32,7 +32,9 @@ import ForwardToInboxRounded from '@mui/icons-material/ForwardToInboxRounded';
 import { isSealedName } from '../../lib/sealed';
 import { QrDialog } from '../../components/QrDialog';
 import MenuItem from '@mui/material/MenuItem';
-import type { FileItem, Subtitle } from '../../lib/types';
+import type { CameraInfo, FileItem, Subtitle } from '../../lib/types';
+import { hasCamera, settingsText, takenText } from '../../lib/camera';
+import { PeaksWaveform } from '../../components/PeaksWaveform';
 import { extensionOf, formatBytes, formatDateTime, formatNumber, parseServerDate, relativeFromServer } from '../../lib/format';
 import { shareFormats } from '../../lib/share';
 import { meaningfulColor, mix } from '../../lib/color';
@@ -44,7 +46,7 @@ import { StatsPanel } from '../../components/StatsView';
 import { fetchFileStats, fetchSubtitles, fileContentUrl } from '../../lib/api';
 import { FontSample, isFontName } from '../../components/FontPreview';
 import { stopAudio } from './audioPlayer';
-import { c, ease, elevation, fonts, radius } from '../../theme/tokens';
+import { c, ease, elevation, fileTypeColor, fonts, radius } from '../../theme/tokens';
 import { t, tn } from '../../lib/i18n';
 
 export interface ViewerState {
@@ -137,6 +139,26 @@ function DetailRow({ label, children }: { label: string; children: ReactNode }) 
   );
 }
 
+function CameraRows({ camera }: { camera: CameraInfo }) {
+  const settings = settingsText(camera);
+  const taken = takenText(camera);
+  return (
+    <>
+      {camera.camera && <DetailRow label={t('Kamera')}>{camera.camera}</DetailRow>}
+      {camera.lens && <DetailRow label={t('Objektiv')}>{camera.lens}</DetailRow>}
+      {settings && <DetailRow label={t('Aufnahme')}>{settings}</DetailRow>}
+      {taken && (
+        <DetailRow label={t('Aufgenommen')}>
+          {taken}
+          <Typography variant="caption" component="p" sx={{ color: 'text.secondary' }}>
+            {t('Ob Besucher die Kameradaten sehen, stellst du unter Konto › Einstellungen ein.')}
+          </Typography>
+        </DetailRow>
+      )}
+    </>
+  );
+}
+
 function FileStats({ id }: { id: number }) {
   const load = useCallback((days: number) => fetchFileStats(id, days), [id]);
   return <StatsPanel load={load} compact />;
@@ -194,6 +216,7 @@ function InfoPanel({ file, stats }: { file: FileItem; stats: boolean }) {
           </DetailRow>
         )}
         {file.scan === 'clean' && <DetailRow label={t('Virenscan')}>{t('Geprüft, nichts gefunden')}</DetailRow>}
+        {hasCamera(file.camera) && <CameraRows camera={file.camera} />}
         {file.alt && <DetailRow label={t('Alternativtext')}>{file.alt}</DetailRow>}
         <DetailRow label={t('Dateiname')}>
           <Box component="span" sx={{ fontFamily: fonts.mono, fontSize: '0.8rem' }}>
@@ -251,6 +274,42 @@ function InfoPanel({ file, stats }: { file: FileItem; stats: boolean }) {
   );
 }
 
+function AudioWithPeaks({ file }: { file: FileItem }) {
+  const ref = useRef<HTMLAudioElement>(null);
+  const [time, setTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  return (
+    <Box sx={{ mt: 3 }}>
+      {file.waveform && file.waveform.length > 0 && (
+        <Box sx={{ mb: 1.5 }}>
+          <PeaksWaveform
+            peaks={file.waveform}
+            progress={duration ? time / duration : 0}
+            duration={duration}
+            color={fileTypeColor.audio}
+            height={56}
+            onSeek={(fraction) => {
+              const el = ref.current;
+              if (!el || !duration) return;
+              el.currentTime = fraction * duration;
+              setTime(fraction * duration);
+            }}
+          />
+        </Box>
+      )}
+      <audio
+        ref={ref}
+        src={file.urls.direct}
+        controls
+        autoPlay
+        style={{ width: '100%', display: 'block' }}
+        onTimeUpdate={(event) => setTime(event.currentTarget.currentTime)}
+        onLoadedMetadata={(event) => setDuration(event.currentTarget.duration || 0)}
+      />
+    </Box>
+  );
+}
+
 function MediaCard({ file }: { file: FileItem }) {
   const isAudio = file.type === 'audio';
   const font = isFontName(file.filename) && !file.blocked;
@@ -292,7 +351,7 @@ function MediaCard({ file }: { file: FileItem }) {
         {formatBytes(file.sizeBytes)}
       </Typography>
       {isAudio ? (
-        <Box component="audio" src={file.urls.direct} controls autoPlay sx={{ width: '100%', mt: 3 }} />
+        <AudioWithPeaks file={file} />
       ) : (
         <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center', mt: 3, flexWrap: 'wrap' }}>
           {file.sealedKey !== undefined ? (

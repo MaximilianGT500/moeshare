@@ -101,6 +101,8 @@ const TABLES = [
       col('publish_at', 'bigint'),
       col('phash', 'string', { length: 16 }),
       col('color_family', 'string', { length: 16 }),
+      col('exif', 'text'),
+      col('waveform', 'text'),
     ],
     indexes: [
       { name: 'idx_file_data_username_id', columns: ['username', 'id'] },
@@ -263,10 +265,15 @@ const TABLES = [
       col('last_clicked_at', 'bigint'),
       col('blocked_at', 'bigint'),
       col('blocked_reason', 'string', { length: 200 }),
+      col('check_status', 'int'),
+      col('checked_at', 'bigint'),
+      col('broken_since', 'bigint'),
+      col('interstitial', 'int', { notNull: true, default: 0 }),
     ],
     indexes: [
       { name: 'idx_links_code', columns: ['code'], unique: true },
       { name: 'idx_links_user', columns: ['user_id', 'id'] },
+      { name: 'idx_links_checked', columns: ['checked_at'] },
     ],
   },
   {
@@ -285,6 +292,7 @@ const TABLES = [
       col('blocked_at', 'bigint'),
       col('blocked_reason', 'string', { length: 200 }),
       col('rule', 'text'),
+      col('layout', 'string', { length: 16 }),
     ],
     indexes: [
       { name: 'idx_albums_code', columns: ['code'], unique: true },

@@ -86,6 +86,8 @@ function uploadOptions(prefs, user, watermark) {
     linkPath: paths.currentFor(user.username),
     requests: settings.get('requests.enabled'),
     encrypted: settings.get('uploads.encrypted'),
+    linkChecks: settings.get('links.check'),
+    interstitial: settings.get('links.interstitial'),
   };
 }
 

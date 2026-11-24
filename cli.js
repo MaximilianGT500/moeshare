@@ -235,6 +235,43 @@ async function moveStorage() {
   if (result.failed) process.exitCode = 1;
 }
 
+async function storageCheck() {
+  const inventory = require('./src/services/inventoryService');
+  const { formatBytes } = require('./src/lib/format');
+  say('\nDer Speicher wird geprüft …');
+  let result = await inventory.check({ actor: 'Kommandozeile' });
+  console.log(
+    `  ${result.checked.files} Dateien und ${result.checked.versions} ältere Versionen in der Datenbank, ${result.checked.scanned} Dateien im Ordner uploads`
+  );
+  say(`\nFehlende Dateien: ${result.missing.count}${result.missing.count ? ` (${formatBytes(result.missing.bytes)})` : ''}`);
+  for (const item of result.missing.items.slice(0, 20)) {
+    console.log(
+      `  ${item.username}/${item.filename}${item.kind === 'version' ? ' (ältere Version)' : item.name !== item.filename ? ` „${item.name}“` : ''}`
+    );
+  }
+  if (result.missing.count > 20) console.log(`  … und ${result.missing.count - 20} weitere`);
+  say(`Verwaiste Dateien: ${result.orphans.count}${result.orphans.count ? ` (${formatBytes(result.orphans.bytes)})` : ''}`);
+  for (const item of result.orphans.items.slice(0, 20)) console.log(`  ${item.path} (${formatBytes(item.sizeBytes)})`);
+  if (result.orphans.count > 20) console.log(`  … und ${result.orphans.count - 20} weitere`);
+  if (result.orphans.count && option('--verschieben', '--move')) {
+    result = await inventory.moveOrphans();
+    await audit.log('storage_orphans_moved', {
+      userId: null,
+      actorId: null,
+      details: { files: result.moved.count, bytes: result.moved.bytes, folder: result.moved.folder, via: 'cli' },
+    });
+    say(
+      `\n${result.moved.count === 1 ? '1 verwaiste Datei' : `${result.moved.count} verwaiste Dateien`} nach ${result.moved.folder} verschoben (${formatBytes(result.moved.bytes)}).`
+    );
+    say('Prüf den Ordner und lösch ihn, wenn nichts davon fehlt.\n');
+  } else if (result.orphans.count) {
+    say(`\nVerschieben mit: ${program} storage-check --verschieben\n`);
+  } else {
+    console.log('');
+  }
+  if (result.missing.count) process.exitCode = 2;
+}
+
 function valueOf(...names) {
   for (let index = 0; index < args.length; index++) {
     for (const name of names) {
@@ -395,6 +432,7 @@ const COMMANDS = {
   backup,
   restore,
   storage: moveStorage,
+  'storage-check': storageCheck,
   import: importData,
   videos,
   version,
@@ -414,6 +452,7 @@ async function main() {
     say('  backup               erstellt eine Sicherung in db/backups (--uploads nimmt die Dateien mit)');
     say('  restore <datei>      spielt eine Sicherung ein (--force überschreibt, --ohne-dateien nur die Datenbank)');
     say('  storage <s3|lokal>   verschiebt vorhandene Dateien nach S3 oder zurück');
+    say('  storage-check        sucht fehlende und verwaiste Dateien (--verschieben räumt verwaiste beiseite)');
     say('  import <quelle>      übernimmt Konten und Dateien aus Zipline, XBackBone oder Chibisafe');
     say('  videos               prüft vorhandene Videos: Abmessungen, Vorschaubilder und Fassungen für alle Browser');
     say('  version              zeigt die Version und fragt nach, ob es eine neuere gibt');

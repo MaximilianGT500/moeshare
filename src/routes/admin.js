@@ -50,6 +50,8 @@ const metrics = require('../services/metricsService');
 const announcementService = require('../services/announcementService');
 const discordApp = require('../services/discordAppService');
 const telegram = require('../services/telegramService');
+const pulse = require('../services/pulseService');
+const inventory = require('../services/inventoryService');
 
 const router = express.Router();
 const admin = requireApi({ admin: true });
@@ -228,7 +230,8 @@ router.get('/admin', requirePage({ admin: true }), async (req, res) => {
       webhooks: { targets: webhookTargets, kinds: webhook.KINDS, events: settings.WEBHOOK_EVENTS },
       imports: importInfo(),
       access: { pending: pendingLinks, enabled: links.enabled(), passwordLogin: settings.get('auth.passwordLogin') },
-      update: await updates.info(),
+      update: await updates.info(req.language),
+      pulse: { ...pulse.state(req.language), defaults: await supportDefaults(req.user) },
       announcements: await announcementService.list(),
       videos: { running: videoService.running(), ffmpeg: media.ffmpegAvailable },
     },
@@ -296,6 +299,29 @@ router.post('/api/admin/storage/migrate', adminSudo, async (req, res) => {
     .then((result) => Object.assign(migration, result, { finishedAt: Date.now() }))
     .catch((error) => Object.assign(migration, { error: error.message, finishedAt: Date.now() }));
   res.status(202).json({ ok: true, migration });
+});
+
+router.get('/api/admin/storage/analysis', admin, async (req, res) => {
+  res.json(await inventory.analysis({ timeZone: typeof req.query.timeZone === 'string' ? req.query.timeZone : null }));
+});
+
+router.get('/api/admin/storage/check', admin, async (req, res) => {
+  res.json(await inventory.result());
+});
+
+router.post('/api/admin/storage/check', admin, async (req, res) => {
+  res.status(202).json(await inventory.start({ actor: req.user.username }));
+});
+
+router.post('/api/admin/storage/orphans', adminSudo, async (req, res) => {
+  const result = await inventory.moveOrphans();
+  audit.log('storage_orphans_moved', {
+    userId: null,
+    actorId: req.user.id,
+    req,
+    details: { files: result.moved.count, bytes: result.moved.bytes, folder: result.moved.folder },
+  });
+  res.json({ ...inventory.status(), result });
 });
 
 router.get('/api/admin/backups', admin, async (req, res) => {
@@ -429,11 +455,55 @@ router.post('/api/admin/metrics/token', adminSudo, async (req, res) => {
 });
 
 router.get('/api/admin/update', admin, async (req, res) => {
-  res.json(await updates.info());
+  res.json(await updates.info(req.language));
 });
 
 router.post('/api/admin/update/check', admin, async (req, res) => {
-  res.json(await updates.check());
+  res.json(await updates.check({ language: req.language }));
+});
+
+router.get('/api/admin/pulse', admin, (req, res) => res.json(pulse.state(req.language)));
+
+router.put('/api/admin/pulse', admin, async (req, res) => {
+  if (pulse.lockedBy()) throw conflict('MoePulse ist auf diesem Server über eine Umgebungsvariable abgeschaltet.', { code: 'locked' });
+  const body = req.body && typeof req.body === 'object' ? req.body : {};
+  const before = pulse.state(req.language).value;
+  const next = { stats: body.stats === true, errors: body.errors === true };
+  await pulse.setConsent(next, req.user.id);
+  const changed = ['stats', 'errors'].filter((key) => before[key] !== next[key]).map((key) => `pulse.${key}`);
+  if (changed.length) audit.log('settings_updated', { userId: null, actorId: req.user.id, req, details: { keys: changed } });
+  res.json(pulse.state(req.language));
+});
+
+router.get('/api/admin/pulse/preview', admin, async (req, res) => res.json(await pulse.preview()));
+
+router.post('/api/admin/pulse/forget', admin, async (req, res) => {
+  const ok = await pulse.forget(req.user.id);
+  if (ok) audit.log('pulse_forgotten', { userId: null, actorId: req.user.id, req, details: {} });
+  res.json({ ok, ...pulse.state(req.language) });
+});
+
+async function supportDefaults(user) {
+  const row = await db.get('SELECT email, email_verified_at FROM users WHERE id = ?', [user.id]);
+  return { name: user.username, email: row && row.email && row.email_verified_at ? row.email : '' };
+}
+
+const supportAllowed = () => !updates.disabled() || pulse.state().value.stats || pulse.state().value.errors;
+
+router.post('/api/admin/moepulse/support', admin, async (req, res) => {
+  const body = req.body && typeof req.body === 'object' ? req.body : {};
+  if (body.action === 'update') {
+    const found = body.force === true ? await updates.check({ language: req.language }) : await updates.info(req.language);
+    return res.json({ update: found.details });
+  }
+  if (body.action === 'notices') return res.json({ notices: supportAllowed() ? await pulse.notices() : [] });
+  const result = await pulse.support(body, req.language);
+  if (result.status === 200) return res.json(result.body);
+  return res.status(result.status).json({
+    error: typeof result.body.message === 'string' ? result.body.message : tr(req, 'Da ist etwas schiefgegangen.'),
+    code: typeof result.body.error === 'string' ? result.body.error : 'server',
+    retry: typeof result.body.retry === 'number' ? result.body.retry : null,
+  });
 });
 
 router.get('/api/admin/videos', admin, async (req, res) => {

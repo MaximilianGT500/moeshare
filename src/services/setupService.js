@@ -40,6 +40,8 @@ const WIZARD_SETTINGS = [
   'webhook.enabled',
   'webhook.url',
   'webhook.events',
+  'pulse.stats',
+  'pulse.errors',
 ];
 
 const isOpen = async () => (await users.count()) === 0;

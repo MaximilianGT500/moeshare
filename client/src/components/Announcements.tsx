@@ -36,7 +36,7 @@ export function Announcements({ site, admin = false, sx }: { site: SiteInfo; adm
   const [dismissedUpdate, setDismissedUpdate] = useState(readDismissedUpdate);
   const items = (site.announcements || []).filter((item) => !dismissed.includes(keyOf(item)));
   const maintenance = Boolean(site.maintenance);
-  const update = admin && site.update && dismissedUpdate !== site.update.version ? site.update : null;
+  const update = admin && site.update && (site.update.yanked || dismissedUpdate !== site.update.version) ? site.update : null;
   if (!items.length && !maintenance && !update) return null;
 
   const dismiss = (item: SiteAnnouncement) => {
@@ -54,7 +54,7 @@ export function Announcements({ site, admin = false, sx }: { site: SiteInfo; adm
     <Box sx={[{ display: 'grid', gap: 1.25 }, ...(Array.isArray(sx) ? sx : [sx])]} role="region" aria-label={t('Hinweise')}>
       {update && (
         <Alert
-          severity={update.security ? 'warning' : 'info'}
+          severity={update.yanked ? 'error' : update.security ? 'warning' : 'info'}
           action={
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
               <Button color="inherit" size="small" href={update.changelog} target="_blank" rel="noopener noreferrer">
@@ -63,15 +63,19 @@ export function Announcements({ site, admin = false, sx }: { site: SiteInfo; adm
               <Button color="inherit" size="small" href="/admin#system">
                 {t('Aktualisieren')}
               </Button>
-              <IconButton color="inherit" size="small" aria-label={t('Ausblenden')} onClick={() => dismissUpdate(update.version)}>
-                <CloseRounded fontSize="small" />
-              </IconButton>
+              {!update.yanked && (
+                <IconButton color="inherit" size="small" aria-label={t('Ausblenden')} onClick={() => dismissUpdate(update.version)}>
+                  <CloseRounded fontSize="small" />
+                </IconButton>
+              )}
             </Box>
           }
         >
-          {update.security
-            ? t('Sicherheitsupdate: MoeShare {version} ist erschienen.', { version: update.version })
-            : t('MoeShare {version} ist erschienen.', { version: update.version })}
+          {update.yanked
+            ? t('Version {current} wurde zurückgezogen. Spiel bitte bald ein Update ein.', { current: update.current || '' })
+            : update.security
+              ? t('Sicherheitsupdate: MoeShare {version} ist erschienen.', { version: update.version })
+              : t('MoeShare {version} ist erschienen.', { version: update.version })}
         </Alert>
       )}
       {maintenance && (

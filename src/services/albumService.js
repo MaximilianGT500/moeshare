@@ -10,8 +10,11 @@ const audit = require('./auditService');
 const webhook = require('./webhookService');
 const addresses = require('./addressService');
 const avatars = require('./avatarService');
+const preferences = require('./preferenceService');
 
 const VISIBILITY = ['private', 'link', 'public'];
+const LAYOUTS = ['rows', 'grid', 'masonry', 'timeline'];
+const layoutOf = (row) => (LAYOUTS.includes(row.layout) ? row.layout : 'rows');
 const MAX_TITLE = 120;
 const MAX_DESCRIPTION = 2000;
 const MAX_FILES = 500;
@@ -41,6 +44,7 @@ function present(row, extra = {}) {
     role: row.member_role ? 'member' : 'owner',
     members: row.member_count !== undefined ? Number(row.member_count) || 0 : undefined,
     rule: ruleOf(row),
+    layout: layoutOf(row),
     ...extra,
   };
 }
@@ -148,6 +152,8 @@ async function create(user, input = {}) {
     while (await codeTaken(code)) code = randomString(12);
   }
   const rule = input.rule === undefined || input.rule === null ? null : cleanRule(input.rule);
+  if (input.layout !== undefined && input.layout !== null && !LAYOUTS.includes(input.layout))
+    throw badRequest('Diese Anordnung gibt es nicht.', { field: 'layout' });
   const now = Date.now();
   const id = await db.insertRow('albums', {
     code,
@@ -160,6 +166,7 @@ async function create(user, input = {}) {
     created_at: now,
     updated_at: now,
     rule: rule ? JSON.stringify(rule) : null,
+    layout: input.layout && input.layout !== 'rows' ? input.layout : null,
   });
   if (!rule && Array.isArray(input.fileIds) && input.fileIds.length) await addFiles(user, id, input.fileIds);
   return get(user, id);
@@ -282,6 +289,10 @@ async function update(user, id, patch = {}) {
   if (patch.visibility !== undefined) {
     if (!VISIBILITY.includes(patch.visibility)) throw badRequest('Ungültige Sichtbarkeit.', { field: 'visibility' });
     fields.visibility = patch.visibility;
+  }
+  if (patch.layout !== undefined) {
+    if (patch.layout !== null && !LAYOUTS.includes(patch.layout)) throw badRequest('Diese Anordnung gibt es nicht.', { field: 'layout' });
+    fields.layout = patch.layout && patch.layout !== 'rows' ? patch.layout : null;
   }
   if (patch.password !== undefined) {
     const hashed = patch.password ? await protection.hashPassword(patch.password) : null;
@@ -478,9 +489,11 @@ async function access(req, row) {
   return { state: 'open' };
 }
 
-function publicFile(file) {
+function publicFile(file, { taken = false } = {}) {
   const guarded = file.password || file.maxViews;
   return {
+    taken: !guarded && taken && file.camera && file.camera.taken ? file.camera.taken.slice(0, 10) : null,
+    waveform: guarded || file.type !== 'audio' ? null : file.waveform || null,
     warning: file.warning === null || file.warning === undefined ? null : file.warning,
     id: file.id,
     slug: file.slug,
@@ -510,9 +523,9 @@ const albumUrl = (row, domain) => `${domain || settings.get('site.baseUrl')}/a/$
 async function publicView(req, row, { domain = null } = {}) {
   const owner = await db.get('SELECT username FROM users WHERE id = ?', [row.user_id]);
   const now = Date.now();
-  const items = (await filesOf(row.id, { publicOnly: true, domain }))
-    .filter((file) => !file.expiresAt || file.expiresAt > now)
-    .map((file) => ({ ...publicFile(file), username: file.username }));
+  const listed = (await filesOf(row.id, { publicOnly: true, domain })).filter((file) => !file.expiresAt || file.expiresAt > now);
+  const dated = layoutOf(row) === 'timeline' ? await preferences.cameraVisible(listed.map((file) => file.username)) : new Set();
+  const items = listed.map((file) => ({ ...publicFile(file, { taken: dated.has(file.username) }), username: file.username }));
   const contributors = [...new Set(items.map((item) => item.username).filter((name) => name && (!owner || name !== owner.username)))];
   const pictures = await avatars.urlsFor([...(owner ? [owner.username] : []), ...contributors]);
   return {
@@ -525,6 +538,7 @@ async function publicView(req, row, { domain = null } = {}) {
       owner: owner ? owner.username : null,
       contributors,
       updatedAt: Number(row.updated_at),
+      layout: layoutOf(row),
       url: albumUrl(row, domain),
       zip: settings.get('zip.enabled') && items.some((item) => !item.locked),
     },

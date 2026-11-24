@@ -25,6 +25,8 @@ import TimerOutlined from '@mui/icons-material/TimerOutlined';
 import LockOutlined from '@mui/icons-material/LockOutlined';
 import ArrowOutwardRounded from '@mui/icons-material/ArrowOutwardRounded';
 import CodeRounded from '@mui/icons-material/CodeRounded';
+import PhotoCameraOutlined from '@mui/icons-material/PhotoCameraOutlined';
+import CameraOutlined from '@mui/icons-material/CameraOutlined';
 import type { SiteInfo, ViewBoot, ViewFile, ViewUrls } from '../../lib/types';
 import { t, tn } from '../../lib/i18n';
 import { useDesign } from '../../lib/design';
@@ -40,6 +42,8 @@ import { ShareMenuItems } from '../../components/ShareList';
 import { UserAvatar } from '../../components/UserAvatar';
 import { VideoFrame } from '../../components/VideoPlayer';
 import { Waveform } from '../../components/Waveform';
+import { PeaksWaveform } from '../../components/PeaksWaveform';
+import { hasCamera, settingsText, takenText } from '../../lib/camera';
 import { fileIcon, typeDescription } from '../../components/FileIcons';
 import { FooterLinks, SiteFooter } from '../../components/SiteFooter';
 import { ReportButton } from '../../components/ReportDialog';
@@ -78,7 +82,7 @@ function formatTime(seconds: number) {
   return `${minutes}:${String(rest).padStart(2, '0')}`;
 }
 
-export function AudioStage({ src, seed }: { src: string; seed: string }) {
+export function AudioStage({ src, seed, peaks = null, color }: { src: string; seed: string; peaks?: number[] | null; color?: string }) {
   const { r } = useDesign();
   const audio = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
@@ -123,13 +127,30 @@ export function AudioStage({ src, seed }: { src: string; seed: string }) {
           {playing ? <PauseRounded /> : <PlayArrowRounded />}
         </IconButton>
         <Box sx={{ flex: 1, minWidth: 0, height: { xs: 64, sm: 80 }, display: 'flex', alignItems: 'center' }}>
-          <Waveform seed={seed} playing={playing} bars={44} height="100%" />
+          {peaks && peaks.length ? (
+            <PeaksWaveform
+              peaks={peaks}
+              progress={duration ? time / duration : 0}
+              duration={duration}
+              color={color || c.primary}
+              height="100%"
+              onSeek={(fraction) => {
+                const el = audio.current;
+                if (!el || !duration) return;
+                el.currentTime = fraction * duration;
+                setTime(fraction * duration);
+              }}
+            />
+          ) : (
+            <Waveform seed={seed} playing={playing} bars={44} height="100%" />
+          )}
         </Box>
       </Box>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mt: 2.5 }}>
         <Typography variant="body2" sx={{ color: 'text.secondary', minWidth: 40, fontVariantNumeric: 'tabular-nums' }}>
           {formatTime(time)}
         </Typography>
+        {peaks && peaks.length ? <Box sx={{ flex: 1 }} /> : null}
         <Slider
           aria-label={t('Position')}
           size="small"
@@ -145,7 +166,7 @@ export function AudioStage({ src, seed }: { src: string; seed: string }) {
             }
           }}
           getAriaValueText={(value) => formatTime(value)}
-          sx={{ flex: 1 }}
+          sx={{ flex: 1, display: peaks && peaks.length ? 'none' : undefined }}
         />
         <Typography variant="body2" sx={{ color: 'text.secondary', minWidth: 40, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
           {formatTime(duration)}
@@ -353,7 +374,7 @@ export function MediaStage({
   if (file.type === 'audio') {
     return (
       <Box className="ms-media">
-        <AudioStage src={urls.direct} seed={file.filename} />
+        <AudioStage src={urls.direct} seed={file.filename} peaks={file.waveform} color={model.accent} />
       </Box>
     );
   }
@@ -659,7 +680,33 @@ export function MetaList({ model, owner = true, dense = false }: { model: ViewMo
         </MetaItem>
       )}
       {file.protected && <MetaItem icon={<LockOutlined />}>{t('Mit Passwort geschützt')}</MetaItem>}
+      <CameraItems model={model} />
     </Box>
+  );
+}
+
+function CameraItems({ model }: { model: ViewModel }) {
+  const camera = model.file.camera;
+  if (!hasCamera(camera)) return null;
+  const settings = settingsText(camera);
+  const taken = takenText(camera);
+  const hint = model.file.owner && !model.file.cameraPublic ? t('Nur du siehst die Kameradaten.') : undefined;
+  return (
+    <>
+      {(camera.camera || camera.lens) && (
+        <MetaItem
+          icon={<PhotoCameraOutlined />}
+          title={[camera.lens, taken ? t('Aufgenommen {date}', { date: taken }) : null, hint].filter(Boolean).join('\n')}
+        >
+          {camera.camera || camera.lens}
+        </MetaItem>
+      )}
+      {settings && (
+        <MetaItem icon={<CameraOutlined />} title={hint}>
+          {settings}
+        </MetaItem>
+      )}
+    </>
   );
 }
 

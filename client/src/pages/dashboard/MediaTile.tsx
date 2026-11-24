@@ -29,6 +29,7 @@ import { CopyIconButton } from '../../components/CopyButton';
 import { fileIcon } from '../../components/FileIcons';
 import { toggleAudio, useAudioState } from './audioPlayer';
 import { Waveform } from '../../components/Waveform';
+import { PeaksWaveform } from '../../components/PeaksWaveform';
 import { c, css, fileTypeColor, radius } from '../../theme/tokens';
 
 export interface TileHandlers {
@@ -159,7 +160,16 @@ function AudioArt({ file, compact }: { file: FileItem; compact: boolean }) {
       }}
     >
       <Box sx={{ height: compact ? 20 : 28 }} />
-      <Waveform seed={file.filename} playing={playing} bars={compact ? 18 : 28} />
+      {file.waveform && file.waveform.length ? (
+        <PeaksWaveform
+          peaks={file.waveform}
+          progress={audio.src === file.urls.direct ? audio.progress : 0}
+          color={fileTypeColor.audio}
+          height="42%"
+        />
+      ) : (
+        <Waveform seed={file.filename} playing={playing} bars={compact ? 18 : 28} />
+      )}
       <Box sx={{ minWidth: 0, height: 44, pr: 6, display: compact ? 'none' : 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
         <Typography
           variant="caption"

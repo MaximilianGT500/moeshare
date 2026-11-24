@@ -36,6 +36,8 @@ Offizielle Instance: [v3.moeshare.eu](https://v3.moeshare.eu).
 - [Telegram-Bot](#telegram-bot)
 - [Automatisch teilen](#automatisch-teilen)
 - [Texte, Kurzlinks und Alben](#texte-kurzlinks-und-alben)
+- [Kurzlinks prüfen und Zwischenseite](#kurzlinks-prüfen-und-zwischenseite)
+- [Anordnung der Albumseite](#anordnung-der-albumseite)
 - [Vorschau für PDF, Markdown, CSV, ZIP und Schriften](#vorschau-für-pdf-markdown-csv-zip-und-schriften)
 - [Datei-Anfragen](#datei-anfragen)
 - [QR-Codes](#qr-codes)
@@ -60,6 +62,7 @@ Offizielle Instance: [v3.moeshare.eu](https://v3.moeshare.eu).
 - [Untertitel](#untertitel)
 - [Inhaltswarnungen](#inhaltswarnungen)
 - [Beschreibung und Alternativtext](#beschreibung-und-alternativtext)
+- [Kameradaten und Wellenform](#kameradaten-und-wellenform)
 - [Reaktionen](#reaktionen)
 - [Einbetten](#einbetten)
 - [Per E-Mail teilen](#per-e-mail-teilen)
@@ -81,6 +84,7 @@ Offizielle Instance: [v3.moeshare.eu](https://v3.moeshare.eu).
 - [Import aus anderen Uploadern](#import-aus-anderen-uploadern)
 - [Datenbank](#datenbank)
 - [Dateien in S3](#dateien-in-s3)
+- [Speicher im Blick](#speicher-im-blick)
 - [Einstellungen und Umgebungsvariablen](#einstellungen-und-umgebungsvariablen)
 - [Sprache](#sprache)
 - [Anmelden über andere Dienste](#anmelden-über-andere-dienste)
@@ -92,6 +96,7 @@ Offizielle Instance: [v3.moeshare.eu](https://v3.moeshare.eu).
 - [Ankündigungen und Wartungsmodus](#ankündigungen-und-wartungsmodus)
 - [App fürs Handy](#app-fürs-handy)
 - [Protokoll und Fehlerberichte](#protokoll-und-fehlerberichte)
+- [MoePulse: Statistik, Fehlerberichte und Hilfe](#moepulse-statistik-fehlerberichte-und-hilfe)
 - [Hinter einem Reverse-Proxy](#hinter-einem-reverse-proxy)
 - [Caddy verwalten](#caddy-verwalten)
 - [Metriken für Prometheus](#metriken-für-prometheus)
@@ -113,11 +118,11 @@ Offizielle Instance: [v3.moeshare.eu](https://v3.moeshare.eu).
 - **Ordner und ZIP-Archive** als Album hochladen, entpackt wird im Browser
 - **Texte und Code** wie in einem Pastebin, mit Syntaxhervorhebung, aus ShareX oder direkt im Browser
 - **Vorschau für PDF, Markdown, CSV, ZIP und Schriften**: PDFs im Browser, Markdown formatiert, Tabellen als Tabelle, ZIP-Archive mit ihrem Inhalt, aus dem sich einzelne Dateien herunterladen lassen, und Schriftdateien mit Probetext in mehreren Größen
-- **Kurzlinks** für lange Adressen, auch direkt aus ShareX
+- **Kurzlinks** für lange Adressen, auch direkt aus ShareX. MoeShare prüft die Ziele regelmäßig und markiert Links, die ins Leere führen, auf Wunsch zeigt eine Zwischenseite vorher, wohin es geht
 - **Schutz pro Upload**: Ablaufzeit, Passwort oder nur ein einziger Abruf, für Dateien, Texte und Kurzlinks
 - **Ende-zu-Ende verschlüsselt teilen**: Dateien und Texte werden schon im Browser verschlüsselt, den Schlüssel enthält nur der Link, der Server kennt weder Inhalt noch Namen
 - **Inhaltswarnungen**: Bilder und Videos erscheinen erst nach einem Klick, auch die Vorschau in Discord bleibt verschwommen
-- **Alben und Tags**: Dateien ordnen und als Album mit eigener Seite teilen, als ZIP herunterladen und gemeinsam mit anderen Konten füllen
+- **Alben und Tags**: Dateien ordnen und als Album mit eigener Seite teilen, in Reihen, als Raster, Mauerwerk oder Zeitleiste nach Aufnahmetag, als ZIP herunterladen und gemeinsam mit anderen Konten füllen
 - **Versionen**: eine Datei durch eine neue Fassung ersetzen, ohne dass sich ihr Link ändert, jederzeit zu einer älteren zurück und zwei Fassungen vergleichen, Texte Zeile für Zeile und Bilder mit einem Regler
 - **Duplikate**: Mehrfach hochgeladene Dateien zeigt das Dashboard an, auf der Festplatte liegen sie nur einmal
 - **Ähnliche Bilder**: Serienfotos, mehrere Screenshots vom selben Fenster und leicht bearbeitete Kopien findet das Aufräumen auch dann, wenn die Dateien nicht genau gleich sind
@@ -136,6 +141,8 @@ Offizielle Instance: [v3.moeshare.eu](https://v3.moeshare.eu).
 - **Statistiken** pro Datei, Kurzlink und Album: Aufrufe, Vorschauen in Discord und Co., Downloads und woher die Besucher kommen, ganz ohne IP-Adressen
 - **Adressen nach Wahl**: lange ID, kurze Zeichenfolge, Wörter, Emojis, unsichtbare Zeichen oder der Originalname, auf Wunsch über mehrere Domains
 - **Ansichtsseiten** mit Bild-, Video- und Audioplayer in sechs Designs, mit Farben aus der Datei oder eigener Akzentfarbe, wählbarer Schrift, ein- und ausblendbaren Angaben und auf Wunsch eigenem CSS
+- **Kameradaten**: Kamera, Objektiv, Brennweite, Blende, Belichtungszeit, ISO und Aufnahmezeit aus jedem Foto, im Dashboard immer und auf der Ansichtsseite nur, wenn du es willst. Standort, Seriennummer und Namen bleiben draußen
+- **Wellenform**: Audiodateien zeigen ihre echte Wellenform, ein Klick oder eine Pfeiltaste springt an die Stelle
 - **Beschreibung und Alternativtext** für jede Datei: stehen auf der Ansichtsseite und in Link-Vorschauen, helfen Menschen mit Screenreader und werden durchsucht, auch direkt aus ShareX
 - **Reaktionen** auf Dateien und Alben: Besucher reagieren mit 👍 ❤️ 😂 😮 🔥 👏, ohne Konto und ohne dass MoeShare IP-Adressen speichert. Neue Reaktionen kommen gesammelt per E-Mail oder Push
 - **Einbetten**: Bilder, Videos, Audio, Alben und die Profilkarte mit einem iframe-Code in Blogs und Foren einbauen, dazu fertige Codes für Markdown, BBCode und HTML und **oEmbed** für WordPress, Ghost und Co.
@@ -168,7 +175,9 @@ Offizielle Instance: [v3.moeshare.eu](https://v3.moeshare.eu).
 - **Startseite** mit Statistiken und Upload-Verlauf, im Browser anpassbar oder abschaltbar
 - **Dein Name**: Überall steht der Name deiner Instanz, auch in DNS-Einträgen, Dateinamen und Webhooks. „Läuft mit MoeShare“ und die Versionsnummer lassen sich abschalten
 - **Ankündigungen und Wartungsmodus**: Hinweise für alle oder nur Angemeldete, mit Zeitraum, und eine Wartungsseite, während du am Server arbeitest
-- **Update-Hinweis**: Admins sehen, wenn eine neue Version erschienen ist, auf Wunsch abschaltbar
+- **Update-Hinweis**: Admins sehen, wenn eine neue Version erschienen ist, mit den Neuerungen jeder verpassten Version, auf Wunsch abschaltbar
+- **Speicher im Blick**: belegter Platz nach Monat, Dateiart und Konto, die größten Dateien, was Duplikate sparen und eine Prüfung auf fehlende und verwaiste Dateien
+- **Hilfe vom Entwickler**: Fragen und Fehler direkt aus dem Adminbereich an MoeStudio schicken, die Antwort kommt dorthin zurück. Nutzungsstatistik und Fehlerberichte über MoePulse, beides freiwillig
 - **Anmeldung** mit Passwort, Zwei-Faktor per Authenticator-App und Passkeys, dazu über Discord, GitHub, Google, Microsoft, GitLab oder jeden OpenID-Connect-Anbieter wie Authentik, Keycloak oder Authelia, dort auch mit Rollen aus Gruppen
 - **Ohne Passwort**: Die Anmeldung mit Passwort lässt sich ganz abschalten, dann geht es nur noch mit Passkey, über einen verknüpften Dienst oder mit einem Einmal-Link
 - **Hinweis bei neuen Anmeldungen**: eine E-Mail oder Push-Benachrichtigung, sobald sich jemand auf einem Gerät anmeldet, das bisher nicht dabei war
@@ -313,7 +322,7 @@ Der Assistent führt durch:
 5. **Startseite**: Startseite mit Statistiken, direkt zur Anmeldung oder Weiterleitung auf eine andere Seite
 6. **Uploads**: maximale Dateigröße, Speicher pro Konto, Adressstil und die Verarbeitung nach dem Hochladen
 7. **Anmeldung**: wer ein Konto bekommt, Zwei-Faktor-Pflicht und Passkeys
-8. **Benachrichtigungen** über einen Discord-Webhook, auf Wunsch mit Testnachricht
+8. **Benachrichtigungen** über einen Discord-Webhook, auf Wunsch mit Testnachricht, und ob du MoeStudio mit [Nutzungsstatistik und Fehlerberichten](#moepulse-statistik-fehlerberichte-und-hilfe) helfen willst
 9. **Übersicht** und Abschluss
 
 Danach bist du angemeldet und kannst direkt die ShareX-Dateien mitnehmen. Alles lässt sich später unter **Admin › Einstellungen** ändern, dort richtest du auch Impressum, Datenschutz, S3, Sicherungen, E-Mail, eigene Domains und die Anmeldung über andere Dienste ein.
@@ -467,13 +476,32 @@ Admins schalten die Funktion unter **Admin › Einstellungen › Funktionen › 
 
 **Texte** lädst du aus ShareX, über die API oder im Dashboard mit „Neuer Text“ hoch. MoeShare zeigt sie mit Syntaxhervorhebung, erkennt die Sprache auf Wunsch selbst und bietet die Rohfassung und einen Download an. Wie groß ein Text sein darf, legst du unter **Admin › Einstellungen › Uploads** fest.
 
-**Kurzlinks** stehen unter `/s/<code>` und leiten auf die Zieladresse weiter. Im Dashboard unter **Links** siehst du alle Kurzlinks mit Klickzahl, änderst sie oder schützt sie mit Passwort, Ablaufzeit und einer Höchstzahl an Klicks.
+**Kurzlinks** stehen unter `/s/<code>` und leiten auf die Zieladresse weiter. Im Dashboard unter **Links** siehst du alle Kurzlinks mit Klickzahl, änderst sie oder schützt sie mit Passwort, Ablaufzeit und einer Höchstzahl an Klicks. Ob ihre Ziele noch erreichbar sind, prüft MoeShare selbst, siehe [Kurzlinks prüfen und Zwischenseite](#kurzlinks-prüfen-und-zwischenseite).
 
 **Alben** legst du im Dashboard unter **Alben** an oder wählst beim Hochladen ein Album aus. Jedes Album hat eine eigene Seite unter `/a/<code>` mit Titel, Beschreibung und Titelbild. Es ist entweder nur für dich sichtbar, für alle mit dem Link oder öffentlich, dann steht es auch auf deiner [Profilseite](#profilseiten). Ein Passwort geht zusätzlich. Geschützte Dateien zeigt ein Album erst, wenn ihr Passwort eingegeben wurde.
 
 Ein Passwort, eine Ablaufzeit oder ein einmaliger Abruf lässt sich bei jedem Upload setzen und später im Dashboard ändern. Abgelaufene Dateien löscht MoeShare selbst.
 
 Kurzlinks und Alben lassen sich unter **Admin › Einstellungen › Funktionen** abschalten.
+
+## Kurzlinks prüfen und Zwischenseite
+
+Etwa einmal pro Woche ruft MoeShare das Ziel jedes Kurzlinks auf, zuerst nur den Kopf der Seite und, falls der Server das nicht mag, das erste Byte. Antwortet das Ziel mit einem Fehler wie 404 oder gar nicht, steht in der Linkliste „Ziel nicht erreichbar“, seit wann und mit welcher Antwort. Ein Filter zeigt nur diese Links, „Ziel jetzt prüfen“ fragt sofort nach. Nicht erreichbare Ziele prüft MoeShare alle zwölf Stunden erneut, steht die Seite wieder, verschwindet der Hinweis von selbst. Antworten wie 401, 403 oder 429 gelten nicht als kaputt, weil manche Seiten Abrufe ohne Browser ablehnen. Adressen im internen Netz ruft MoeShare nur mit `URL_FETCH_ALLOW_PRIVATE=true` ab. Abschalten lässt sich die Prüfung unter **Admin › Einstellungen › Funktionen › Ziele regelmäßig prüfen**.
+
+Mit **Zwischenseite vor der Weiterleitung** sehen Besucher zuerst, wohin ein Kurzlink führt: die Domain groß, die ganze Adresse und Hinweise, wenn die Verbindung nicht verschlüsselt ist oder das Ziel bei der letzten Prüfung nicht erreichbar war. Erst mit „Weiter“ geht es zum Ziel, und erst dann zählt der Klick. Einschalten lässt sie sich pro Link beim Kürzen oder Bearbeiten, über die API mit `"interstitial": true`. Unter **Admin › Einstellungen › Funktionen › Zwischenseite** gilt sie auf Wunsch für alle Kurzlinks. Ein `+` am Ende zeigt die Seite für jeden Kurzlink, etwa `/s/abc+`. Die Notiz zu einem Link bleibt dabei privat.
+
+## Anordnung der Albumseite
+
+Unter **Bearbeiten** wählst du, wie die Albumseite die Dateien zeigt:
+
+| Anordnung | So sieht es aus |
+| --- | --- |
+| Reihen | Bilder in Reihen mit gleicher Höhe, ohne Zuschnitt, wie bisher |
+| Raster | Gleich große, quadratische Kacheln |
+| Mauerwerk | Spalten mit ganzen Bildern, jedes in seinem Format |
+| Zeitleiste | Nach Tagen gruppiert, vom ältesten zum neuesten. Mit freigegebenen [Kameradaten](#kameradaten-und-wellenform) zählt der Aufnahmetag, sonst der Upload |
+
+Über die API setzt `PATCH /api/albums/:id` mit `{ "layout": "rows" }`, `"grid"`, `"masonry"` oder `"timeline"` die Anordnung.
 
 ## Vorschau für PDF, Markdown, CSV, ZIP und Schriften
 
@@ -653,6 +681,12 @@ Jede Datei kann eine **Beschreibung** mit bis zu 2000 Zeichen bekommen, Zeilenum
 Beides trägst du im Dashboard unter „Bearbeiten“ ein. ShareX und andere Programme schicken es beim Hochladen mit `X-Description` und `X-Alt`, die API als Felder `description` und `alt`. Die Suche im Dashboard findet Dateien auch über Beschreibung und Alternativtext. Bei Dateien mit Passwort, Aufruflimit oder Inhaltswarnung und bei verschlüsselten Dateien landet die Beschreibung nicht in der Link-Vorschau.
 
 Für ältere Uploads hilft **Alternativtexte nachtragen** (unter **Statistik** oder in der Befehlspalette): Es zeigt jedes Bild und Video ohne Alternativtext groß an, du tippst, was zu sehen ist, und mit Strg+Enter geht es zum nächsten. Überspringen und später weitermachen ist jederzeit möglich. Der Filter **Ohne Alternativtext** zeigt dieselben Dateien im Dashboard, über die API `GET /api/files?alt=missing`.
+
+## Kameradaten und Wellenform
+
+Beim Hochladen liest MoeShare aus Fotos **Kamera, Objektiv, Brennweite** (mit Kleinbild-Entsprechung), **Blende, Belichtungszeit, ISO**, Belichtungskorrektur, Blitz und die **Aufnahmezeit**, bevor ein Bild optimiert wird. Standort, Seriennummer, Name des Fotografen und Software übernimmt MoeShare nicht. Im Dashboard stehen die Kameradaten in den Details jeder Datei. Auf den Ansichtsseiten erscheinen sie erst, wenn du unter **Konto › Einstellungen › Kameradaten zeigen** einschaltest, die [Zeitleiste](#anordnung-der-albumseite) eines Albums nutzt dann den Aufnahmetag. Für Fotos aus älteren Versionen liest MoeShare die Daten im Hintergrund nach, über die API stehen sie an jeder Datei unter `camera`.
+
+**Audiodateien** bekommen beim Hochladen eine echte Wellenform, berechnet mit FFmpeg. Auf der Ansichtsseite springst du per Klick, Ziehen oder Pfeiltaste an jede Stelle, im Dashboard zeigen die Kacheln die Form und wie weit eine Datei abgespielt ist. Ältere Audiodateien bekommen ihre Wellenform im Hintergrund, drei pro Durchgang.
 
 ## Reaktionen
 
@@ -969,11 +1003,22 @@ Vorschaubilder entstehen weiterhin auf dem Server, danach wandert die Datei in d
 
 Im Bucket liegt jede Datei für sich. Gleiche Dateien teilen sich dort keinen Platz wie im Ordner `uploads/`, das Dashboard zeigt [Duplikate](#duplikate-und-volltextsuche) aber weiter an. Zum Kürzen eines Videos holt MoeShare es kurz auf den Server und löscht die Kopie danach wieder.
 
+## Speicher im Blick
+
+Unter **Admin › Speicher** siehst du, wie viel belegt ist, was zusammengelegte [Duplikate](#duplikate-und-volltextsuche) sparen, was im Papierkorb liegt und wie viel auf dem Server noch frei ist. Diagramme zeigen, wie viel in den letzten zwölf Monaten dazukam und wie sich der Platz auf Bilder, Videos, Audio, andere Dateien und ältere Versionen und auf die Konten verteilt, mit Speicherlimit. Dazu kommen die zehn größten Dateien mit Link. Jedes Diagramm lässt sich auch als Tabelle lesen.
+
+**Speicher prüfen** vergleicht die Datenbank mit den gespeicherten Dateien und ändert dabei nichts:
+
+- **Fehlende Dateien** sind Einträge, deren Datei nicht mehr da ist, im Ordner `uploads/` oder im S3-Bucket. Ihre Links liefern einen Fehler, löschen kannst du sie unter **Admin › Dateien**. Fehlt fast alles, ist meist nur der Ordner `uploads/` gerade nicht eingebunden.
+- **Verwaiste Dateien** liegen im Ordner `uploads/`, gehören aber zu keinem Upload, keiner älteren Version und keiner Vorschau, etwa Reste abgebrochener Verarbeitung. Dateien, die jünger als eine Stunde sind, bleiben außen vor. **Beiseitelegen** verschiebt sie nach `uploads/.verwaist/<Datum>`, gelöscht wird nichts. Prüf den Ordner und lösch ihn, wenn nichts davon fehlt.
+
+Auf der Kommandozeile geht dasselbe mit `node cli.js storage-check`, mit `--verschieben` legt der Befehl verwaiste Dateien gleich beiseite.
+
 ## Einstellungen und Umgebungsvariablen
 
 Alle Einstellungen stehen in der Datenbank und werden unter **Admin › Einstellungen** geändert: Allgemein, Uploads, Bilder, Funktionen, Virenscan, Eigene Domains, Speicherort, Sicherungen, E-Mail, Anmeldung, Anmeldedienste, Rechtliches und Links, Benachrichtigungen, Import und System. Änderungen gelten sofort, auch für alle Prozesse im PM2-Cluster.
 
-Unter **Konto › Einstellungen** legt jede Person eigene Vorlieben fest: Sprache, Adressstil, automatisches Löschen nach einer Zeit, ob Bilder optimiert werden und, wenn es mehrere gibt, die Domain. Sie gelten im Browser genauso wie für ShareX.
+Unter **Konto › Einstellungen** legt jede Person eigene Vorlieben fest: Sprache, Adressstil, automatisches Löschen nach einer Zeit, ob Bilder optimiert werden, ob Besucher die [Kameradaten](#kameradaten-und-wellenform) sehen und, wenn es mehrere gibt, die Domain. Sie gelten im Browser genauso wie für ShareX.
 
 Umgebungsvariablen sind nur noch optional. Du kannst sie als `.env` im Projektordner, in der `docker-compose.yml` oder direkt beim Start setzen:
 
@@ -986,8 +1031,10 @@ Umgebungsvariablen sind nur noch optional. Du kannst sie als `.env` im Projektor
 | `LOG_FORMAT` | `text` | `text` für die Konsole, `json` für Loki, Graylog, Elasticsearch und Co. |
 | `NO_COLOR` / `FORCE_COLOR` | | Farben im Log abschalten oder erzwingen. Ohne Angabe gibt es Farben nur im Terminal. |
 | `TZ` | Systemzeit | Zeitzone für die Zeitstempel im Log, etwa `Europe/Berlin` |
-| `GLITCHTIP_DSN` | Projekt-GlitchTip | Ziel für Fehlerberichte, siehe [Protokoll und Fehlerberichte](#protokoll-und-fehlerberichte). `off` schaltet sie ganz ab. |
-| `UPDATE_CHECK_URL` | `https://moeshare.moestudio.net/version.json` | Woher die [Versionsprüfung](#versionsprüfung) die neueste Version holt. `off` schaltet sie fest ab. |
+| `GLITCHTIP_DSN` | aus | Eigenes GlitchTip oder Sentry für Fehlerberichte, siehe [Protokoll und Fehlerberichte](#protokoll-und-fehlerberichte) |
+| `MOEPULSE_DISABLED` | | `1` schaltet [MoePulse](#moepulse-statistik-fehlerberichte-und-hilfe) fest ab: keine Statistik, keine Fehlerberichte an MoeStudio, kein Support |
+| `MOEPULSE_ENDPOINT` | `https://pulse.moestudio.net` | Anderer MoePulse-Server, `off` wirkt wie `MOEPULSE_DISABLED=1` |
+| `UPDATE_CHECK_URL` | MoePulse, ersatzweise `https://moeshare.moestudio.net/version.json` | Eigene Quelle für die [Versionsprüfung](#versionsprüfung). `off` schaltet sie fest ab. |
 | `URL_FETCH_ALLOW_PRIVATE` | `false` | „Hochladen per Link“ darf auch Adressen im internen Netz abrufen, ebenso das [automatische Teilen](#automatisch-teilen) an ntfy, Matrix, Mastodon und eigene Webhooks, dann auch ohne HTTPS. Nur im eigenen Netz einschalten. |
 | `MEMORY_NOTICE_HOUR` | `9` | Ab dieser Stunde (deutsche Zeit) gehen die täglichen Hinweise [An diesem Tag](#favoriten-und-rückblick) und der [Wochenbericht](#wochenbericht-und-erinnerungen) raus |
 | `DIGEST_WEEKDAY` | `1` | Wochentag für den [Wochenbericht](#wochenbericht-und-erinnerungen), `0` für Sonntag bis `6` für Samstag, Standard ist Montag |
@@ -1104,7 +1151,17 @@ Fehlgeschlagene Anmeldungen stehen mit IP-Adresse im Log, solange unter **System
 failregex = ^.* WARN  \[(audit|auth)\] Anmeldung fehlgeschlagen .*ip=<HOST>
 ```
 
-Unter **Admin › Einstellungen › System** kannst du erlauben, dass MoeShare Fehlermeldungen und vom Browser blockierte Inhalte an das [GlitchTip](https://glitchtip.com) des Projekts schickt. Das ist anfangs aus. Vor dem Senden werden Benutzernamen, IP-Adressen, E-Mail-Adressen, Dateinamen, Tokens und lokale Pfade entfernt, gleiche Fehler gehen höchstens alle zehn Minuten raus. Mit `GLITCHTIP_DSN` schickst du die Berichte an ein eigenes GlitchTip oder Sentry, mit `GLITCHTIP_DSN=off` schaltest du sie unabhängig von der Einstellung ab.
+Mit `GLITCHTIP_DSN` schickt MoeShare Fehlermeldungen und vom Browser blockierte Inhalte an dein eigenes [GlitchTip](https://glitchtip.com) oder Sentry, sobald du unter **Admin › Einstellungen › System** „Fehlerberichte senden“ erlaubst. Vor dem Senden werden Benutzernamen, IP-Adressen, E-Mail-Adressen, Dateinamen, Tokens und lokale Pfade entfernt, gleiche Fehler gehen höchstens alle zehn Minuten raus. Fehlerberichte an MoeStudio laufen über [MoePulse](#moepulse-statistik-fehlerberichte-und-hilfe).
+
+## MoePulse: Statistik, Fehlerberichte und Hilfe
+
+Über [MoePulse](https://github.com/MaximilianGT500/moepulse) hält MoeShare Kontakt zu MoeStudio. Alles davon ist freiwillig.
+
+**Nutzungsstatistik und Fehlerberichte** schaltest du unter **Admin › System › MoeStudio helfen** ein, schon im Einrichtungsassistenten fragt MoeShare danach. Beides ist aus, bis du es einschaltest. Die Statistik schickt alle paar Stunden eine zufällige Installations-ID, Version, Installationsart, Node.js-Version, Betriebssystem, CPU-Kerne, Arbeitsspeicher und freien Speicherplatz, Zeitzone, Sprache, die genutzten Funktionen wie Datenbank und Speicherort und Anzahlen wie Konten, Dateien, Kurzlinks und Alben. Fehlerberichte enthalten die Fehlermeldung und die Stelle im Programm, Pfade, Domains, E-Mail-Adressen, IP-Adressen und Schlüssel werden vorher entfernt. Inhalte, Dateinamen, Benutzernamen und IP-Adressen gehen nie raus. **Vorschau** zeigt genau, was gesendet würde, **Gesendete Daten löschen** entfernt bei MoeStudio alles, was die Installation geschickt hat, und schaltet beides ab. Die Installations-ID liegt mit ihrem Schlüssel in `db/moepulse/identity.json`, jede Meldung ist damit signiert.
+
+Unter **Admin › Hilfe** schreibst du Max von MoeStudio direkt, wenn etwas hakt, eine Frage offen ist oder du eine Idee hast. Die Antwort erscheint dort, neue Antworten zeigt der Reiter mit einer Zahl. Auf Wunsch geht eine bereinigte Diagnose mit Version, System und den letzten Fehlern mit. Hinweise von MoeStudio, etwa zu Sicherheitslücken, erscheinen oben im Adminbereich, wenn sie zur installierten Version passen.
+
+Mit `MOEPULSE_DISABLED=1` oder `MOEPULSE_ENDPOINT=off` ist MoePulse fest aus: keine Statistik, keine Fehlerberichte, kein Support, keine Hinweise, und die [Versionsprüfung](#versionsprüfung) fragt nur noch die Website. `MOEPULSE_ENDPOINT` zeigt auf einen anderen MoePulse-Server, erlaubt ist nur HTTPS oder `http://localhost`.
 
 ## Hinter einem Reverse-Proxy
 
@@ -1214,21 +1271,21 @@ Ohne Token antwortet `/metrics` mit 401, abgeschaltet gar nicht.
 
 ## Versionsprüfung
 
-Einmal am Tag fragt MoeShare unter `https://moeshare.moestudio.net/version.json` nach, ob es eine neue Version gibt. Abgerufen wird nur diese Datei, ohne Angaben über deinen Server, seinen Namen oder die installierte Version. Gibt es eine neue Version, sehen Admins einen Hinweis im Dashboard und im Admin-Bereich. Einmal pro Version feuern außerdem die [Benachrichtigungen](#benachrichtigungen) für Systemmeldungen, und Admins, die Systemmeldungen per E-Mail bekommen, erhalten eine Nachricht. Sicherheitsupdates sind als solche markiert.
+Einmal am Tag fragt MoeShare bei MoePulse (`https://pulse.moestudio.net`) nach, ob es eine neue Version gibt. Die Anfrage nennt nur die installierte Version, ohne Installations-ID und ohne Angaben über deinen Server, und hängt nicht von der [Nutzungsstatistik](#moepulse-statistik-fehlerberichte-und-hilfe) ab. Antwortet MoePulse nicht, fragt MoeShare wie früher unter `https://moeshare.moestudio.net/version.json`. Gibt es eine neue Version, sehen Admins einen Hinweis im Dashboard und im Admin-Bereich. Einmal pro Version feuern außerdem die [Benachrichtigungen](#benachrichtigungen) für Systemmeldungen, und Admins, die Systemmeldungen per E-Mail bekommen, erhalten eine Nachricht. Sicherheitsupdates und zurückgezogene Versionen sind als solche markiert.
 
-Unter **Admin › System › Updates** stehen die installierte und die neueste Version mit den wichtigsten Neuerungen, wann zuletzt geprüft wurde und der passende Befehl zum Aktualisieren, je nachdem, ob MoeShare mit Docker, dem Installationsskript oder Git läuft. „Jetzt prüfen“ fragt sofort nach. Auf der Kommandozeile zeigt `node cli.js version` dasselbe.
+Unter **Admin › System › Updates** stehen die installierte und die neueste Version mit den Neuerungen jeder verpassten Version, das Erscheinungsdatum und der passende Befehl zum Aktualisieren, je nachdem, ob MoeShare mit Docker, dem Installationsskript oder Git läuft. „Erneut prüfen“ fragt sofort nach. Auf der Kommandozeile zeigt `node cli.js version` dasselbe.
 
-Abschalten lässt sich die Prüfung dort oder unter **Admin › Einstellungen › System › Nach neuen Versionen suchen**, danach stellt MoeShare keine Anfrage mehr. Mit `UPDATE_CHECK_URL=off` ist sie fest aus. Mit einer eigenen Adresse fragt MoeShare dort nach, etwa für einen Fork. Die Datei sieht so aus, Pflicht ist nur `version`:
+Abschalten lässt sich die Prüfung dort oder unter **Admin › Einstellungen › System › Nach neuen Versionen suchen**, danach stellt MoeShare keine Anfrage mehr. Mit `UPDATE_CHECK_URL=off` ist sie fest aus. Mit einer eigenen Adresse fragt MoeShare nur dort nach und nicht bei MoePulse, etwa für einen Fork. Die Datei sieht so aus, Pflicht ist nur `version`:
 
 ```json
 {
-  "version": "3.9.0",
-  "date": "2026-11-22",
-  "changelog": "https://moeshare.moestudio.net/changelog.html#v3.9.0",
+  "version": "3.10.0",
+  "date": "2026-11-24",
+  "changelog": "https://moeshare.moestudio.net/changelog.html#v3.10.0",
   "security": false,
   "notes": {
-    "de": ["Telegram-Bot, Tokens mit Rechten und Vorgaben, ähnliche Bilder, Farbfilter und Upload-Kalender"],
-    "en": ["Telegram bot, tokens with permissions and presets, similar images, color filter and upload calendar"]
+    "de": ["Kameradaten, Wellenformen, Speicheranalyse, geprüfte Kurzlinks und neue Album-Anordnungen"],
+    "en": ["Camera data, waveforms, storage analysis, checked short links and new album layouts"]
   }
 }
 ```
@@ -1299,6 +1356,7 @@ Wer lieber selbst sichert, nimmt diese Ordner mit:
 | `node cli.js restore <datei> [--force] [--ohne-dateien]` | Spielt eine Sicherung ein |
 | `node cli.js storage <s3\|lokal>` | Verschiebt vorhandene Dateien nach S3 oder zurück auf den Server |
 | `node cli.js videos` | Prüft vorhandene Videos: Abmessungen, Vorschaubilder und [Fassungen für alle Browser](#videos-für-alle-browser) |
+| `node cli.js storage-check [--verschieben]` | Sucht fehlende und verwaiste Dateien, siehe [Speicher im Blick](#speicher-im-blick). Mit `--verschieben` wandern verwaiste Dateien nach `uploads/.verwaist`. Fehlt eine Datei, endet der Befehl mit Code 2 |
 | `node cli.js version` | Zeigt die installierte Version und fragt nach, ob es eine neuere gibt, siehe [Versionsprüfung](#versionsprüfung) |
 | `node cli.js import <zipline\|xbackbone\|chibisafe> --db <adresse> --files <ordner>` | Übernimmt einen anderen Uploader, siehe [Import](#import-aus-anderen-uploadern). Mit `--probe` nur ein Probelauf, `--ohne-admins` macht niemanden zum Admin, `--waisen-ueberspringen` lässt Dateien ohne Besitzer weg, `--als <admin>` bestimmt, wem sie gehören. |
 
@@ -1325,7 +1383,9 @@ Skripte und Uploader melden sich mit einem API-Token im Header `Authorization` a
 | `GET` | `/api/files/year?year=2025` | [Jahresrückblick](#jahresrückblick): Uploads, Größe, Typen, Monate, Wochentage, Stunden, Serie, beliebteste Dateien und mehr, ohne `year` das laufende Jahr |
 | `PATCH` | `/api/files/:id` | Eigene Datei ändern, unter anderem `title`, `description`, `alt`, `starred`, `tags`, `warning` und `publishAt` (`null` veröffentlicht sofort). Antwort: `{ file }` |
 | `POST` | `/api/files/:id/email` | Datei [per E-Mail teilen](#per-e-mail-teilen): `{ to: [..], message }`. Antwort: `{ ok, sent }` |
-| `POST` | `/api/albums` | Album anlegen, mit `rule: { tag, type, starred, days }` als [smartes Album](#smarte-alben). `PATCH /api/albums/:id` ändert die Regel, `rule: null` macht es wieder zu einem normalen Album |
+| `POST` | `/api/albums` | Album anlegen, mit `rule: { tag, type, starred, days }` als [smartes Album](#smarte-alben) und `layout` für die [Anordnung](#anordnung-der-albumseite). `PATCH /api/albums/:id` ändert beides, `rule: null` macht es wieder zu einem normalen Album |
+| `GET` | `/api/links?broken=1` | Nur Kurzlinks, deren Ziel bei der letzten [Prüfung](#kurzlinks-prüfen-und-zwischenseite) nicht erreichbar war. Jeder Link hat `check: { status, checkedAt, brokenSince }` und `interstitial` |
+| `POST` | `/api/links/:id/check` | Ziel eines eigenen Kurzlinks sofort prüfen. Antwort: `{ link }` |
 | `POST` | `/api/albums/:id/email` | Album per E-Mail teilen, wie bei Dateien |
 | `PATCH` | `/api/tags/:tag` | [Tag](#tags-verwalten) umbenennen oder mit `{ name }` in einen vorhandenen zusammenführen. `DELETE /api/tags/:tag` löscht ihn |
 | `GET` | `/api/account/autoshare` | Regeln zum [automatischen Teilen](#automatisch-teilen): `{ enabled, rules, kinds, types, max }`. `POST` legt eine an (`kind` plus die Felder des Ziels, dazu `name`, `tag`, `types`, `template`), `PATCH /api/account/autoshare/:id` ändert sie, `DELETE` entfernt sie, `POST /api/account/autoshare/:id/test` schickt eine Testnachricht |

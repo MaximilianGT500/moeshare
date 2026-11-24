@@ -6,6 +6,7 @@ const { HttpError } = require('../lib/errors');
 const { renderMessage } = require('../lib/render');
 const i18n = require('../lib/i18n');
 const { pathOf } = require('./requestLog');
+const pulse = require('../services/pulseService');
 
 const log = logger.scope('http');
 
@@ -39,7 +40,10 @@ function notFound(req, res) {
 
 function errorHandler(error, req, res, next) {
   const known = normalize(error);
-  if (!known) log.error(`${req.method} ${pathOf(req)} ist fehlgeschlagen`, { id: req.id, error });
+  if (!known) {
+    pulse.captureRequest(error, req);
+    log.error(`${req.method} ${pathOf(req)} ist fehlgeschlagen`, { id: req.id, error });
+  }
   if (res.headersSent) return res.destroy();
 
   if (!known) {

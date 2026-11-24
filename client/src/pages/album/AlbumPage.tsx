@@ -210,7 +210,7 @@ function AlbumView({
         )}
       </m.section>
 
-      <PublicGallery items={items} play={play} />
+      <PublicGallery items={items} play={play} layout={album.layout || 'rows'} />
 
       {!items.length && (
         <Box sx={{ textAlign: 'center', py: 10, color: 'text.secondary' }}>

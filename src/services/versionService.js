@@ -76,7 +76,7 @@ async function drop(record, row) {
   await db.run('DELETE FROM file_versions WHERE id = ?', [row.id]);
 }
 
-async function replace(record, filename, { originalName, note = null, scanStatus = null } = {}) {
+async function replace(record, filename, { originalName, note = null, scanStatus = null, exif } = {}) {
   const { file } = filePaths(record.username, filename);
   const { size } = await fsp.stat(file);
   const sha256 = await hashFile(file);
@@ -87,8 +87,8 @@ async function replace(record, filename, { originalName, note = null, scanStatus
     if (keep) await tx.insertRow('file_versions', archived(record, now, note));
     await tx.run(
       `UPDATE file_data SET filename = ?, slug = ?, size_bytes = ?, original_name = ?, sha256 = ?, deduped = 0, resolution_width = 0,
-       resolution_height = 0, dominant_color = '#ffffff', storage = 'local', variants = NULL, version = ?, version_at = ?, scan_status = ?
-       WHERE id = ?`,
+       resolution_height = 0, dominant_color = '#ffffff', storage = 'local', variants = NULL, version = ?, version_at = ?, scan_status = ?,
+       exif = ?, waveform = NULL WHERE id = ?`,
       [
         filename,
         record.slug || record.filename,
@@ -98,6 +98,7 @@ async function replace(record, filename, { originalName, note = null, scanStatus
         version,
         now,
         scanStatus,
+        exif === undefined ? record.exif || null : exif,
         record.id,
       ]
     );
@@ -130,7 +131,7 @@ async function restore(record, versionId) {
     await tx.insertRow('file_versions', archived(record, now));
     await tx.run(
       `UPDATE file_data SET filename = ?, size_bytes = ?, original_name = ?, sha256 = ?, deduped = 0, resolution_width = ?, resolution_height = ?,
-       dominant_color = ?, storage = ?, variants = ?, version = ?, version_at = ? WHERE id = ?`,
+       dominant_color = ?, storage = ?, variants = ?, version = ?, version_at = ?, exif = NULL, waveform = NULL WHERE id = ?`,
       [
         row.filename,
         Number(row.size_bytes) || 0,

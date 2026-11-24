@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent, type ReactNode } from 'react';
 import { AnimatePresence, m } from 'motion/react';
 import Box from '@mui/material/Box';
 import IconButton from '@mui/material/IconButton';
@@ -19,13 +19,13 @@ import FullscreenRounded from '@mui/icons-material/FullscreenRounded';
 import FullscreenExitRounded from '@mui/icons-material/FullscreenExitRounded';
 import WarningAmberRounded from '@mui/icons-material/WarningAmberRounded';
 import Button from '@mui/material/Button';
-import type { AlbumItem } from '../lib/types';
+import type { AlbumItem, AlbumLayout } from '../lib/types';
 import { justify, tileAspect } from '../lib/justified';
 import { useElementWidth } from '../lib/hooks';
 import { formatBytes } from '../lib/format';
 import { mix } from '../lib/color';
 import { useDesign } from '../lib/design';
-import { t } from '../lib/i18n';
+import { locale, t, tn } from '../lib/i18n';
 import { fileIcon } from './FileIcons';
 import { VideoFrame } from './VideoPlayer';
 import { c, ease, elevation, fileTypeColor, radius } from '../theme/tokens';
@@ -83,10 +83,62 @@ function metrics(width: number) {
   return { target: 236, gap: 10 };
 }
 
-export function PublicGallery({ items, play = 0 }: { items: AlbumItem[]; play?: number }) {
+interface TimelineGroup {
+  key: string;
+  label: string;
+  items: AlbumItem[];
+  offset: number;
+}
+
+const pad = (value: number) => String(value).padStart(2, '0');
+
+function dayOf(item: AlbumItem): string | null {
+  if (item.taken && /^\d{4}-\d{2}-\d{2}/.test(item.taken)) return item.taken.slice(0, 10);
+  if (!item.createdAt) return null;
+  const date = new Date(item.createdAt);
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+const dayLabel = new Intl.DateTimeFormat(locale, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+export function timelineGroups(items: AlbumItem[]): TimelineGroup[] {
+  const byDay = new Map<string, AlbumItem[]>();
+  for (const item of items) {
+    const key = dayOf(item) || 'undated';
+    byDay.set(key, [...(byDay.get(key) || []), item]);
+  }
+  const keys = [...byDay.keys()].sort((a, b) => (a === 'undated' ? 1 : b === 'undated' ? -1 : a.localeCompare(b)));
+  let offset = 0;
+  return keys.map((key) => {
+    const list = byDay.get(key) || [];
+    const group = {
+      key,
+      label: key === 'undated' ? t('Ohne Datum') : dayLabel.format(new Date(`${key}T12:00:00`)),
+      items: list,
+      offset,
+    };
+    offset += list.length;
+    return group;
+  });
+}
+
+function masonry(items: AlbumItem[], count: number) {
+  const columns: Array<Array<{ item: AlbumItem; index: number }>> = Array.from({ length: count }, () => []);
+  const heights = new Array(count).fill(0);
+  items.forEach((item, index) => {
+    const shortest = heights.indexOf(Math.min(...heights));
+    columns[shortest].push({ item, index });
+    heights[shortest] += 1 / tileAspect(item);
+  });
+  return columns;
+}
+
+export function PublicGallery({ items, play = 0, layout = 'rows' }: { items: AlbumItem[]; play?: number; layout?: AlbumLayout }) {
   const [ref, width] = useElementWidth<HTMLDivElement>();
   const { target, gap } = metrics(width);
-  const media = useMemo(() => items.filter(viewable), [items]);
+  const groups = useMemo(() => (layout === 'timeline' ? timelineGroups(items) : null), [items, layout]);
+  const ordered = useMemo(() => (groups ? groups.flatMap((group) => group.items) : items), [groups, items]);
+  const media = useMemo(() => ordered.filter(viewable), [ordered]);
   const [open, setOpen] = useState<number | null>(null);
   const [playing, setPlaying] = useState(false);
   const [revealed, setRevealed] = useState<Set<number>>(() => new Set());
@@ -102,7 +154,6 @@ export function PublicGallery({ items, play = 0 }: { items: AlbumItem[]; play?: 
     setPlaying(false);
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   };
-  const rows = useMemo(() => justify(items, tileAspect, width, { targetHeight: target, gap }), [items, width, target, gap]);
 
   const openItem = (item: AlbumItem) => {
     const index = media.findIndex((entry) => entry.id === item.id);
@@ -111,24 +162,84 @@ export function PublicGallery({ items, play = 0 }: { items: AlbumItem[]; play?: 
   const reveal = (item: AlbumItem) => setRevealed((current) => new Set(current).add(item.id));
   const veiled = (item: AlbumItem) => warned(item) && !revealed.has(item.id);
 
-  return (
-    <>
-      <Box ref={ref} className="ms-gallery" sx={{ display: 'grid', gap: `${gap}px` }}>
-        {rows.map((row, rowIndex) => (
-          <Box key={rowIndex} sx={{ display: 'flex', gap: `${gap}px`, height: Math.round(row.height) }}>
-            {row.cells.map((cell, cellIndex) => (
-              <AlbumTile
-                key={cell.item.id}
-                item={cell.item}
-                width={row.complete && cellIndex === row.cells.length - 1 ? undefined : Math.round(cell.width)}
-                index={rowIndex * 10 + cellIndex}
-                veiled={veiled(cell.item)}
-                onReveal={() => reveal(cell.item)}
-                onOpen={() => openItem(cell.item)}
-              />
+  const tile = (item: AlbumItem, index: number, tileWidth?: number) => (
+    <AlbumTile
+      key={item.id}
+      item={item}
+      width={tileWidth}
+      index={index}
+      veiled={veiled(item)}
+      onReveal={() => reveal(item)}
+      onOpen={() => openItem(item)}
+    />
+  );
+
+  const rowsOf = (list: AlbumItem[], offset = 0) =>
+    justify(list, tileAspect, width, { targetHeight: target, gap }).map((row, rowIndex) => (
+      <Box key={rowIndex} sx={{ display: 'flex', gap: `${gap}px`, height: Math.round(row.height) }}>
+        {row.cells.map((cell, cellIndex) =>
+          tile(
+            cell.item,
+            offset + rowIndex * 10 + cellIndex,
+            row.complete && cellIndex === row.cells.length - 1 ? undefined : Math.round(cell.width)
+          )
+        )}
+      </Box>
+    ));
+
+  let body: ReactNode = null;
+  if (width > 0 && layout === 'grid') {
+    body = (
+      <Box sx={{ display: 'grid', gap: `${gap}px`, gridTemplateColumns: `repeat(auto-fill, minmax(${Math.round(target * 0.8)}px, 1fr))` }}>
+        {items.map((item, index) => (
+          <Box key={item.id} sx={{ aspectRatio: '1 / 1', display: 'flex', minWidth: 0 }}>
+            {tile(item, index)}
+          </Box>
+        ))}
+      </Box>
+    );
+  } else if (width > 0 && layout === 'masonry') {
+    const columns = masonry(items, Math.max(2, Math.round(width / (target * 1.25))));
+    body = (
+      <Box sx={{ display: 'flex', gap: `${gap}px`, alignItems: 'flex-start' }}>
+        {columns.map((column, columnIndex) => (
+          <Box key={columnIndex} sx={{ flex: '1 1 0', minWidth: 0, display: 'grid', gap: `${gap}px` }}>
+            {column.map(({ item, index }) => (
+              <Box key={item.id} sx={{ aspectRatio: String(tileAspect(item)), display: 'flex', minWidth: 0 }}>
+                {tile(item, index)}
+              </Box>
             ))}
           </Box>
         ))}
+      </Box>
+    );
+  } else if (width > 0 && groups) {
+    body = groups.map((group, groupIndex) => (
+      <Box
+        key={group.key}
+        component="section"
+        aria-labelledby={`album-day-${group.key}`}
+        sx={{ display: 'grid', gap: `${gap}px`, mt: groupIndex ? { xs: 2.5, md: 3.5 } : 0 }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'baseline', flexWrap: 'wrap', columnGap: 1.5, mb: 0.5 }}>
+          <Typography id={`album-day-${group.key}`} component="h2" variant="h6" sx={{ fontWeight: 800 }}>
+            {group.label}
+          </Typography>
+          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+            {tn(group.items.length, '1 Datei', '{count} Dateien')}
+          </Typography>
+        </Box>
+        {rowsOf(group.items, group.offset)}
+      </Box>
+    ));
+  } else if (width > 0) {
+    body = rowsOf(items);
+  }
+
+  return (
+    <>
+      <Box ref={ref} className="ms-gallery" data-layout={layout} sx={{ display: 'grid', gap: `${gap}px` }}>
+        {body}
       </Box>
       <AnimatePresence>
         {open !== null && media[open] && (

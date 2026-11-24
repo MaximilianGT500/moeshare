@@ -441,6 +441,16 @@ const MIGRATIONS = [
       await createIndexes(db, 'file_data');
     },
   },
+  {
+    version: 16,
+    name: 'Kameradaten, Wellenformen, geprüfte Kurzlinks und Album-Layouts',
+    async up(db) {
+      await addColumns(db, 'file_data', ['exif', 'waveform']);
+      await addColumns(db, 'links', ['check_status', 'checked_at', 'broken_since', 'interstitial']);
+      await addColumns(db, 'albums', ['layout']);
+      await createIndexes(db, 'links');
+    },
+  },
 ];
 
 const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

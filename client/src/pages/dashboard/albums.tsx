@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type DragEvent as ReactDragEvent, type CSSProperties } from 'react';
+import { useCallback, useEffect, useRef, useState, type DragEvent as ReactDragEvent, type CSSProperties, type ReactNode } from 'react';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import ButtonBase from '@mui/material/ButtonBase';
@@ -52,6 +52,10 @@ import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import AutoAwesomeRounded from '@mui/icons-material/AutoAwesomeRounded';
 import ForwardToInboxRounded from '@mui/icons-material/ForwardToInboxRounded';
 import PanToolAltOutlined from '@mui/icons-material/PanToolAltOutlined';
+import ViewDayOutlined from '@mui/icons-material/ViewDayOutlined';
+import GridViewOutlined from '@mui/icons-material/GridViewOutlined';
+import ViewQuiltOutlined from '@mui/icons-material/ViewQuiltOutlined';
+import TimelineOutlined from '@mui/icons-material/TimelineOutlined';
 import {
   ApiError,
   addAlbumMember,
@@ -68,7 +72,7 @@ import {
   reorderAlbum,
   updateAlbum,
 } from '../../lib/api';
-import type { Album, AlbumRule, AlbumVisibility, FileItem, FileType, TagCount, UploadOptionsInfo } from '../../lib/types';
+import type { Album, AlbumLayout, AlbumRule, AlbumVisibility, FileItem, FileType, TagCount, UploadOptionsInfo } from '../../lib/types';
 import { EmailShareDialog, type EmailTarget } from '../../components/EmailShareDialog';
 import { relativeMs } from '../../lib/format';
 import { readBoot } from '../../lib/boot';
@@ -96,6 +100,34 @@ const RULE_TYPES: Array<{ key: FileType; label: () => string }> = [
 ];
 
 const RULE_DAYS = [7, 30, 90, 365];
+
+const LAYOUTS: Array<{ key: AlbumLayout; icon: ReactNode; label: () => string; text: () => string }> = [
+  {
+    key: 'rows',
+    icon: <ViewDayOutlined fontSize="small" />,
+    label: () => t('Reihen'),
+    text: () => t('Bilder in Reihen mit gleicher Höhe, ohne Zuschnitt.'),
+  },
+  {
+    key: 'grid',
+    icon: <GridViewOutlined fontSize="small" />,
+    label: () => t('Raster'),
+    text: () => t('Gleich große, quadratische Kacheln.'),
+  },
+  {
+    key: 'masonry',
+    icon: <ViewQuiltOutlined fontSize="small" />,
+    label: () => t('Mauerwerk'),
+    text: () => t('Spalten mit ganzen Bildern, jedes in seinem Format.'),
+  },
+  {
+    key: 'timeline',
+    icon: <TimelineOutlined fontSize="small" />,
+    label: () => t('Zeitleiste'),
+    text: () =>
+      t('Nach Tagen gruppiert, vom ältesten zum neuesten. Mit freigegebenen Kameradaten zählt das Aufnahmedatum, sonst der Upload.'),
+  },
+];
 
 const daysLabel = (days: number) => (days === 365 ? t('im letzten Jahr') : t('in den letzten {count} Tagen', { count: days }));
 
@@ -226,6 +258,7 @@ export function AlbumEditorDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [mode, setMode] = useState<'manual' | 'smart'>('manual');
+  const [layout, setLayout] = useState<AlbumLayout>('rows');
   const [rule, setRule] = useState<RuleDraft>(ruleDraftOf(null));
   const [tags, setTags] = useState<TagCount[]>([]);
   const canChooseMode = !fileIds.length && (!album || (album.role !== 'member' && !(album.members ?? 0)));
@@ -246,6 +279,7 @@ export function AlbumEditorDialog({
     setTitle(album?.title || '');
     setDescription(album?.description || '');
     setVisibility(album?.visibility || 'link');
+    setLayout(album?.layout || 'rows');
     setPasswordEnabled(Boolean(album?.password));
     setPassword('');
     setError('');
@@ -264,6 +298,7 @@ export function AlbumEditorDialog({
         title: title.trim(),
         description,
         visibility,
+        layout,
         ...(passwordEnabled ? (password ? { password } : {}) : album?.password ? { password: null } : {}),
         ...(customAddresses && wanted && wanted !== album?.code ? { code: wanted } : {}),
         ...(mode === 'smart' ? { rule: ruleOfDraft(rule) } : album?.rule ? { rule: null } : {}),
@@ -409,6 +444,33 @@ export function AlbumEditorDialog({
           </RadioGroup>
           {visibility !== 'private' && (
             <>
+              <Box sx={{ display: 'grid', gap: 1 }}>
+                <Typography variant="body2" id="album-layout-label" sx={{ fontWeight: 600 }}>
+                  {t('Anordnung auf der Albumseite')}
+                </Typography>
+                <ToggleButtonGroup
+                  exclusive
+                  fullWidth
+                  size="small"
+                  value={layout}
+                  onChange={(_event, next: AlbumLayout | null) => next && setLayout(next)}
+                  aria-labelledby="album-layout-label"
+                >
+                  {LAYOUTS.map((entry) => (
+                    <ToggleButton
+                      key={entry.key}
+                      value={entry.key}
+                      sx={{ gap: 0.75, flexDirection: { xs: 'column', sm: 'row' }, py: { xs: 0.75, sm: 0.5 }, fontSize: '0.8125rem' }}
+                    >
+                      {entry.icon}
+                      {entry.label()}
+                    </ToggleButton>
+                  ))}
+                </ToggleButtonGroup>
+                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                  {LAYOUTS.find((entry) => entry.key === layout)?.text()}
+                </Typography>
+              </Box>
               <FormControlLabel
                 control={<Switch checked={passwordEnabled} onChange={(event) => setPasswordEnabled(event.target.checked)} />}
                 label={t('Mit Passwort schützen')}

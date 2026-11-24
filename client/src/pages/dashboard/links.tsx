@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
+import Chip from '@mui/material/Chip';
 import CircularProgress from '@mui/material/CircularProgress';
+import FormControlLabel from '@mui/material/FormControlLabel';
+import Switch from '@mui/material/Switch';
 import Collapse from '@mui/material/Collapse';
 import Dialog from '@mui/material/Dialog';
 import DialogActions from '@mui/material/DialogActions';
@@ -22,9 +25,12 @@ import AdsClickRounded from '@mui/icons-material/AdsClickRounded';
 import BarChartRounded from '@mui/icons-material/BarChartRounded';
 import BlockRounded from '@mui/icons-material/BlockRounded';
 import EditOutlined from '@mui/icons-material/EditOutlined';
-import { ApiError, createLink, deleteLink, listLinks, updateLink } from '../../lib/api';
+import LinkOffRounded from '@mui/icons-material/LinkOffRounded';
+import FactCheckOutlined from '@mui/icons-material/FactCheckOutlined';
+import SignpostOutlined from '@mui/icons-material/SignpostOutlined';
+import { ApiError, checkLink, createLink, deleteLink, listLinks, updateLink } from '../../lib/api';
 import type { ExpiryChoice, ShortLink, UploadOptionsInfo, UrlStyle } from '../../lib/types';
-import { formatNumber, relativeMs } from '../../lib/format';
+import { formatDateTime, formatNumber, relativeMs } from '../../lib/format';
 import { t, tn } from '../../lib/i18n';
 import { useDebouncedValue, useInView } from '../../lib/hooks';
 import { CopyIconButton, CopyTextButton } from '../../components/CopyButton';
@@ -44,6 +50,42 @@ const LINK_STYLES = URL_STYLES.filter((style) => style !== 'original');
 const linkHost = (domain: string, info: UploadOptionsInfo) =>
   domain && domain !== 'base' && domain !== 'random' ? domain : info.domains[0] || window.location.origin;
 
+function InterstitialSwitch({
+  info,
+  checked,
+  onChange,
+}: {
+  info: UploadOptionsInfo;
+  checked: boolean;
+  onChange: (value: boolean) => void;
+}) {
+  const forced = info.interstitial === 'always';
+  return (
+    <Box>
+      <FormControlLabel
+        control={<Switch checked={forced || checked} disabled={forced} onChange={(event) => onChange(event.target.checked)} />}
+        label={t('Zwischenseite vor der Weiterleitung')}
+      />
+      <Typography variant="caption" component="p" sx={{ color: 'text.secondary', mt: -0.5, ml: 6.5 }}>
+        {forced
+          ? t('Auf diesem Server zeigen alle Kurzlinks vorher, wohin sie führen.')
+          : t('Besucher sehen zuerst, wohin der Link führt, und gehen dann selbst weiter.')}
+      </Typography>
+    </Box>
+  );
+}
+
+export function brokenText(link: ShortLink) {
+  const check = link.check;
+  if (!check || !check.brokenSince) return '';
+  const reason = check.status ? t('Antwort {status}', { status: check.status }) : t('keine Antwort');
+  return t('Seit {date} nicht erreichbar ({reason}), zuletzt geprüft {when}.', {
+    date: formatDateTime(new Date(check.brokenSince)),
+    reason,
+    when: relativeMs(check.checkedAt),
+  });
+}
+
 function LinkEditDialog({
   link,
   info,
@@ -58,6 +100,7 @@ function LinkEditDialog({
   const [url, setUrl] = useState('');
   const [title, setTitle] = useState('');
   const [code, setCode] = useState('');
+  const [interstitial, setInterstitial] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
 
@@ -66,6 +109,7 @@ function LinkEditDialog({
     setUrl(link.url);
     setTitle(link.title || '');
     setCode(link.code);
+    setInterstitial(link.interstitial);
     setErrors({});
   }, [link]);
 
@@ -75,9 +119,10 @@ function LinkEditDialog({
     setBusy(true);
     setErrors({});
     try {
-      const data: { url?: string; title?: string | null; code?: string } = {};
+      const data: { url?: string; title?: string | null; code?: string; interstitial?: boolean } = {};
       if (url.trim() !== link.url) data.url = url.trim();
       if ((title.trim() || null) !== (link.title || null)) data.title = title.trim() || null;
+      if (interstitial !== link.interstitial) data.interstitial = interstitial;
       if (info.customAddresses && code.trim() && code.trim() !== link.code) data.code = code.trim();
       const result = Object.keys(data).length ? await updateLink(link.id, data) : { link };
       onSaved(result.link);
@@ -128,6 +173,7 @@ function LinkEditDialog({
               maxLength={64}
             />
           )}
+          <InterstitialSwitch info={info} checked={interstitial} onChange={setInterstitial} />
           {errors.form && (
             <Typography variant="body2" sx={{ color: c.error }}>
               {errors.form}
@@ -174,6 +220,7 @@ export function LinkDialog({
   const [domain, setDomain] = useState('');
   const [code, setCode] = useState('');
   const [codeError, setCodeError] = useState('');
+  const [interstitial, setInterstitial] = useState(false);
   const [more, setMore] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -196,6 +243,7 @@ export function LinkDialog({
     setDomain('');
     setCode('');
     setCodeError('');
+    setInterstitial(false);
     setMore(false);
   };
 
@@ -216,15 +264,19 @@ export function LinkDialog({
     setBusy(true);
     setError('');
     try {
-      const result = await createLink(value, {
-        title: title.trim() || undefined,
-        expires: expires || undefined,
-        password: password || undefined,
-        maxViews: clicks,
-        urlStyle: style || undefined,
-        domain: domain || undefined,
-        code: code.trim() || undefined,
-      });
+      const result = await createLink(
+        value,
+        {
+          title: title.trim() || undefined,
+          expires: expires || undefined,
+          password: password || undefined,
+          maxViews: clicks,
+          urlStyle: style || undefined,
+          domain: domain || undefined,
+          code: code.trim() || undefined,
+        },
+        { interstitial }
+      );
       setCreated(result.url);
       reset();
       onCreated(result.url);
@@ -339,6 +391,7 @@ export function LinkDialog({
                 )}
                 {!code.trim() && <UrlStyleSelect value={style} onChange={setStyle} styles={LINK_STYLES} includeDefault={t('Standard')} />}
                 <DomainSelect value={domain} onChange={setDomain} domains={info.domains} includeDefault={t('Standard')} />
+                <InterstitialSwitch info={info} checked={interstitial} onChange={setInterstitial} />
               </Box>
             </Collapse>
           </Box>
@@ -378,13 +431,18 @@ function LinkRow({
   onEdit,
   onStats,
   onQr,
+  onCheck,
+  checking = false,
 }: {
   link: ShortLink;
   onDelete: () => void;
   onEdit: () => void;
   onStats?: () => void;
   onQr: () => void;
+  onCheck?: () => void;
+  checking?: boolean;
 }) {
+  const broken = brokenText(link);
   let host = '';
   try {
     host = new URL(link.url).host;
@@ -449,11 +507,30 @@ function LinkRow({
             </Box>
           )}
           <span>{t('erstellt {when}', { when: relativeMs(link.createdAt) })}</span>
+          {link.interstitial && (
+            <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+              <SignpostOutlined sx={{ fontSize: 14 }} />
+              {t('mit Zwischenseite')}
+            </Box>
+          )}
           {link.blocked && (
             <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, color: c.error, fontWeight: 700 }}>
               <BlockRounded sx={{ fontSize: 14 }} />
               {t('Von der Moderation gesperrt')}
             </Box>
+          )}
+          {broken && (
+            <Tooltip title={broken}>
+              <Box
+                component="span"
+                data-testid="link-broken"
+                tabIndex={0}
+                sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, color: c.error, fontWeight: 700 }}
+              >
+                <LinkOffRounded sx={{ fontSize: 14 }} />
+                {t('Ziel nicht erreichbar')}
+              </Box>
+            </Tooltip>
           )}
         </Box>
       </Box>
@@ -463,6 +540,15 @@ function LinkRow({
             <IconButton aria-label={t('Statistik')} onClick={onStats}>
               <BarChartRounded />
             </IconButton>
+          </Tooltip>
+        )}
+        {onCheck && (
+          <Tooltip title={t('Ziel jetzt prüfen')}>
+            <span>
+              <IconButton aria-label={t('Ziel jetzt prüfen')} onClick={onCheck} disabled={checking}>
+                {checking ? <CircularProgress size={20} /> : <FactCheckOutlined />}
+              </IconButton>
+            </span>
           </Tooltip>
         )}
         <Tooltip title={t('QR-Code')}>
@@ -500,36 +586,57 @@ export function LinksView({ info, version }: { info: UploadOptionsInfo; version:
   const [editing, setEditing] = useState<ShortLink | null>(null);
   const [qr, setQr] = useState<ShortLink | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [onlyBroken, setOnlyBroken] = useState(false);
+  const [brokenCount, setBrokenCount] = useState(0);
+  const [checking, setChecking] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const res = await listLinks({ page: 1, limit: 30, search });
+      const res = await listLinks({ page: 1, limit: 30, search, broken: onlyBroken });
       setLinks(res.links);
       setPage(res.page);
       setHasNext(res.hasNext);
       setTotal(res.total);
+      setBrokenCount(res.broken || 0);
+      if (onlyBroken && !res.broken) setOnlyBroken(false);
     } catch (err) {
       setLinks([]);
       toast(err instanceof ApiError ? err.message : t('Die Links konnten nicht geladen werden.'), { variant: 'error' });
     }
-  }, [search, toast]);
+  }, [search, toast, onlyBroken]);
 
   useEffect(() => {
     load();
   }, [load, version]);
 
+  const recheck = async (link: ShortLink) => {
+    setChecking(link.id);
+    try {
+      const { link: fresh } = await checkLink(link.id);
+      setLinks((prev) => (prev || []).map((entry) => (entry.id === fresh.id ? fresh : entry)));
+      setBrokenCount((count) => Math.max(0, count + (fresh.check?.brokenSince ? 1 : 0) - (link.check?.brokenSince ? 1 : 0)));
+      toast(fresh.check?.brokenSince ? t('Das Ziel ist nicht erreichbar.') : t('Das Ziel ist erreichbar.'), {
+        variant: fresh.check?.brokenSince ? 'error' : 'success',
+      });
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : t('Das hat nicht geklappt.'), { variant: 'error' });
+    } finally {
+      setChecking(null);
+    }
+  };
+
   const more = useCallback(async () => {
     if (!hasNext || loadingMore) return;
     setLoadingMore(true);
     try {
-      const res = await listLinks({ page: page + 1, limit: 30, search });
+      const res = await listLinks({ page: page + 1, limit: 30, search, broken: onlyBroken });
       setLinks((prev) => [...(prev || []), ...res.links.filter((link) => !(prev || []).some((known) => known.id === link.id))]);
       setPage(res.page);
       setHasNext(res.hasNext);
     } finally {
       setLoadingMore(false);
     }
-  }, [hasNext, loadingMore, page, search]);
+  }, [hasNext, loadingMore, page, search, onlyBroken]);
 
   const sentinel = useInView(more, hasNext && !loadingMore);
 
@@ -559,6 +666,16 @@ export function LinksView({ info, version }: { info: UploadOptionsInfo; version:
         <Typography variant="body2" sx={{ color: 'text.secondary' }}>
           {links ? tn(total, '1 Link', '{count} Links') : ''}
         </Typography>
+        {(brokenCount > 0 || onlyBroken) && (
+          <Chip
+            icon={<LinkOffRounded />}
+            label={tn(brokenCount, '1 nicht erreichbar', '{count} nicht erreichbar')}
+            color={onlyBroken ? 'error' : 'default'}
+            variant={onlyBroken ? 'filled' : 'outlined'}
+            onClick={() => setOnlyBroken((value) => !value)}
+            aria-pressed={onlyBroken}
+          />
+        )}
         <Button variant="tonal" startIcon={<AddLinkRounded />} onClick={() => setCreating(true)} sx={{ ml: 'auto' }}>
           {t('Link kürzen')}
         </Button>
@@ -606,6 +723,8 @@ export function LinksView({ info, version }: { info: UploadOptionsInfo; version:
               onDelete={() => remove(link)}
               onEdit={() => setEditing(link)}
               onQr={() => setQr(link)}
+              onCheck={info.linkChecks ? () => recheck(link) : undefined}
+              checking={checking === link.id}
               onStats={
                 info.stats ? () => setStatsTarget({ kind: 'link', id: link.id, title: link.short.replace(/^https?:\/\//, '') }) : undefined
               }

@@ -368,6 +368,16 @@ async function sendRemote(req, res, relative, { cacheControl, downloadName = nul
   return pipeline(upstream, res).catch(() => {});
 }
 
+async function remoteOriginals(username) {
+  const folder = prefixed(`${username}/`);
+  const names = new Set();
+  for await (const object of bucket().listAll(folder)) {
+    const rest = object.key.slice(folder.length);
+    if (rest && !rest.includes('/')) names.add(rest);
+  }
+  return names;
+}
+
 async function cleanupLocalCopies() {
   const rows = await db.all("SELECT username, filename FROM file_data WHERE storage = 's3'");
   let removed = 0;
@@ -397,6 +407,7 @@ module.exports = {
   readRemote,
   sendRemote,
   cleanupLocalCopies,
+  remoteOriginals,
   contentTypeOf,
   IMMUTABLE,
 };

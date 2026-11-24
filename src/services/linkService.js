@@ -1,7 +1,9 @@
 'use strict';
 
+const config = require('../config');
 const db = require('../lib/db');
 const logger = require('../lib/logger');
+const { client: safeHttp } = require('../lib/safeFetch');
 const { badRequest, conflict, notFound } = require('../lib/errors');
 const slugs = require('../lib/slugs');
 const { resolveExpiry } = require('../lib/expiry');
@@ -12,11 +14,21 @@ const protection = require('./protectionService');
 const uploads = require('./uploadService');
 const webhook = require('./webhookService');
 const addresses = require('./addressService');
+const pulse = require('./pulseService');
 
 const log = logger.scope('links');
 
 const MAX_URL = 2048;
 const MAX_CLICKS = 100000;
+const HOUR = 60 * 60 * 1000;
+const RECHECK_GOOD_MS = 7 * 24 * HOUR;
+const RECHECK_BROKEN_MS = 12 * HOUR;
+const CHECK_BATCH = 24;
+const CHECK_PARALLEL = 4;
+const CHECK_TIMEOUT_MS = 10000;
+const UNCHECKABLE = -1;
+const UNREACHABLE = 0;
+const TOLERATED = new Set([401, 403, 407, 429]);
 
 function validateUrl(value) {
   const text = typeof value === 'string' ? value.trim() : '';
@@ -62,7 +74,17 @@ const toLink = (row) => ({
   lastClickedAt: row.last_clicked_at ? Number(row.last_clicked_at) : null,
   blocked: row.blocked_at ? { at: Number(row.blocked_at), reason: row.blocked_reason || '' } : null,
   short: urlsFor(row).short,
+  interstitial: Boolean(Number(row.interstitial)),
+  check: row.checked_at
+    ? {
+        status: row.check_status === null || row.check_status === undefined ? null : Number(row.check_status),
+        checkedAt: Number(row.checked_at),
+        brokenSince: row.broken_since ? Number(row.broken_since) : null,
+      }
+    : null,
 });
+
+const flag = (value) => value === true || value === 1 || value === '1' || value === 'true';
 
 async function create(user, target, raw = {}) {
   const url = validateUrl(target);
@@ -82,6 +104,7 @@ async function create(user, target, raw = {}) {
         password_hash: options.passwordHash,
         max_clicks: options.maxViews,
         clicks: 0,
+        interstitial: flag(raw.interstitial) ? 1 : 0,
       });
     } catch (error) {
       if (db.isUniqueViolation(error) && options.code) throw conflict('Diese Adresse ist schon vergeben.', { field: 'code' });
@@ -92,12 +115,14 @@ async function create(user, target, raw = {}) {
   const urls = urlsFor(row, options.domain, user.username);
   log.info('Kurzlink erstellt', { user: user.username, code: row.code });
   webhook.notify('upload', 'Neuer Kurzlink', `Kurzlink: **${urls.short}**\nZiel: ${url}\nBenutzername: **${user.username}**`);
+  pulse.count('link');
   return { success: true, url: urls.short, short: urls.short, target: url, code: row.code, id: row.id, delete: urls.manage };
 }
 
-async function list(userId, { page = 1, limit = 25, search = '' } = {}) {
+async function list(userId, { page = 1, limit = 25, search = '', broken = false } = {}) {
   const conditions = ['user_id = ?'];
   const params = [userId];
+  if (broken) conditions.push('broken_since IS NOT NULL');
   if (search) {
     const term = `%${db.escapeLike(String(search).toLowerCase())}%`;
     conditions.push("(lower(url) LIKE ? ESCAPE '!' OR lower(code) LIKE ? ESCAPE '!' OR lower(title) LIKE ? ESCAPE '!')");
@@ -113,7 +138,8 @@ async function list(userId, { page = 1, limit = 25, search = '' } = {}) {
     size,
     (current - 1) * size,
   ]);
-  return { links: rows.map(toLink), total, page: current, pages, limit: size, hasNext: current < pages };
+  const brokenCount = await db.count('SELECT COUNT(*) FROM links WHERE user_id = ? AND broken_since IS NOT NULL', [userId]);
+  return { links: rows.map(toLink), total, page: current, pages, limit: size, hasNext: current < pages, broken: brokenCount };
 }
 
 async function owned(userId, id) {
@@ -127,7 +153,11 @@ async function owned(userId, id) {
 async function update(userId, id, patch) {
   const row = await owned(userId, id);
   const fields = {};
-  if (patch.url !== undefined) fields.url = validateUrl(patch.url);
+  if (patch.url !== undefined) {
+    fields.url = validateUrl(patch.url);
+    if (fields.url !== row.url) Object.assign(fields, { check_status: null, checked_at: null, broken_since: null });
+  }
+  if (patch.interstitial !== undefined) fields.interstitial = flag(patch.interstitial) ? 1 : 0;
   if (patch.title !== undefined) fields.title = patch.title ? String(patch.title).replace(/\s+/g, ' ').trim().slice(0, 255) || null : null;
   if (patch.expires !== undefined) {
     const expiry = resolveExpiry(patch.expires, { max: settings.get('uploads.maxExpiry') });
@@ -202,7 +232,84 @@ async function removeExpired(now = Date.now()) {
   return changes;
 }
 
+const checkEnabled = () => settings.get('links.check');
+
+const interstitialFor = (row) => settings.get('links.interstitial') === 'always' || Boolean(Number(row.interstitial));
+
+function release(response) {
+  if (response && response.data && typeof response.data.destroy === 'function') response.data.destroy();
+  return response;
+}
+
+async function probe(url) {
+  const options = {
+    timeout: CHECK_TIMEOUT_MS,
+    maxRedirects: 5,
+    validateStatus: () => true,
+    responseType: 'stream',
+    headers: {
+      'User-Agent': `Mozilla/5.0 (compatible; MoeShare/${config.version}; +${settings.get('site.baseUrl')})`,
+      Accept: 'text/html,application/xhtml+xml,*/*;q=0.8',
+    },
+  };
+  const head = release(await safeHttp.head(url, options));
+  if (head.status < 400) return head.status;
+  return release(await safeHttp.get(url, { ...options, headers: { ...options.headers, Range: 'bytes=0-0' } })).status;
+}
+
+async function statusOf(url) {
+  try {
+    return await probe(url);
+  } catch (error) {
+    if (error && error.code === 'EPRIVATE') return UNCHECKABLE;
+    if (error && error.response && error.response.status) return error.response.status;
+    return UNREACHABLE;
+  }
+}
+
+const isBroken = (status) =>
+  status !== UNCHECKABLE && (status === UNREACHABLE || (status >= 400 && status !== 416 && !TOLERATED.has(status)));
+
+async function store(row, status, now = Date.now()) {
+  const broken = isBroken(status);
+  await db.run('UPDATE links SET check_status = ?, checked_at = ?, broken_since = ? WHERE id = ?', [
+    status,
+    now,
+    broken ? Number(row.broken_since) || now : null,
+    row.id,
+  ]);
+  return broken;
+}
+
+async function checkDue({ now = Date.now(), limit = CHECK_BATCH } = {}) {
+  if (!checkEnabled()) return { checked: 0, broken: 0 };
+  const rows = await db.all(
+    `SELECT id, url, broken_since FROM links WHERE blocked_at IS NULL AND (expires_at IS NULL OR expires_at > ?)
+       AND (checked_at IS NULL OR (broken_since IS NULL AND checked_at < ?) OR (broken_since IS NOT NULL AND checked_at < ?))
+     ORDER BY CASE WHEN checked_at IS NULL THEN 0 ELSE 1 END, checked_at, id LIMIT ?`,
+    [now, now - RECHECK_GOOD_MS, now - RECHECK_BROKEN_MS, limit]
+  );
+  let broken = 0;
+  for (let index = 0; index < rows.length; index += CHECK_PARALLEL) {
+    const group = rows.slice(index, index + CHECK_PARALLEL);
+    const results = await Promise.all(group.map(async (row) => store(row, await statusOf(row.url))));
+    broken += results.filter(Boolean).length;
+  }
+  return { checked: rows.length, broken };
+}
+
+async function checkNow(userId, id) {
+  if (!checkEnabled()) throw notFound('Die Prüfung von Kurzlinks ist auf diesem Server abgeschaltet.');
+  const row = await owned(userId, id);
+  await store(row, await statusOf(row.url));
+  return toLink(await db.get('SELECT * FROM links WHERE id = ?', [row.id]));
+}
+
 module.exports = {
+  checkEnabled,
+  interstitialFor,
+  checkDue,
+  checkNow,
   create,
   list,
   update,

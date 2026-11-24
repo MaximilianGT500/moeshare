@@ -732,6 +732,31 @@ export function NotifyStep({
           </Box>
         </>
       )}
+      <Box>
+        <Label
+          hint={t(
+            'Hilft MoeStudio zu sehen, auf wie vielen Servern MoeShare läuft und welche Fehler auftreten. Inhalte, Namen, E-Mail- und IP-Adressen werden nicht gesendet. Beides ist freiwillig und lässt sich unter Admin › System jederzeit ändern.'
+          )}
+        >
+          {t('MoeStudio helfen')}
+        </Label>
+        <Group>
+          <SwitchRow
+            id="setup-pulse-stats"
+            label={t('Nutzungsstatistik teilen')}
+            description={t('Version, System und Speicherplatz, ohne persönliche Daten')}
+            checked={bool(values, 'pulse.stats')}
+            onChange={(on) => set('pulse.stats', on)}
+          />
+          <SwitchRow
+            id="setup-pulse-errors"
+            label={t('Fehlerberichte senden')}
+            description={t('Fehlermeldungen mit Programmstelle, bereinigt')}
+            checked={bool(values, 'pulse.errors')}
+            onChange={(on) => set('pulse.errors', on)}
+          />
+        </Group>
+      </Box>
     </Stack>
   );
 }
@@ -853,6 +878,15 @@ export function ReviewStep({
         </Summary>
         <Summary title={t('Benachrichtigungen')} step="notify" onEdit={onEdit}>
           {bool(values, 'webhook.enabled') ? (webhookUrl ? t('An Discord, neue Adresse') : t('An Discord')) : t('Aus')}
+        </Summary>
+        <Summary title={t('MoeStudio helfen')} step="notify" onEdit={onEdit}>
+          {bool(values, 'pulse.stats') && bool(values, 'pulse.errors')
+            ? t('Nutzungsstatistik und Fehlerberichte')
+            : bool(values, 'pulse.stats')
+              ? t('Nur Nutzungsstatistik')
+              : bool(values, 'pulse.errors')
+                ? t('Nur Fehlerberichte')
+                : t('Aus')}
         </Summary>
       </Group>
       <FormControlLabel

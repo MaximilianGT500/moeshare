@@ -1,12 +1,10 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useId, useState, type ReactNode } from 'react';
 import { m } from 'motion/react';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
-import CircularProgress from '@mui/material/CircularProgress';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import LinearProgress from '@mui/material/LinearProgress';
-import Link from '@mui/material/Link';
 import Switch from '@mui/material/Switch';
 import Typography from '@mui/material/Typography';
 import SystemUpdateAltRounded from '@mui/icons-material/SystemUpdateAltRounded';
@@ -18,7 +16,8 @@ import ScheduleRounded from '@mui/icons-material/ScheduleRounded';
 import DnsRounded from '@mui/icons-material/DnsRounded';
 import WarningAmberRounded from '@mui/icons-material/WarningAmberRounded';
 import StorageRounded from '@mui/icons-material/StorageRounded';
-import type { DatabaseInfo, Job, SettingsPayload, SystemInfo, UpdateInfo } from '../../lib/types';
+import VolunteerActivismOutlined from '@mui/icons-material/VolunteerActivismOutlined';
+import type { DatabaseInfo, Job, PulseAdminState, SettingsPayload, SystemInfo, UpdateInfo } from '../../lib/types';
 import {
   ApiError,
   checkForUpdate,
@@ -26,21 +25,27 @@ import {
   fetchSystem,
   fetchUpdateInfo,
   fetchVideoInfo,
+  forgetPulse,
+  previewPulse,
   repairVideos,
+  savePulse,
   saveSettings,
   waitForJob,
 } from '../../lib/api';
 import { useToast } from '../../components/Toaster';
 import { CopyIconButton } from '../../components/CopyButton';
-import { formatBytes, formatDate, formatDuration, formatNumber, relativeMs } from '../../lib/format';
+import { formatBytes, formatDuration, formatNumber, relativeMs } from '../../lib/format';
 import { language, t, tn } from '../../lib/i18n';
-import { updateError, updateNotes, updateSteps } from '../../lib/updates';
+import { updateError, updateSteps } from '../../lib/updates';
+import { PulseConsent, PulseUpdate, type PulseChoice } from '../../moepulse';
 import { c, ease, fonts, radius } from '../../theme/tokens';
 
 export function Card({ icon, title, children, wide = false }: { icon: ReactNode; title: string; children: ReactNode; wide?: boolean }) {
+  const id = useId();
   return (
     <Box
       component="section"
+      aria-labelledby={id}
       sx={{
         gridColumn: wide ? { md: 'span 2' } : undefined,
         p: { xs: 2.5, md: 3 },
@@ -62,7 +67,7 @@ export function Card({ icon, title, children, wide = false }: { icon: ReactNode;
         >
           {icon}
         </Box>
-        <Typography variant="h6" component="h3">
+        <Typography variant="h6" component="h3" id={id}>
           {title}
         </Typography>
       </Box>
@@ -263,7 +268,44 @@ function VideoCard({ initial }: { initial: { running: string | null; ffmpeg: boo
   );
 }
 
-const releaseDate = (value: string | null) => (value ? formatDate(new Date(`${value}T12:00:00`)) : '');
+function UpdateSteps({ install }: { install: UpdateInfo['install'] }) {
+  const steps = updateSteps(install);
+  if (!steps)
+    return <>{t('Lade die neue Version herunter, führe npm install aus und starte MoeShare neu. Leg vorher eine Sicherung an.')}</>;
+  return (
+    <>
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1,
+          pl: 1.5,
+          pr: 0.5,
+          py: 0.5,
+          borderRadius: `${radius.md}px`,
+          bgcolor: c.surfaceContainerHighest,
+        }}
+      >
+        <Box
+          component="code"
+          sx={{ flex: 1, minWidth: 0, fontFamily: fonts.mono, fontSize: '0.8125rem', overflowWrap: 'anywhere', py: 0.75 }}
+        >
+          {steps.command}
+        </Box>
+        <CopyIconButton
+          value={steps.command}
+          label={t('Befehl kopieren')}
+          message={t('Befehl kopiert')}
+          size="small"
+          icon={<ContentCopyRounded fontSize="inherit" />}
+        />
+      </Box>
+      <Typography variant="caption" component="p" sx={{ color: 'text.secondary', mt: 0.75 }}>
+        {steps.note} {t('Leg vorher eine Sicherung an.')}
+      </Typography>
+    </>
+  );
+}
 
 function UpdateCard({
   info,
@@ -277,25 +319,15 @@ function UpdateCard({
   onSettings: (next: SettingsPayload) => void;
 }) {
   const toast = useToast();
-  const [busy, setBusy] = useState(false);
   const [saving, setSaving] = useState(false);
   const fixed = info.disabledBy === 'env';
-  const steps = info.available ? updateSteps(info.install) : null;
-  const notes = info.available ? updateNotes(info.notes, language) : [];
   const failed = info.enabled && Boolean(info.error);
 
   const recheck = async () => {
-    setBusy(true);
-    try {
-      const next = await checkForUpdate();
-      onInfo(next);
-      if (next.error) toast(updateError(next.error), { variant: 'error' });
-      else toast(next.available ? t('Version {version} ist erschienen', { version: next.available }) : t('Du nutzt die neueste Version.'));
-    } catch (failure) {
-      toast(errorMessage(failure), { variant: 'error' });
-    } finally {
-      setBusy(false);
-    }
+    const next = await checkForUpdate();
+    onInfo(next);
+    if (next.error) toast(updateError(next.error), { variant: 'error' });
+    return next.details;
   };
 
   const toggle = async (on: boolean) => {
@@ -311,46 +343,23 @@ function UpdateCard({
     }
   };
 
-  const status = !info.enabled
-    ? fixed
-      ? t('Abgeschaltet über die Umgebungsvariable UPDATE_CHECK_URL. MoeShare fragt nicht nach neuen Versionen.')
-      : t('Abgeschaltet. MoeShare fragt nicht nach neuen Versionen.')
-    : info.available
-      ? info.date
-        ? t('Erschienen am {date}, hier läuft noch {current}.', { date: releaseDate(info.date), current: info.current })
-        : t('Hier läuft noch {current}.', { current: info.current })
-      : info.latest
-        ? t('Das ist die neueste Version, geprüft {when}.', { when: relativeMs(info.checkedAt) })
-        : info.checkedAt
-          ? t('Die neueste Version ist noch unbekannt.')
-          : t('Noch nicht geprüft.');
-
   return (
     <Card icon={<SystemUpdateAltRounded />} title={t('Updates')}>
-      <Box sx={{ display: 'flex', alignItems: 'baseline', flexWrap: 'wrap', gap: 1.25, mb: 1 }}>
-        <Typography sx={{ fontSize: '2.25rem', fontWeight: 800, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>
-          {info.available || info.current}
+      {info.enabled ? (
+        <PulseUpdate
+          info={info.checkedAt ? info.details : undefined}
+          load={recheck}
+          app="MoeShare"
+          language={language === 'en' ? 'en' : 'de'}
+          instructions={<UpdateSteps install={info.install} />}
+        />
+      ) : (
+        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+          {fixed
+            ? t('Abgeschaltet über die Umgebungsvariable UPDATE_CHECK_URL. MoeShare fragt nicht nach neuen Versionen.')
+            : t('Abgeschaltet. MoeShare fragt nicht nach neuen Versionen.')}
         </Typography>
-        {info.enabled && (info.available || info.latest) && (
-          <Box
-            component="span"
-            sx={{
-              px: 1.25,
-              py: 0.25,
-              borderRadius: `${radius.full}px`,
-              fontSize: '0.75rem',
-              fontWeight: 700,
-              bgcolor: info.security ? c.warningContainer : info.available ? c.primaryContainer : c.successContainer,
-              color: info.security ? c.onWarningContainer : info.available ? c.onPrimaryContainer : c.onSuccessContainer,
-            }}
-          >
-            {info.security ? t('Sicherheitsupdate') : info.available ? t('Neu erschienen') : t('Aktuell')}
-          </Box>
-        )}
-      </Box>
-      <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-        {status}
-      </Typography>
+      )}
 
       {failed && (
         <Alert severity="warning" sx={{ mt: 2 }}>
@@ -358,95 +367,81 @@ function UpdateCard({
         </Alert>
       )}
 
-      {info.security && (
-        <Alert severity="warning" sx={{ mt: 2 }}>
-          {t('Das Update schließt Sicherheitslücken. Spiel es bald ein.')}
+      <FormControlLabel
+        sx={{ mr: 0, mt: 2 }}
+        control={
+          <Switch
+            checked={info.enabled}
+            disabled={fixed || saving || settings.values['system.updateCheck'] === undefined}
+            onChange={(event) => toggle(event.target.checked)}
+          />
+        }
+        label={t('Nach neuen Versionen suchen')}
+      />
+      {info.enabled && info.source && (
+        <Typography variant="caption" component="p" sx={{ color: 'text.secondary', mt: 0.5 }}>
+          {t('Fragt einmal am Tag bei {source} nach, ohne Angaben über deinen Server.', { source: info.source })}
+        </Typography>
+      )}
+    </Card>
+  );
+}
+
+function PulseCard({ initial, onState }: { initial: PulseAdminState; onState: (next: PulseAdminState) => void }) {
+  const toast = useToast();
+  const [state, setState] = useState(initial);
+  const [saving, setSaving] = useState(false);
+
+  const apply = (next: PulseAdminState) => {
+    setState(next);
+    onState(next);
+  };
+
+  const change = async (value: PulseChoice) => {
+    setSaving(true);
+    try {
+      const next = await savePulse(value);
+      apply(next);
+      toast(
+        next.value.stats || next.value.errors
+          ? t('Danke! {name} meldet sich jetzt bei MoeStudio.', { name: 'MoeShare' })
+          : t('Es wird nichts mehr gesendet.')
+      );
+    } catch (failure) {
+      toast(errorMessage(failure), { variant: 'error' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const forget = async () => {
+    const result = await forgetPulse();
+    apply(result);
+    return result.ok;
+  };
+
+  return (
+    <Card icon={<VolunteerActivismOutlined />} title={t('MoeStudio helfen')} wide>
+      {state.locked && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          {state.locked === 'insecure'
+            ? t('MOEPULSE_ENDPOINT ist keine HTTPS-Adresse, deshalb bleibt MoePulse aus.')
+            : t('Abgeschaltet über MOEPULSE_DISABLED oder MOEPULSE_ENDPOINT=off. Es wird nichts gesendet.')}
         </Alert>
       )}
-
-      {notes.length > 0 && (
-        <Box component="ul" sx={{ m: 0, mt: 2, pl: 2.5, display: 'grid', gap: 0.5 }}>
-          {notes.map((note) => (
-            <Typography key={note} component="li" variant="body2">
-              {note}
-            </Typography>
-          ))}
-        </Box>
-      )}
-
-      {info.available && (
-        <Box sx={{ mt: 2 }}>
-          <Typography variant="subtitle2" component="h4" sx={{ mb: 0.75 }}>
-            {t('So aktualisierst du')}
-          </Typography>
-          {steps ? (
-            <>
-              <Box
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1,
-                  pl: 1.5,
-                  pr: 0.5,
-                  py: 0.5,
-                  borderRadius: `${radius.md}px`,
-                  bgcolor: c.surfaceContainerHighest,
-                }}
-              >
-                <Box
-                  component="code"
-                  sx={{ flex: 1, minWidth: 0, fontFamily: fonts.mono, fontSize: '0.8125rem', overflowWrap: 'anywhere', py: 0.75 }}
-                >
-                  {steps.command}
-                </Box>
-                <CopyIconButton
-                  value={steps.command}
-                  label={t('Befehl kopieren')}
-                  message={t('Befehl kopiert')}
-                  size="small"
-                  icon={<ContentCopyRounded fontSize="inherit" />}
-                />
-              </Box>
-              <Typography variant="caption" component="p" sx={{ color: 'text.secondary', mt: 0.75 }}>
-                {steps.note} {t('Leg vorher eine Sicherung an.')}
-              </Typography>
-            </>
-          ) : (
-            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-              {t('Lade die neue Version herunter, führe npm install aus und starte MoeShare neu. Leg vorher eine Sicherung an.')}
-            </Typography>
-          )}
-          <Link href={info.changelog} target="_blank" rel="noopener noreferrer" variant="body2" sx={{ display: 'inline-block', mt: 1.5 }}>
-            {t('Alle Neuerungen im Changelog')}
-          </Link>
-        </Box>
-      )}
-
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1, mt: 2.5 }}>
-        <FormControlLabel
-          sx={{ mr: 0 }}
-          control={
-            <Switch
-              checked={info.enabled}
-              disabled={fixed || saving || settings.values['system.updateCheck'] === undefined}
-              onChange={(event) => toggle(event.target.checked)}
-            />
-          }
-          label={t('Nach neuen Versionen suchen')}
-        />
-        <Button
-          variant="outlined"
-          size="small"
-          onClick={recheck}
-          disabled={!info.enabled || busy || saving}
-          startIcon={busy ? <CircularProgress size={14} color="inherit" /> : undefined}
-        >
-          {t('Jetzt prüfen')}
-        </Button>
-      </Box>
-      {info.enabled && info.source && (
-        <Typography variant="caption" component="p" sx={{ color: 'text.secondary', mt: 1 }}>
-          {t('Fragt einmal am Tag bei {source} nach, ohne Angaben über deinen Server.', { source: info.source })}
+      <PulseConsent
+        texts={state.texts}
+        value={state.value}
+        status={state.status}
+        disabled={Boolean(state.locked) || saving}
+        language={language === 'en' ? 'en' : 'de'}
+        onChange={change}
+        preview={previewPulse}
+        onForget={forget}
+      />
+      {state.endpoint && (
+        <Typography variant="caption" component="p" sx={{ color: 'text.secondary', mt: 1.5 }}>
+          {t('Meldungen gehen an {host} statt an MoeStudio.', { host: state.endpoint })}
         </Typography>
       )}
     </Card>
@@ -462,6 +457,8 @@ export function SystemPanel({
   settings,
   onSettings,
   videos,
+  pulse,
+  onPulse,
 }: {
   initial: SystemInfo;
   database: DatabaseInfo;
@@ -471,6 +468,8 @@ export function SystemPanel({
   settings: SettingsPayload;
   onSettings: (next: SettingsPayload) => void;
   videos: { running: string | null; ffmpeg: boolean };
+  pulse: PulseAdminState;
+  onPulse: (next: PulseAdminState) => void;
 }) {
   const [info, setInfo] = useState(initial);
   const [updatedAt, setUpdatedAt] = useState(() => Date.now());
@@ -599,7 +598,7 @@ export function SystemPanel({
 
         <UpdateCard info={update} onInfo={onUpdate} settings={settings} onSettings={onSettings} />
 
-        <VideoCard initial={videos} />
+        <PulseCard initial={pulse} onState={onPulse} />
 
         <Card icon={<DnsRounded />} title={t('Server')} wide>
           <Box>
@@ -627,6 +626,8 @@ export function SystemPanel({
             </Box>
           </Typography>
         </Card>
+
+        <VideoCard initial={videos} />
       </Box>
     </Box>
   );

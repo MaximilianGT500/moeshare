@@ -35,6 +35,7 @@ const caddy = require('./services/caddyService');
 const announcements = require('./services/announcementService');
 const scans = require('./services/scanService');
 const telegram = require('./services/telegramService');
+const pulse = require('./services/pulseService');
 const { createApp } = require('./app');
 
 const log = logger.scope('server');
@@ -47,12 +48,14 @@ function fatal(message, error, hint) {
 }
 
 function watchProcess() {
-  process.on('unhandledRejection', (reason) =>
-    log.error('Unbehandelter Fehler', { error: reason instanceof Error ? reason : new Error(String(reason)) })
-  );
+  process.on('unhandledRejection', (reason) => {
+    const error = reason instanceof Error ? reason : new Error(String(reason));
+    pulse.capture(error, { origin: 'unhandledRejection' }, 'fatal');
+    log.error('Unbehandelter Fehler', { error });
+  });
   process.on('uncaughtException', (error) => {
     log.error('Unerwarteter Fehler, MoeShare wird beendet', { error });
-    errorReports.flush(2000).then(() => exitSoon(1));
+    Promise.all([errorReports.flush(2000), pulse.flush(2000)]).then(() => exitSoon(1));
   });
 }
 
@@ -126,6 +129,34 @@ function scheduleMaintenance() {
   setTimeout(everyMinute, Math.min(5000, config.tickMs)).unref();
   setInterval(everyMinute, config.tickMs).unref();
 
+  const exclusive = (name, ttl, task) => async () => {
+    const token = await ephemeral.acquire(name, ttl).catch(() => null);
+    if (!token) return;
+    try {
+      await task();
+    } finally {
+      await ephemeral.release(name, token).catch(() => {});
+    }
+  };
+  const mediaBackfill = exclusive('media-backfill', 10 * 60 * 1000, async () => {
+    const done = await files.backfillMedia().catch((error) => {
+      log.warn('Kameradaten und Wellenformen ließen sich nicht nachtragen', { error });
+      return null;
+    });
+    if (done && (done.cameras || done.waveforms)) log.debug('Kameradaten und Wellenformen nachgetragen', done);
+  });
+  setTimeout(mediaBackfill, Math.min(8000, config.tickMs * 2)).unref();
+  setInterval(mediaBackfill, config.tickMs * 2).unref();
+  const linkChecks = exclusive('link-checks', 10 * 60 * 1000, async () => {
+    const done = await links.checkDue().catch((error) => {
+      log.warn('Kurzlinks ließen sich nicht prüfen', { error });
+      return null;
+    });
+    if (done && done.checked) log.debug('Kurzlinks geprüft', done);
+  });
+  setTimeout(linkChecks, Math.min(15000, config.tickMs * 3)).unref();
+  setInterval(linkChecks, config.tickMs * 5).unref();
+
   storage
     .cleanupLocalCopies()
     .then((removed) => removed && log.info('Lokale Kopien von S3-Dateien aufgeräumt', { files: removed }))
@@ -181,6 +212,7 @@ function handleShutdown(server) {
     stopping = true;
     log.info(`${signal} empfangen, MoeShare wird beendet`);
     server.close(async () => {
+      await pulse.flush(2000).catch(() => {});
       await db.close();
       log.info('MoeShare ist beendet');
       exitSoon(0);
@@ -238,6 +270,7 @@ async function start() {
     logSummary(notifications);
     updates.start();
     telegram.start();
+    pulse.start().catch((error) => log.debug('MoePulse ließ sich nicht starten', { error }));
     setup.prepare().catch((error) => log.error('Der Einrichtungslink konnte nicht erstellt werden', { error }));
   });
   server.on('error', (error) =>

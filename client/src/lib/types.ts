@@ -1,3 +1,4 @@
+import type { PulseChoice, PulseTexts, UpdateInfo as PulseUpdateInfo } from '../moepulse';
 export type FileType = 'image' | 'video' | 'audio' | 'text' | 'file';
 
 export type UrlStyle = 'uuid' | 'random' | 'words' | 'emoji' | 'invisible' | 'original';
@@ -48,6 +49,8 @@ export interface FileItem {
   versionAt: number | null;
   scan: 'clean' | 'skipped' | 'error' | null;
   deduped: boolean;
+  camera?: CameraInfo | null;
+  waveform?: number[] | null;
   versions?: number;
   twins?: number;
   match?: SearchMatch;
@@ -55,6 +58,20 @@ export interface FileItem {
   mine?: boolean;
   sealedKey?: string | null;
   urls: FileUrls;
+}
+
+export interface CameraInfo {
+  camera?: string;
+  lens?: string;
+  focal?: number;
+  focal35?: number;
+  aperture?: number;
+  exposure?: number;
+  iso?: number;
+  bias?: number;
+  flash?: boolean;
+  taken?: string;
+  offset?: string;
 }
 
 export interface SearchMatch {
@@ -372,6 +389,8 @@ export interface UploadOptionsInfo {
   linkPath: string | null;
   requests?: boolean;
   encrypted?: boolean;
+  linkChecks?: boolean;
+  interstitial?: 'off' | 'always';
 }
 
 export interface TagCount {
@@ -392,6 +411,14 @@ export interface ShortLink {
   lastClickedAt: number | null;
   blocked: { at: number; reason: string } | null;
   short: string;
+  interstitial: boolean;
+  check: LinkCheck | null;
+}
+
+export interface LinkCheck {
+  status: number | null;
+  checkedAt: number;
+  brokenSince: number | null;
 }
 
 export interface LinkListResponse {
@@ -401,9 +428,12 @@ export interface LinkListResponse {
   pages: number;
   limit: number;
   hasNext: boolean;
+  broken?: number;
 }
 
 export type AlbumVisibility = 'private' | 'link' | 'public';
+
+export type AlbumLayout = 'rows' | 'grid' | 'masonry' | 'timeline';
 
 export interface AlbumRule {
   tag?: string;
@@ -425,6 +455,7 @@ export interface Album {
   url: string;
   files: number;
   rule?: AlbumRule | null;
+  layout?: AlbumLayout;
   blocked?: { at: number; reason: string } | null;
   cover?: { type: FileType; url: string | null; color: string } | null;
   items?: FileItem[];
@@ -453,6 +484,7 @@ export interface Preferences {
   domain: string | null;
   expiry: ExpiryChoice | null;
   optimize: boolean | null;
+  camera: boolean;
   notify: Record<NotifyKey, boolean>;
 }
 
@@ -988,7 +1020,7 @@ export interface SettingsPayload {
     port: number;
     logLevel: string;
     logFormat: string;
-    errorReports: 'project' | 'custom' | 'off';
+    errorReports: 'custom' | 'off';
     updateCheck: 'default' | 'custom' | 'off';
   };
 }
@@ -1125,6 +1157,7 @@ export interface AdminBoot extends BootBase {
   imports: { sources: Array<{ id: string; label: string }>; argon2: boolean; redirects: number };
   access: { pending: number; enabled: boolean; passwordLogin: boolean };
   update: UpdateInfo;
+  pulse: PulseAdminState & { defaults: { name: string; email: string } };
   announcements: Announcement[];
   videos: { running: string | null; ffmpeg: boolean };
 }
@@ -1141,14 +1174,36 @@ export interface UpdateInfo {
   checkedAt: number | null;
   error: string | null;
   changelog: string;
+  yanked: boolean;
+  behind: number;
+  via: 'moepulse' | 'website' | null;
+  details: PulseUpdateInfo | null;
   source: string | null;
   install: 'docker' | 'script' | 'git' | 'other';
 }
 
 export interface UpdateNotice {
   version: string;
+  current?: string;
   security: boolean;
+  yanked?: boolean;
   changelog: string;
+}
+
+export interface PulseAdminState {
+  texts: PulseTexts;
+  value: PulseChoice;
+  status: {
+    installId: string | null;
+    lastHeartbeat: number | null;
+    lastError: string | null;
+    running: boolean;
+    queued: number;
+    blocked: boolean;
+  };
+  locked: 'disabled' | 'insecure' | null;
+  endpoint: string | null;
+  unread: number;
 }
 
 export type AnnouncementLevel = 'info' | 'success' | 'warning' | 'error';
@@ -1450,6 +1505,20 @@ export interface ViewFile {
   warning?: string | null;
   version?: number;
   sealed?: boolean;
+  camera?: CameraInfo | null;
+  cameraPublic?: boolean;
+  waveform?: number[] | null;
+}
+
+export interface InterstitialInfo {
+  code: string;
+  url: string;
+  host: string;
+  secure: boolean;
+  next: string;
+  brokenSince: number | null;
+  checkedAt: number | null;
+  owner: boolean;
 }
 
 export interface ViewUrls {
@@ -1472,6 +1541,7 @@ export interface OwnerStyle {
 export interface ViewBoot extends BootBase, OwnerStyle {
   page: 'view';
   locked?: LockedInfo;
+  interstitial?: InterstitialInfo;
   file: ViewFile;
   urls: ViewUrls;
   accent: string | null;
@@ -1553,6 +1623,9 @@ export interface AlbumItem {
   download: string | null;
   warning?: string | null;
   username?: string;
+  createdAt?: number | null;
+  taken?: string | null;
+  waveform?: number[] | null;
 }
 
 export interface AlbumBoot extends BootBase, OwnerStyle {
@@ -1570,6 +1643,7 @@ export interface AlbumBoot extends BootBase, OwnerStyle {
     updatedAt: number;
     url: string;
     zip: boolean;
+    layout?: AlbumLayout;
   };
   items?: AlbumItem[];
   owner?: boolean;
@@ -1714,3 +1788,68 @@ export type AnyBoot =
   | ProfileBoot
   | ReportBoot
   | RequestBoot;
+
+export interface StorageDisk {
+  originals: number;
+  previews: number;
+  videos: number;
+  other: number;
+  total: number;
+}
+
+export type StorageKind = 'image' | 'video' | 'audio' | 'other' | 'versions';
+
+export interface StorageAnalysis {
+  timeZone: string;
+  total: { files: number; bytes: number };
+  types: Array<{ type: StorageKind; files: number; bytes: number }>;
+  users: {
+    top: Array<{ username: string; files: number; bytes: number; quota: number | null }>;
+    rest: { users: number; files: number; bytes: number } | null;
+  };
+  months: Array<{ month: string; files: number; bytes: number }>;
+  largest: Array<{
+    id: number;
+    username: string;
+    name: string;
+    sizeBytes: number;
+    createdAt: number | null;
+    type: FileType;
+    view: string;
+    storage: 'local' | 's3';
+  }>;
+  savings: { files: number; bytes: number };
+  trash: { files: number; bytes: number };
+  disk: { free: number; total: number } | null;
+  driver: 'local' | 's3';
+  lastCheck: { finishedAt: number; missing: number; orphans: number; orphanBytes: number; disk: StorageDisk } | null;
+}
+
+export interface StorageMissingItem {
+  kind: 'file' | 'version';
+  id: number;
+  username: string;
+  filename: string;
+  name: string;
+  sizeBytes: number;
+  createdAt: number | null;
+  storage: 'local' | 's3';
+  deleted: boolean;
+}
+
+export interface StorageCheckResult {
+  startedAt: number;
+  finishedAt: number;
+  driver: 'local' | 's3';
+  checked: { files: number; versions: number; scanned: number };
+  missing: { count: number; bytes: number; items: StorageMissingItem[] };
+  orphans: { count: number; bytes: number; items: Array<{ path: string; sizeBytes: number; modifiedAt: number }> };
+  disk: StorageDisk;
+  moved: { at: number; count: number; bytes: number; folder: string } | null;
+}
+
+export interface StorageCheckState {
+  running: boolean;
+  progress: { phase: 'missing' | 'orphans' | null; checked: number; scanned: number; total: number; startedAt: number | null } | null;
+  result: StorageCheckResult | null;
+}

@@ -13,6 +13,7 @@ const { formatBytes } = require('../lib/format');
 const { extensionOf, ensureUserDirs, filePaths } = require('../lib/storage');
 const slugs = require('../lib/slugs');
 const imaging = require('../lib/imaging');
+const exif = require('../lib/exif');
 const { hashFile } = require('../lib/hash');
 const { resolveExpiry } = require('../lib/expiry');
 const db = require('../lib/db');
@@ -31,6 +32,7 @@ const search = require('./searchService');
 const watermarks = require('./watermarkService');
 const addresses = require('./addressService');
 const similarity = require('../lib/similarity');
+const pulse = require('./pulseService');
 
 const log = logger.scope('upload');
 
@@ -342,7 +344,14 @@ async function prepare(user, filename, { chosen = {}, originalName = null, via =
       .stripLocation(file)
       .catch((error) => log.warn('Standortdaten konnten nicht entfernt werden', { user: username, file: filename, error }));
   }
-  const result = { filename, originalName, scanStatus, original: null };
+  const camera = type === 'image' ? await exif.read(file).catch(() => null) : null;
+  const result = {
+    filename,
+    originalName,
+    scanStatus,
+    original: null,
+    exif: type === 'image' ? (camera ? JSON.stringify(camera) : '') : null,
+  };
   if (!process || type !== 'image' || !imaging.canProcess(extensionOf(filename))) return result;
   const plan = await imagePlan(user, chosen);
   if (!plan.optimize && !plan.watermark) return result;
@@ -414,6 +423,7 @@ async function accept(user, filename, { via = 'upload', originalName = null, opt
         warning: chosen.warning,
         scanStatus: prepared.scanStatus,
         version: prepared.original ? 2 : 1,
+        exif: prepared.exif,
       },
       chosen
     );
@@ -444,6 +454,7 @@ async function accept(user, filename, { via = 'upload', originalName = null, opt
   });
   if (type === 'text') search.indexLater(record);
   analyzeLater(record, type);
+  if (via !== 'import') pulse.count(type === 'text' ? 'text' : 'upload');
   const links = linksFor(record, chosen.domain);
   if (twin)
     links.duplicateOf = {
@@ -481,6 +492,7 @@ async function addVersion(user, record, filename, { originalName = null, note = 
       originalName: prepared.originalName === null ? undefined : prepared.originalName,
       note,
       scanStatus: prepared.scanStatus,
+      exif: note === 'edited' && !prepared.exif ? undefined : prepared.exif,
     });
   } catch (error) {
     await fsp.rm(filePaths(user.username, prepared.filename).file, { force: true });

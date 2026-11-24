@@ -89,7 +89,7 @@ export const STEP_SETTINGS: Partial<Record<StepKey, string[]>> = {
     'uploads.urlFetch',
   ],
   signin: ['auth.registration', 'auth.enforceMfa', 'auth.passkeys'],
-  notify: ['webhook.enabled', 'webhook.url', 'webhook.events'],
+  notify: ['webhook.enabled', 'webhook.url', 'webhook.events', 'pulse.stats', 'pulse.errors'],
 };
 
 export function stepOfField(field: string): StepKey | null {

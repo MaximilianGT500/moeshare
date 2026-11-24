@@ -1,82 +1,87 @@
 import type { PublicKeyCredentialCreationOptionsJSON, PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/browser';
+import type { Notice, PulseChoice, SupportAdapter, UpdateInfo as PulseUpdateInfo } from '../moepulse';
 import type {
-  TelegramAccount,
-  TelegramAdminState,
-  TokenPreset,
-  TokenScope,
-  UploadCalendar,
-  VersionDiff,
-  AlbumRule,
-  AutoShareInput,
-  AutoShareKind,
-  AutoShareRule,
-  FileType,
-  YearReview,
-  MemoryGroup,
-  ReactionKey,
-  ProfileIcon,
   AccountOverview,
   AdminUser,
   Album,
+  AlbumLayout,
+  AlbumRule,
+  Announcement,
+  ApiTokenInfo,
+  AuditEvent,
+  AutoShareInput,
+  AutoShareKind,
+  AutoShareRule,
   BackupInfo,
+  CaddyAdapt,
+  CaddyState,
+  CertificateInfo,
   DatabaseChoice,
   DatabaseInfo,
   DomainCheck,
   DomainState,
   DuplicateReport,
+  EmailState,
+  EmbedTemplate,
+  ExpiryChoice,
+  FileItem,
+  FileListResponse,
+  FileType,
   FileVersion,
+  GlobalStats,
+  HomeStats,
   ImportPreview,
   ImportReport,
   Integration,
+  Invite,
   Job,
-  Announcement,
-  CaddyAdapt,
-  CaddyState,
-  CertificateInfo,
   LegalConfig,
   LegalPreview,
-  PublicRequest,
-  Subtitle,
-  UpdateInfo,
-  UploadRequest,
-  UploadRequestInput,
-  LoginLink,
-  NotifyKey,
-  UploadSession,
-  WatermarkConfig,
-  WebhookTarget,
-  EmailState,
-  ExpiryChoice,
-  FileItem,
   LinkListResponse,
+  LoginLink,
+  MemoryGroup,
+  NotifyKey,
+  PasskeyInfo,
   Preferences,
+  ProfileIcon,
   ProfileSettings,
   PublicFilePage,
+  PublicRequest,
+  PulseAdminState,
+  ReactionKey,
   ReportKind,
   ReportList,
   ReportReason,
-  ShortLink,
-  StatsOverview,
-  StatsSeries,
-  StorageInfo,
-  TagCount,
-  TrashSummary,
-  UrlStyle,
-  UserDomain,
-  ViewDesign,
-  ApiTokenInfo,
-  AuditEvent,
-  EmbedTemplate,
-  FileListResponse,
-  GlobalStats,
-  HomeStats,
-  Invite,
-  PasskeyInfo,
   SessionInfo,
   SettingsPayload,
   SettingValue,
+  ShortLink,
+  StatsOverview,
+  StatsSeries,
+  StorageAnalysis,
+  StorageCheckState,
+  StorageInfo,
+  Subtitle,
   SystemInfo,
+  TagCount,
+  TelegramAccount,
+  TelegramAdminState,
+  TokenPreset,
+  TokenScope,
+  TrashSummary,
+  UpdateInfo,
+  UploadCalendar,
+  UploadRequest,
+  UploadRequestInput,
+  UploadSession,
+  UrlStyle,
+  UserDomain,
   UserStats,
+  VersionDiff,
+  ViewDesign,
+  WatermarkConfig,
+  WebhookTarget,
+  YearReview,
 } from './types';
 import { t } from './i18n';
 import { withSavedKey } from './sealedKeys';
@@ -731,16 +736,30 @@ export const moderateContent = (kind: ReportKind, id: number, action: 'block' | 
 export const createText = (content: string, options: UploadOptions = {}) =>
   post<UploadResponse>('/api/texts', { content, ...Object.fromEntries(optionFields(options)) });
 
-export const listLinks = (params: { page: number; limit: number; search: string }) => {
+export const listLinks = (params: { page: number; limit: number; search: string; broken?: boolean }) => {
   const query = new URLSearchParams({ page: String(params.page), limit: String(params.limit), search: params.search });
+  if (params.broken) query.set('broken', '1');
   return api<LinkListResponse>(`/api/links?${query}`);
 };
-export const createLink = (url: string, options: UploadOptions = {}) =>
-  post<{ success: boolean; url: string; code: string; id: number }>('/api/links', { url, ...Object.fromEntries(optionFields(options)) });
+export const createLink = (url: string, options: UploadOptions = {}, extra: { interstitial?: boolean } = {}) =>
+  post<{ success: boolean; url: string; code: string; id: number }>('/api/links', {
+    url,
+    ...Object.fromEntries(optionFields(options)),
+    ...(extra.interstitial ? { interstitial: true } : {}),
+  });
 export const updateLink = (
   id: number,
-  data: { url?: string; title?: string | null; expires?: string; password?: string | null; maxClicks?: number | null; code?: string }
+  data: {
+    url?: string;
+    title?: string | null;
+    expires?: string;
+    password?: string | null;
+    maxClicks?: number | null;
+    code?: string;
+    interstitial?: boolean;
+  }
 ) => patch<{ link: ShortLink }>(`/api/links/${id}`, data);
+export const checkLink = (id: number) => post<{ link: ShortLink }>(`/api/links/${id}/check`, {});
 export const deleteLink = (id: number) => del<{ ok: boolean }>(`/api/links/${id}`);
 
 export const listAlbums = () => api<{ albums: Album[] }>('/api/albums');
@@ -753,6 +772,7 @@ export const createAlbum = (data: {
   fileIds?: number[];
   code?: string;
   rule?: AlbumRule | null;
+  layout?: AlbumLayout;
 }) => post<{ album: Album }>('/api/albums', data);
 export const updateAlbum = (
   id: number,
@@ -764,6 +784,7 @@ export const updateAlbum = (
     coverFileId?: number | null;
     code?: string;
     rule?: AlbumRule | null;
+    layout?: AlbumLayout;
   }
 ) => patch<{ album: Album }>(`/api/albums/${id}`, data);
 export const deleteAlbum = (id: number) => del<{ ok: boolean }>(`/api/albums/${id}`);
@@ -909,6 +930,13 @@ export const saveOwnEmbed = (template: EmbedTemplate) => put<{ ok: boolean; temp
 export const resetOwnEmbed = () => del<{ ok: boolean }>('/api/embed');
 
 export const fetchAdminStats = () => api<GlobalStats>('/api/admin/stats');
+export const fetchStorageAnalysis = () =>
+  api<StorageAnalysis>(
+    `/api/admin/storage/analysis?timeZone=${encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC')}`
+  );
+export const fetchStorageCheck = () => api<StorageCheckState>('/api/admin/storage/check');
+export const startStorageCheck = () => post<StorageCheckState>('/api/admin/storage/check', {});
+export const moveOrphans = () => post<StorageCheckState>('/api/admin/storage/orphans', {});
 export const fetchSystem = () => api<SystemInfo>('/api/admin/system');
 export const listUsers = (search: string) =>
   api<{ users: AdminUser[] }>(`/api/admin/users${search ? `?search=${encodeURIComponent(search)}` : ''}`);
@@ -1082,6 +1110,23 @@ export const completeSetup = (payload: SetupPayload & { createToken: boolean }) 
 
 export const fetchUpdateInfo = () => api<UpdateInfo>('/api/admin/update');
 export const checkForUpdate = () => post<UpdateInfo>('/api/admin/update/check');
+
+export const fetchPulse = () => api<PulseAdminState>('/api/admin/pulse');
+export const savePulse = (value: PulseChoice) => put<PulseAdminState>('/api/admin/pulse', value);
+export const previewPulse = () => api<unknown>('/api/admin/pulse/preview');
+export const forgetPulse = () => post<PulseAdminState & { ok: boolean }>('/api/admin/pulse/forget');
+
+const pulseCall = <T>(payload: Record<string, unknown>) => post<T>('/api/admin/moepulse/support', payload);
+
+export const pulseSupport: SupportAdapter = {
+  list: () => pulseCall({ action: 'list' }),
+  get: (id) => pulseCall({ action: 'get', id }),
+  create: (input) => pulseCall({ action: 'create', input }),
+  reply: (id, message) => pulseCall({ action: 'reply', id, message }),
+  close: (id) => pulseCall({ action: 'close', id }),
+  notices: async () => (await pulseCall<{ notices: Notice[] }>({ action: 'notices' })).notices,
+  update: async (force = false) => (await pulseCall<{ update: PulseUpdateInfo | null }>({ action: 'update', force })).update,
+};
 
 export interface DiscordAppState {
   enabled: boolean;

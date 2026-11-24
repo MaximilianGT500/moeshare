@@ -1,6 +1,8 @@
 'use strict';
 
 const fs = require('fs');
+const os = require('os');
+const path = require('path');
 const db = require('../lib/db');
 const cache = require('../lib/cache');
 const logger = require('../lib/logger');
@@ -10,6 +12,8 @@ const { berlinDate, berlinDay } = require('../lib/format');
 const { displayPath } = require('../lib/slugs');
 const { extensionOf, baseNameOf, userDirs, isSafeFilename, filePaths } = require('../lib/storage');
 const similarity = require('../lib/similarity');
+const exif = require('../lib/exif');
+const media = require('../lib/media');
 const settings = require('./settingsService');
 const storage = require('./storageService');
 const domains = require('./domainService');
@@ -106,12 +110,12 @@ function matchesAny(extensions) {
 
 function typeFilter(type) {
   if (MEDIA_TYPES.includes(type)) return matchesAny(formatsOf(type));
-  const media = matchesAny(MEDIA_TYPES.flatMap(formatsOf));
+  const known = matchesAny(MEDIA_TYPES.flatMap(formatsOf));
   const text = matchesAny(Object.keys(TEXT_SYNTAX));
   if (type === 'text')
-    return { sql: `(NOT ${media.sql} AND (syntax IS NOT NULL OR ${text.sql}))`, params: [...media.params, ...text.params] };
+    return { sql: `(NOT ${known.sql} AND (syntax IS NOT NULL OR ${text.sql}))`, params: [...known.params, ...text.params] };
   if (type !== 'file') return null;
-  return { sql: `(NOT ${media.sql} AND syntax IS NULL AND NOT ${text.sql})`, params: [...media.params, ...text.params] };
+  return { sql: `(NOT ${known.sql} AND syntax IS NULL AND NOT ${text.sql})`, params: [...known.params, ...text.params] };
 }
 
 const origins = () => [settings.get('site.baseUrl'), ...settings.get('site.domains')];
@@ -195,6 +199,18 @@ function protectionOf(record) {
   };
 }
 
+function peaksOf(raw) {
+  if (typeof raw !== 'string' || !raw.startsWith('[')) return null;
+  try {
+    const value = JSON.parse(raw);
+    return Array.isArray(value) && value.length && value.every((entry) => Number.isInteger(entry) && entry >= 0 && entry <= 100)
+      ? value
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 const toFile = (row, tags = [], domain = null) => ({
   id: row.id,
   slug: row.slug || row.filename,
@@ -225,6 +241,8 @@ const toFile = (row, tags = [], domain = null) => ({
   versionAt: row.version_at ? Number(row.version_at) : row.created_at ? Number(row.created_at) : null,
   scan: row.scan_status || null,
   deduped: Boolean(Number(row.deduped)),
+  camera: exif.stored(row.exif),
+  waveform: peaksOf(row.waveform),
   ...protectionOf(row),
   ...typeOf(row.filename, row.syntax),
   urls: urlsFor(row, { domain }),
@@ -546,6 +564,66 @@ async function backfillFingerprints({ limit = 30 } = {}) {
   return { fingerprints: done, colors: settings.get('uploads.dominantColor') ? colors.length : 0 };
 }
 
+const REMOTE_MEDIA_BYTES = 60 * 1024 * 1024;
+
+async function remoteCopy(row) {
+  if (row.storage !== 's3' || Number(row.size_bytes) > REMOTE_MEDIA_BYTES) return null;
+  return storage.readRemote(`${row.username}/${row.filename}`);
+}
+
+async function cameraOf(row) {
+  const { file } = filePaths(row.username, row.filename);
+  if (fs.existsSync(file)) return exif.read(file);
+  const copy = await remoteCopy(row);
+  return copy ? exif.read(copy) : null;
+}
+
+async function measurePeaks(row) {
+  const { file } = filePaths(row.username, row.filename);
+  if (fs.existsSync(file)) return media.waveformOf(file);
+  const copy = await remoteCopy(row);
+  if (!copy) return null;
+  const temporary = path.join(os.tmpdir(), `moeshare-peaks-${process.pid}-${row.id}${extensionOf(row.filename)}`);
+  await fs.promises.writeFile(temporary, copy);
+  try {
+    return await media.waveformOf(temporary);
+  } finally {
+    await fs.promises.rm(temporary, { force: true });
+  }
+}
+
+async function backfillMedia({ images = 40, audio = 3 } = {}) {
+  const image = typeFilter('image');
+  const photos = await db.all(
+    `SELECT id, username, filename, storage, size_bytes FROM file_data WHERE exif IS NULL AND deleted_at IS NULL AND ${image.sql} ORDER BY id DESC LIMIT ?`,
+    [...image.params, images]
+  );
+  for (const row of photos) {
+    const camera = await cameraOf(row).catch(() => null);
+    await db.run('UPDATE file_data SET exif = ? WHERE id = ? AND exif IS NULL', [camera ? JSON.stringify(camera) : '', row.id]);
+  }
+  let tracks = [];
+  if (media.ffmpegAvailable) {
+    const sound = typeFilter('audio');
+    tracks = await db.all(
+      `SELECT id, username, filename, storage, size_bytes FROM file_data WHERE waveform IS NULL AND deleted_at IS NULL AND ${sound.sql} ORDER BY id DESC LIMIT ?`,
+      [...sound.params, audio]
+    );
+    for (const row of tracks) {
+      const peaks = await measurePeaks(row).catch((error) => {
+        log.debug('Wellenform nicht erstellt', { file: row.filename, error });
+        return null;
+      });
+      await db.run('UPDATE file_data SET waveform = ? WHERE id = ? AND waveform IS NULL', [
+        peaks && peaks.length ? JSON.stringify(peaks) : '',
+        row.id,
+      ]);
+    }
+  }
+  if (photos.length || tracks.length) cache.clear();
+  return { cameras: photos.length, waveforms: tracks.length };
+}
+
 const UNSEEN_AFTER_MS = 14 * 24 * 60 * 60 * 1000;
 const STALE_AFTER_MS = 180 * 24 * 60 * 60 * 1000;
 const ACTIVITY =
@@ -728,6 +806,7 @@ async function insert({
   warning = null,
   scanStatus = null,
   version = 1,
+  exif = null,
 }) {
   const id = await db.insertRow('file_data', {
     username,
@@ -756,15 +835,17 @@ async function insert({
     scan_status: scanStatus,
     version,
     version_at: createdAt.getTime(),
+    exif,
   });
   cache.clear();
   return findById(id);
 }
 
-async function update(username, filename, { dominantColor, width, height, phash, colorFamily }) {
+async function update(username, filename, { dominantColor, width, height, phash, colorFamily, waveform }) {
   const fields = { dominant_color: dominantColor, resolution_width: width, resolution_height: height };
   if (phash !== undefined) fields.phash = phash;
   if (colorFamily !== undefined) fields.color_family = colorFamily;
+  if (waveform !== undefined) fields.waveform = Array.isArray(waveform) ? JSON.stringify(waveform) : waveform;
   const columns = Object.keys(fields);
   await db.run(`UPDATE file_data SET ${columns.map((column) => `${column} = ?`).join(', ')} WHERE username = ? AND filename = ?`, [
     ...columns.map((column) => fields[column]),
@@ -1221,6 +1302,7 @@ module.exports = {
   origins,
   originsFor,
   toFile,
+  peaksOf,
   withTags,
   listForUser,
   cleanupFor,
@@ -1233,6 +1315,7 @@ module.exports = {
   CLEANUP_KINDS,
   calendar,
   backfillFingerprints,
+  backfillMedia,
   listAll,
   listListed,
   findByFilename,
@@ -1266,4 +1349,5 @@ module.exports = {
   deleteTag,
   userStats,
   globalStats,
+  summary,
 };

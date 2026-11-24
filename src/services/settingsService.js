@@ -352,6 +352,8 @@ const DEFINITIONS = {
   'links.urlStyle': { type: 'enum', values: LINK_STYLES, default: 'random' },
   'links.customAddresses': { type: 'bool', default: true },
   'links.personalPaths': { type: 'bool', default: true },
+  'links.check': { type: 'bool', default: true },
+  'links.interstitial': { type: 'enum', values: ['off', 'always'], default: 'off' },
 
   'albums.enabled': { type: 'bool', default: true },
 
@@ -415,6 +417,8 @@ const DEFINITIONS = {
   },
   'maintenance.allowViews': { type: 'bool', default: true },
   'system.errorReports': { type: 'bool', default: false },
+  'pulse.stats': { type: 'bool', default: false },
+  'pulse.errors': { type: 'bool', default: false },
   'system.logIps': { type: 'bool', default: true },
   'system.auditRetentionDays': { type: 'int', min: 7, max: 730, default: 90 },
 };

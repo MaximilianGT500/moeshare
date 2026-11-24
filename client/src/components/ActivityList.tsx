@@ -107,6 +107,7 @@ const SETTING_GROUPS: Record<string, string> = {
   requests: t('Datei-Anfragen'),
   metrics: t('Metriken'),
   maintenance: t('Wartungsmodus'),
+  pulse: t('Nutzungsstatistik und Fehlerberichte'),
 };
 
 const ANNOUNCEMENT_CHANGES: Record<string, string> = {
@@ -288,6 +289,18 @@ function describeEvent(event: AuditEvent): Described {
           ? t('Datei von {owner} in den Papierkorb gelegt', { owner: str(d.owner) })
           : t('Datei von {owner} gelöscht', { owner: str(d.owner) }),
         detail: str(d.filename) || undefined,
+        tone: 'neutral',
+      };
+    case 'pulse_forgotten':
+      return { icon: <DeleteOutlineRounded />, title: t('Gesendete Daten bei MoeStudio gelöscht'), tone: 'neutral' };
+    case 'storage_orphans_moved':
+      return {
+        icon: <MoveDownRounded />,
+        title: t('Verwaiste Dateien verschoben'),
+        detail:
+          typeof d.files === 'number'
+            ? t('{count} nach {folder}', { count: formatNumber(d.files), folder: str(d.folder) || 'uploads/.verwaist' })
+            : undefined,
         tone: 'neutral',
       };
     case 'embed_updated':

@@ -10,6 +10,7 @@ import { linkWithKey } from '../../lib/sealed';
 import { t } from '../../lib/i18n';
 import { useThemeSeed } from '../../app/mount';
 import { LockedScreen } from '../../components/LockedScreen';
+import { InterstitialScreen } from '../../components/InterstitialScreen';
 import { waveformKeyframes } from '../../components/Waveform';
 import { ImageZoom, labelOf, useSchemeSync, type UnsealedView, type ViewModel } from './parts';
 import { LAYOUTS } from './layouts';
@@ -18,6 +19,7 @@ import { WarningGate } from './WarningGate';
 export function ViewPage() {
   const boot = readBoot<ViewBoot>();
   if (boot.locked) return <LockedScreen site={boot.site} locked={boot.locked} />;
+  if (boot.interstitial) return <InterstitialScreen site={boot.site} info={boot.interstitial} />;
   return <DesignedView boot={boot} />;
 }
 
