@@ -19,6 +19,7 @@ import { accentOf, useDesign, withDefaults } from '../../lib/design';
 import { t, tn } from '../../lib/i18n';
 import { CopyTextButton } from '../../components/CopyButton';
 import { Reactions } from '../../components/Reactions';
+import { Comments, CommentsCard } from '../../components/Comments';
 import { reactAlbum } from '../../lib/api';
 import { LockedScreen } from '../../components/LockedScreen';
 import { OwnerPage } from '../../components/OwnerPage';
@@ -46,6 +47,7 @@ export function AlbumPage() {
         dashboard={boot.dashboard || null}
         feed={boot.feed || null}
         reactions={boot.reactions || null}
+        comments={Boolean(boot.comments)}
       />
     </OwnerPage>
   );
@@ -82,6 +84,7 @@ function AlbumView({
   dashboard,
   feed,
   reactions,
+  comments,
 }: {
   album: AlbumData;
   items: AlbumItem[];
@@ -89,6 +92,7 @@ function AlbumView({
   dashboard: string | null;
   feed: string | null;
   reactions: Record<ReactionKey, number> | null;
+  comments: boolean;
 }) {
   const { shows, r } = useDesign();
   const [play, setPlay] = useState(0);
@@ -223,6 +227,14 @@ function AlbumView({
               {t('Füge im Dashboard Dateien hinzu, dann erscheinen sie hier.')}
             </Typography>
           )}
+        </Box>
+      )}
+
+      {comments && shows('comments') && (
+        <Box sx={{ maxWidth: 760, mx: 'auto', mt: { xs: 5, md: 7 } }}>
+          <CommentsCard sx={{ borderRadius: `${r(radius.xl)}px` }}>
+            <Comments base={`/a/${encodeURIComponent(album.code)}`} />
+          </CommentsCard>
         </Box>
       )}
     </>

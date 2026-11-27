@@ -16,6 +16,7 @@ const storage = require('./storageService');
 const designs = require('./designService');
 const avatars = require('./avatarService');
 const reactions = require('./reactionService');
+const comments = require('./commentService');
 const protection = require('./protectionService');
 const frames = require('./frameService');
 const profiles = require('./profileService');
@@ -24,6 +25,7 @@ const preferences = require('./preferenceService');
 const exif = require('../lib/exif');
 
 const TEXT_PREVIEW_BYTES = 512 * 1024;
+const NOTEBOOK_PREVIEW_BYTES = 8 * 1024 * 1024;
 
 function webState(record, type) {
   if (type !== 'video') return { ready: false, converting: false };
@@ -73,6 +75,22 @@ async function ownerProfile(username, domain) {
   };
 }
 
+async function commentHint(record, design) {
+  if (!comments.enabled() || isSealedName(record.filename)) return null;
+  const owner = await db.get('SELECT id FROM users WHERE username = ?', [record.username]);
+  const allowed = comments.rights(
+    {
+      kind: 'f',
+      id: record.id,
+      ownerId: owner ? owner.id : null,
+      override: record.comments === null || record.comments === undefined ? null : Number(record.comments),
+      byDefault: !(design.show && design.show.comments === false),
+    },
+    null
+  );
+  return allowed.enabled ? { total: await comments.count('f', record.id) } : null;
+}
+
 async function fileView(record, { access = { state: 'open' }, domain = null } = {}) {
   const { username, filename } = record;
   const { type, isGif } = files.typeOf(filename, record.syntax);
@@ -82,7 +100,8 @@ async function fileView(record, { access = { state: 'open' }, domain = null } = 
   const web = webState(record, type);
   const dominant =
     typeof record.dominant_color === 'string' && record.dominant_color.toLowerCase() !== '#ffffff' ? record.dominant_color : null;
-  const poster = `/uploads/${username}/preview/${baseNameOf(filename)}.jpg`;
+  const posterVersion = record.poster_ms !== null && record.poster_ms !== undefined ? `?v=${Math.abs(Number(record.poster_ms))}` : '';
+  const poster = `/uploads/${username}/preview/${baseNameOf(filename)}.jpg${posterVersion}`;
   const slug = record.slug || filename;
   const camera = type === 'image' ? exif.stored(record.exif) : null;
   const [style, profile, avatar, tracks, visible] = await Promise.all([
@@ -106,7 +125,9 @@ async function fileView(record, { access = { state: 'open' }, domain = null } = 
       isGif,
       syntax: type === 'text' ? files.syntaxOf(record) || 'plaintext' : null,
       textBytes: type === 'text' ? Number(record.size_bytes) || 0 : null,
-      textPreview: type === 'text' && (Number(record.size_bytes) || 0) <= TEXT_PREVIEW_BYTES,
+      textPreview:
+        type === 'text' &&
+        (Number(record.size_bytes) || 0) <= (/\.ipynb$/i.test(record.filename) ? NOTEBOOK_PREVIEW_BYTES : TEXT_PREVIEW_BYTES),
       width: record.resolution_width || 0,
       height: record.resolution_height || 0,
       sizeBytes: record.size_bytes || 0,
@@ -126,6 +147,8 @@ async function fileView(record, { access = { state: 'open' }, domain = null } = 
       camera: camera && (cameraPublic || access.owner) ? camera : null,
       cameraPublic,
       waveform: type === 'audio' ? files.peaksOf(record.waveform) : null,
+      audio: type === 'audio' ? files.audioOf(record.audio_meta) : null,
+      palette: type === 'image' || type === 'video' ? files.paletteOf(record.palette) : null,
     },
     urls: {
       view: urls.view,
@@ -133,7 +156,7 @@ async function fileView(record, { access = { state: 'open' }, domain = null } = 
       raw: local,
       download: `/download/${displayPath(slug)}`,
       display: type === 'image' && !isGif && storage.hasVariant(record, 'preview') ? `/uploads/${username}/preview/${filename}` : local,
-      poster: type === 'video' && storage.hasVariant(record, 'poster') ? poster : null,
+      poster: (type === 'video' || type === 'audio') && storage.hasVariant(record, 'poster') ? poster : null,
       hls: hls.ready ? `/uploads/${username}/m3u8/${path.basename(filePaths(username, filename).playlist)}` : null,
       playback: web.ready ? `/uploads/${username}/web/${path.basename(filePaths(username, filename).web)}` : null,
     },
@@ -146,6 +169,7 @@ async function fileView(record, { access = { state: 'open' }, domain = null } = 
     profile,
     report: settings.get('reports.enabled') ? { kind: 'file', target: slug } : null,
     reactions: reactions.enabled() && !record.max_views && !isSealedName(filename) ? await reactions.counts('f', record.id) : null,
+    comments: await commentHint(record, style.design),
     frame:
       frames.enabled() && !record.password_hash && !record.max_views && !isSealedName(filename)
         ? `${domain || settings.get('site.baseUrl')}/frame/${encodeURIComponent(slug)}`

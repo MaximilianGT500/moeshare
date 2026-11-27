@@ -272,6 +272,20 @@ async function storageCheck() {
   if (result.missing.count) process.exitCode = 2;
 }
 
+async function doctor() {
+  const checks = require('./src/services/doctorService');
+  say('\nMoeShare wird geprüft …\n');
+  const report = await checks.run({ language: 'de' });
+  const marks = { ok: '✓', info: '·', warn: '!', error: '✗' };
+  for (const entry of report.checks) {
+    console.log(`  ${marks[entry.status]} ${entry.title}: ${entry.detail}`);
+    if (entry.hint && entry.status !== 'ok') console.log(`      ${entry.hint}`);
+  }
+  const { summary } = report;
+  say(`\n${summary.ok} in Ordnung, ${summary.warn} Warnungen, ${summary.error} Fehler.\n`);
+  if (summary.error) process.exitCode = 1;
+}
+
 function valueOf(...names) {
   for (let index = 0; index < args.length; index++) {
     for (const name of names) {
@@ -433,6 +447,7 @@ const COMMANDS = {
   restore,
   storage: moveStorage,
   'storage-check': storageCheck,
+  doctor,
   import: importData,
   videos,
   version,
@@ -453,6 +468,7 @@ async function main() {
     say('  restore <datei>      spielt eine Sicherung ein (--force überschreibt, --ohne-dateien nur die Datenbank)');
     say('  storage <s3|lokal>   verschiebt vorhandene Dateien nach S3 oder zurück');
     say('  storage-check        sucht fehlende und verwaiste Dateien (--verschieben räumt verwaiste beiseite)');
+    say('  doctor               prüft Speicher, Datenbank, FFmpeg, E-Mail, S3, Sicherungen und mehr');
     say('  import <quelle>      übernimmt Konten und Dateien aus Zipline, XBackBone oder Chibisafe');
     say('  videos               prüft vorhandene Videos: Abmessungen, Vorschaubilder und Fassungen für alle Browser');
     say('  version              zeigt die Version und fragt nach, ob es eine neuere gibt');

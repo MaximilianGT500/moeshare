@@ -64,6 +64,218 @@ function ffmpeg(args, { onProgress = null, duration = 0 } = {}) {
   });
 }
 
+function capture(args, { limit = 256 * 1024, timeoutMs = 60000 } = {}) {
+  if (!ffmpegPath) return Promise.reject(new Error('FFmpeg ist nicht verfügbar.'));
+  return new Promise((resolve, reject) => {
+    const child = spawn(ffmpegPath, ['-hide_banner', '-nostdin', ...args], { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+    let stdout = '';
+    let stderr = '';
+    const timer = setTimeout(() => child.kill('SIGKILL'), timeoutMs);
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', (chunk) => {
+      if (stdout.length < limit) stdout += chunk;
+    });
+    child.stderr.on('data', (chunk) => {
+      stderr = (stderr + chunk).slice(-50000);
+    });
+    child.on('error', (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    child.on('close', (code) => {
+      clearTimeout(timer);
+      resolve({ code, stdout: stdout.slice(0, limit), stderr });
+    });
+  });
+}
+
+const AUDIO_TAGS = {
+  title: 'title',
+  artist: 'artist',
+  album: 'album',
+  album_artist: 'albumArtist',
+  date: 'year',
+  year: 'year',
+  track: 'track',
+  genre: 'genre',
+};
+const TAG_LIMIT = 200;
+
+function unescapeMeta(value) {
+  return value.replace(/\\(.)/g, '$1');
+}
+
+function cleanTag(value) {
+  return String(value)
+    .replace(/[\u0000-\u001f\u007f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, TAG_LIMIT);
+}
+
+function parseMetadata(text) {
+  const tags = {};
+  let section = 'global';
+  for (const line of String(text || '').split(/\r?\n/)) {
+    if (!line || line.startsWith(';') || line.startsWith('#')) continue;
+    if (/^\[[A-Z]+\]$/.test(line)) {
+      section = line;
+      continue;
+    }
+    if (section !== 'global') continue;
+    const match = /^([^=]+)=(.*)$/.exec(line);
+    if (!match) continue;
+    const key = AUDIO_TAGS[match[1].trim().toLowerCase()];
+    if (!key || tags[key]) continue;
+    const value = cleanTag(unescapeMeta(match[2]));
+    if (!value) continue;
+    if (key === 'year') {
+      const year = /(\d{4})/.exec(value);
+      if (year) tags.year = year[1];
+    } else if (key === 'track') {
+      const track = /^(\d{1,4})/.exec(value);
+      if (track) tags.track = Number(track[1]);
+    } else {
+      tags[key] = value;
+    }
+  }
+  return tags;
+}
+
+async function audioInfo(file) {
+  const { code, stdout, stderr } = await capture(['-i', file, '-f', 'ffmetadata', '-'], { timeoutMs: 30000 });
+  if (code !== 0 && !stdout) throw new Error(lastLine(stderr));
+  return { tags: parseMetadata(stdout), cover: /Stream #\d+:\d+.*?Video:.*\(attached pic\)/.test(stderr) };
+}
+
+const COVER_FILTER = "scale='min(640,iw)':'min(640,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2";
+
+async function audioCover(file, target) {
+  const partial = `${target}.part.jpg`;
+  try {
+    const { code, stderr } = await ffmpeg([
+      '-y',
+      '-i',
+      file,
+      '-map',
+      '0:v:0',
+      '-an',
+      '-frames:v',
+      '1',
+      '-vf',
+      COVER_FILTER,
+      '-q:v',
+      '3',
+      partial,
+    ]);
+    if (code !== 0 || !fs.existsSync(partial)) throw new Error(lastLine(stderr));
+    await fsp.rename(partial, target);
+    return true;
+  } finally {
+    await fsp.rm(partial, { force: true });
+  }
+}
+
+async function posterAt(file, target, seconds) {
+  const partial = `${target}.part.jpg`;
+  try {
+    const { code, stderr } = await ffmpeg([
+      '-y',
+      '-ss',
+      Math.max(0, Number(seconds) || 0).toFixed(3),
+      '-i',
+      file,
+      '-frames:v',
+      '1',
+      '-vf',
+      POSTER_FILTER,
+      '-q:v',
+      '4',
+      partial,
+    ]);
+    if (code !== 0 || !fs.existsSync(partial)) throw new Error(lastLine(stderr));
+    await fsp.rename(partial, target);
+  } finally {
+    await fsp.rm(partial, { force: true });
+  }
+}
+
+async function posterFromImage(source, target) {
+  await sharp(source, { failOn: 'none' })
+    .rotate()
+    .resize(480, 480, { fit: 'inside', withoutEnlargement: false })
+    .flatten({ background: '#000000' })
+    .jpeg({ quality: 82, mozjpeg: true })
+    .toFile(target);
+}
+
+const PALETTE_SIZE = 6;
+
+function distance(a, b) {
+  const dr = a[0] - b[0];
+  const dg = a[1] - b[1];
+  const db = a[2] - b[2];
+  return dr * dr * 0.3 + dg * dg * 0.59 + db * db * 0.11;
+}
+
+async function palette(file, count = PALETTE_SIZE) {
+  const { data, info } = await sharp(file, { failOn: 'none' })
+    .resize(96, 96, { fit: 'inside' })
+    .removeAlpha()
+    .toColourspace('srgb')
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const buckets = new Map();
+  for (let i = 0; i + 2 < data.length; i += info.channels) {
+    const key = ((data[i] >> 3) << 10) | ((data[i + 1] >> 3) << 5) | (data[i + 2] >> 3);
+    const bucket = buckets.get(key) || [0, 0, 0, 0];
+    bucket[0] += data[i];
+    bucket[1] += data[i + 1];
+    bucket[2] += data[i + 2];
+    bucket[3] += 1;
+    buckets.set(key, bucket);
+  }
+  const swatches = [...buckets.values()]
+    .map(([r, g, b, weight]) => ({ rgb: [r / weight, g / weight, b / weight], weight }))
+    .sort((a, b) => b.weight - a.weight)
+    .slice(0, 256);
+  if (!swatches.length) return [];
+  let centers = [];
+  for (const swatch of swatches) {
+    if (centers.every((center) => distance(center.rgb, swatch.rgb) > 900)) centers.push({ rgb: [...swatch.rgb], weight: 0 });
+    if (centers.length >= count) break;
+  }
+  for (let round = 0; round < 6; round += 1) {
+    const sums = centers.map(() => [0, 0, 0, 0]);
+    for (const swatch of swatches) {
+      let best = 0;
+      for (let index = 1; index < centers.length; index += 1) {
+        if (distance(swatch.rgb, centers[index].rgb) < distance(swatch.rgb, centers[best].rgb)) best = index;
+      }
+      sums[best][0] += swatch.rgb[0] * swatch.weight;
+      sums[best][1] += swatch.rgb[1] * swatch.weight;
+      sums[best][2] += swatch.rgb[2] * swatch.weight;
+      sums[best][3] += swatch.weight;
+    }
+    centers = centers
+      .map((center, index) =>
+        sums[index][3]
+          ? {
+              rgb: [sums[index][0] / sums[index][3], sums[index][1] / sums[index][3], sums[index][2] / sums[index][3]],
+              weight: sums[index][3],
+            }
+          : null
+      )
+      .filter(Boolean);
+  }
+  const total = centers.reduce((sum, center) => sum + center.weight, 0) || 1;
+  return centers
+    .filter((center) => center.weight / total >= 0.01)
+    .sort((a, b) => b.weight - a.weight)
+    .slice(0, count)
+    .map((center) => `#${center.rgb.map(hex).join('')}`);
+}
+
 async function probe(file) {
   const { stderr } = await ffmpeg(['-i', file]);
   const duration = /Duration: (\d+):(\d+):(\d+(?:\.\d+)?)/.exec(stderr);
@@ -594,6 +806,8 @@ async function analyze(username, filename, type, options) {
     Object.assign(result, await attempt('Auflösung', () => imageSize(paths.file)));
     if (options.dominantColor) result.dominantColor = (await attempt('Farbe', () => accentColor(paths.file))) || result.dominantColor;
     result.phash = await similarity.differenceHash(fs.existsSync(paths.preview) ? paths.preview : paths.file).catch(() => '');
+    const colors = await palette(fs.existsSync(paths.preview) ? paths.preview : paths.file).catch(() => null);
+    result.palette = colors && colors.length ? colors.join(',') : '';
   }
 
   if (type === 'video' && ffmpegPath) {
@@ -602,11 +816,25 @@ async function analyze(username, filename, type, options) {
     const poster = options.preview && (await attempt('Vorschau', () => videoPoster(paths.file, paths.poster, info))) !== null;
     if (poster && options.dominantColor)
       result.dominantColor = (await attempt('Farbe', () => accentColor(paths.poster))) || result.dominantColor;
+    if (poster) {
+      const colors = await palette(paths.poster).catch(() => null);
+      result.palette = colors && colors.length ? colors.join(',') : '';
+    }
   }
 
   if (type === 'audio' && ffmpegPath) {
     const peaks = await attempt('Wellenform', () => waveformOf(paths.file));
     result.waveform = peaks && peaks.length ? peaks : '';
+    const details = await attempt('Audiodaten', () => audioInfo(paths.file));
+    let cover = false;
+    if (details && details.cover && options.preview) cover = (await attempt('Cover', () => audioCover(paths.file, paths.poster))) === true;
+    result.audio = JSON.stringify({ ...(details ? details.tags : {}), cover });
+    if (cover && options.dominantColor)
+      result.dominantColor = (await attempt('Farbe', () => accentColor(paths.poster))) || result.dominantColor;
+    if (cover) {
+      const colors = await palette(paths.poster).catch(() => null);
+      result.palette = colors && colors.length ? colors.join(',') : '';
+    }
   }
 
   return { result, errors, info };
@@ -620,6 +848,13 @@ module.exports = {
   makeGif,
   analyze,
   waveformOf,
+  audioInfo,
+  audioCover,
+  parseMetadata,
+  posterAt,
+  posterFromImage,
+  palette,
+  accentColor,
   transcode,
   videoInfo,
   videoPoster,

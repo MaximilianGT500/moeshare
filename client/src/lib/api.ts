@@ -2,6 +2,7 @@ import type { PublicKeyCredentialCreationOptionsJSON, PublicKeyCredentialRequest
 import type { Notice, PulseChoice, SupportAdapter, UpdateInfo as PulseUpdateInfo } from '../moepulse';
 import type {
   AccountOverview,
+  AdminTerms,
   AdminUser,
   Album,
   AlbumLayout,
@@ -16,10 +17,13 @@ import type {
   CaddyAdapt,
   CaddyState,
   CertificateInfo,
+  CommentItem,
+  CommentList,
   DatabaseChoice,
   DatabaseInfo,
   DomainCheck,
   DomainState,
+  DoctorReport,
   DuplicateReport,
   EmailState,
   EmbedTemplate,
@@ -38,24 +42,34 @@ import type {
   LegalConfig,
   LegalPreview,
   LinkListResponse,
+  LinkTargets,
   LoginLink,
   MemoryGroup,
   NotifyKey,
   PasskeyInfo,
+  PhoneLink,
   Preferences,
   ProfileIcon,
   ProfileSettings,
   PublicFilePage,
+  PublicPhone,
   PublicRequest,
   PulseAdminState,
   ReactionKey,
+  RecentComment,
   ReportKind,
   ReportList,
   ReportReason,
+  RetentionPreview,
   SessionInfo,
   SettingsPayload,
   SettingValue,
   ShortLink,
+  SortRule,
+  SortRuleInput,
+  SortSource,
+  SortTestResult,
+  SortType,
   StatsOverview,
   StatsSeries,
   StorageAnalysis,
@@ -68,6 +82,7 @@ import type {
   TelegramAdminState,
   TokenPreset,
   TokenScope,
+  TransformUsage,
   TrashSummary,
   UpdateInfo,
   UploadCalendar,
@@ -176,6 +191,7 @@ export interface UploadResponse {
   warning?: string | null;
   duplicateOf?: { id: number; slug: string; view: string; stored: boolean };
   sealed?: { key: string; name: string };
+  rules?: Array<{ id: number; name: string }>;
 }
 
 export interface UploadOptions {
@@ -550,6 +566,7 @@ export interface FilePatch {
   alt?: string | null;
   starred?: boolean;
   publishAt?: number | string | null;
+  comments?: boolean | null;
 }
 
 export const fetchMemories = () => api<{ memories: MemoryGroup[] }>('/api/files/memories');
@@ -741,11 +758,16 @@ export const listLinks = (params: { page: number; limit: number; search: string;
   if (params.broken) query.set('broken', '1');
   return api<LinkListResponse>(`/api/links?${query}`);
 };
-export const createLink = (url: string, options: UploadOptions = {}, extra: { interstitial?: boolean } = {}) =>
+export const createLink = (
+  url: string,
+  options: UploadOptions = {},
+  extra: { interstitial?: boolean; targets?: LinkTargets | null } = {}
+) =>
   post<{ success: boolean; url: string; code: string; id: number }>('/api/links', {
     url,
     ...Object.fromEntries(optionFields(options)),
     ...(extra.interstitial ? { interstitial: true } : {}),
+    ...(extra.targets ? { targets: extra.targets } : {}),
   });
 export const updateLink = (
   id: number,
@@ -757,6 +779,7 @@ export const updateLink = (
     maxClicks?: number | null;
     code?: string;
     interstitial?: boolean;
+    targets?: LinkTargets | null;
   }
 ) => patch<{ link: ShortLink }>(`/api/links/${id}`, data);
 export const checkLink = (id: number) => post<{ link: ShortLink }>(`/api/links/${id}/check`, {});
@@ -785,6 +808,7 @@ export const updateAlbum = (
     code?: string;
     rule?: AlbumRule | null;
     layout?: AlbumLayout;
+    comments?: boolean | null;
   }
 ) => patch<{ album: Album }>(`/api/albums/${id}`, data);
 export const deleteAlbum = (id: number) => del<{ ok: boolean }>(`/api/albums/${id}`);
@@ -1251,3 +1275,84 @@ export const updateSubtitle = (fileId: number, id: number, data: { language?: st
   patch<{ subtitle: Subtitle; subtitles: Subtitle[] }>(`/api/files/${fileId}/subtitles/${id}`, data);
 export const deleteSubtitle = (fileId: number, id: number) =>
   del<{ ok: boolean; subtitles: Subtitle[] }>(`/api/files/${fileId}/subtitles/${id}`);
+
+export const fetchSortRules = () => api<{ rules: SortRule[]; max: number; types: SortType[]; sources: SortSource[] }>('/api/account/rules');
+export const createSortRule = (data: SortRuleInput) => post<{ ok: boolean; rule: SortRule }>('/api/account/rules', data);
+export const updateSortRule = (id: number, data: Partial<SortRuleInput>) =>
+  patch<{ ok: boolean; rule: SortRule }>(`/api/account/rules/${id}`, data);
+export const deleteSortRule = (id: number) => del<{ ok: boolean }>(`/api/account/rules/${id}`);
+export const reorderSortRules = (ids: number[]) => post<{ ok: boolean; rules: SortRule[] }>('/api/account/rules/order', { ids });
+export const testSortRules = (data: { name: string; size?: number; source?: SortSource | null }) =>
+  post<SortTestResult>('/api/account/rules/test', data);
+
+export const createPhoneLink = (album: number | null) => post<{ link: PhoneLink }>('/api/phone-links', album ? { album } : {});
+export const fetchPhoneLink = (id: number) => api<{ link: PhoneLink }>(`/api/phone-links/${id}`);
+export const extendPhoneLink = (id: number) => post<{ link: PhoneLink }>(`/api/phone-links/${id}/extend`, {});
+export const closePhoneLink = (id: number) => del<{ link: PhoneLink }>(`/api/phone-links/${id}`);
+export const fetchPublicPhone = (code: string) => api<{ phone: PublicPhone }>(`/api/phone/${encodeURIComponent(code)}`);
+
+export function uploadFromPhone(
+  code: string,
+  file: File,
+  onProgress: (fraction: number) => void
+): { promise: Promise<{ ok: boolean; file: { id: number; name: string } }>; abort: () => void } {
+  const xhr = new XMLHttpRequest();
+  const promise = new Promise<{ ok: boolean; file: { id: number; name: string } }>((resolve, reject) => {
+    const data = new FormData();
+    data.append('file', file, file.name);
+    xhr.open('POST', `/api/phone/${encodeURIComponent(code)}/files`);
+    xhr.setRequestHeader('Accept', 'application/json');
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) onProgress(event.loaded / event.total);
+    };
+    xhr.onerror = () => reject(new ApiError(t('Keine Verbindung zum Server.'), 0));
+    xhr.onabort = () => reject(new ApiError(t('Abgebrochen.'), 0, { code: 'aborted' }));
+    xhr.onload = () => {
+      let body: Record<string, unknown> = {};
+      try {
+        body = JSON.parse(xhr.responseText || '{}');
+      } catch {}
+      if (xhr.status >= 200 && xhr.status < 300) return resolve(body as { ok: boolean; file: { id: number; name: string } });
+      const message =
+        (typeof body.error === 'string' && body.error) ||
+        (xhr.status === 413 ? t('Die Datei ist zu groß.') : t('Die Anfrage ist fehlgeschlagen (HTTP {status}).', { status: xhr.status }));
+      return reject(new ApiError(message, xhr.status, { code: typeof body.code === 'string' ? body.code : '' }));
+    };
+    xhr.send(data);
+  });
+  return { promise, abort: () => xhr.abort() };
+}
+
+export const fetchComments = (base: string, before?: number | null) =>
+  api<CommentList>(`${base}/comments${before ? `?before=${before}` : ''}`);
+export const postComment = (base: string, data: { body: string; name?: string; website?: string }) =>
+  post<{ comment: CommentItem; token: string | null; total: number }>(`${base}/comments`, data);
+export const deleteComment = (id: number, token?: string | null) => del<{ ok: boolean }>(`/api/comments/${id}`, token ? { token } : {});
+export const hideComment = (id: number, hidden: boolean) => patch<{ ok: boolean; comment: CommentItem }>(`/api/comments/${id}`, { hidden });
+export const fetchRecentComments = (limit = 20) =>
+  api<{ enabled: boolean; mode: 'off' | 'accounts' | 'everyone'; comments: RecentComment[] }>(`/api/comments/recent?limit=${limit}`);
+
+export const choosePosterFrame = (id: number, at: number) => post<{ file: FileItem }>(`/api/files/${id}/poster`, { at });
+export const uploadPoster = (id: number, image: Blob) =>
+  api<{ file: FileItem }>(`/api/files/${id}/poster`, {
+    method: 'POST',
+    headers: { 'Content-Type': image.type || 'application/octet-stream' },
+    body: image,
+  });
+export const resetPoster = (id: number) => del<{ file: FileItem }>(`/api/files/${id}/poster`);
+
+export const fetchDoctor = () => api<DoctorReport>(`/api/admin/doctor?now=${Date.now()}`);
+export const fetchAdminTerms = () => api<AdminTerms>('/api/admin/terms');
+export const publishTerms = (data: { text: string; minor: boolean; enabled: boolean }) =>
+  post<AdminTerms & { ok: boolean }>('/api/admin/terms', data);
+export const acceptTerms = (version: number) =>
+  post<{ ok: boolean; accepted: boolean; version?: number; redirect: string }>('/api/account/terms', { version });
+export const fetchRetention = () => api<RetentionPreview>('/api/admin/retention');
+export const runRetention = () =>
+  post<{
+    ok: boolean;
+    done: { marked: number; released: number; cancelled: number; users?: number; blocked?: string; skipped?: boolean };
+    preview: RetentionPreview;
+  }>('/api/admin/retention/run', {});
+export const fetchTransforms = () => api<TransformUsage>('/api/admin/transforms');
+export const clearTransforms = () => post<TransformUsage & { ok: boolean }>('/api/admin/transforms/clear', {});

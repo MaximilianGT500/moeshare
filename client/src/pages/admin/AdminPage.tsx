@@ -68,11 +68,13 @@ const ALL_TABS: TabKey[] = [
 function UpdateNotice({ info, onOpen }: { info: UpdateInfo; onOpen: () => void }) {
   const [dismissed, setDismissed] = useState(readDismissedUpdate);
   const version = info.available;
-  if (!info.enabled || (!version && !info.yanked) || (!info.yanked && dismissed === version)) return null;
+  const unsupported = info.supported === false;
+  const sticky = info.yanked || unsupported;
+  if (!info.enabled || (!version && !sticky) || (!sticky && dismissed === version)) return null;
 
   return (
     <Alert
-      severity={info.yanked ? 'error' : info.security ? 'warning' : 'info'}
+      severity={sticky ? 'error' : info.security ? 'warning' : 'info'}
       sx={{ mt: 1, mb: 2, alignItems: 'center' }}
       action={
         <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
@@ -82,7 +84,7 @@ function UpdateNotice({ info, onOpen }: { info: UpdateInfo; onOpen: () => void }
           <Button color="inherit" size="small" onClick={onOpen}>
             {t('Aktualisieren')}
           </Button>
-          {version && !info.yanked && (
+          {version && !sticky && (
             <IconButton
               color="inherit"
               size="small"
@@ -100,9 +102,19 @@ function UpdateNotice({ info, onOpen }: { info: UpdateInfo; onOpen: () => void }
     >
       {info.yanked
         ? t('Version {current} wurde zurückgezogen. Spiel bitte bald ein Update ein.', { current: info.current })
-        : info.security
-          ? t('Sicherheitsupdate: Version {latest} ist erschienen. Hier läuft noch {current}.', { latest: version, current: info.current })
-          : t('Version {latest} ist erschienen. Hier läuft noch {current}.', { latest: version, current: info.current })}
+        : unsupported
+          ? info.minimum
+            ? t('Version {current} wird nicht mehr unterstützt, mindestens {minimum} ist nötig. Spiel bitte bald ein Update ein.', {
+                current: info.current,
+                minimum: info.minimum,
+              })
+            : t('Version {current} wird nicht mehr unterstützt. Spiel bitte bald ein Update ein.', { current: info.current })
+          : info.security
+            ? t('Sicherheitsupdate: Version {latest} ist erschienen. Hier läuft noch {current}.', {
+                latest: version,
+                current: info.current,
+              })
+            : t('Version {latest} ist erschienen. Hier läuft noch {current}.', { latest: version, current: info.current })}
     </Alert>
   );
 }
@@ -379,6 +391,8 @@ function Admin({ boot }: { boot: AdminBoot }) {
                 videos={boot.videos}
                 pulse={pulse}
                 onPulse={setPulse}
+                doctor={boot.doctor ?? null}
+                site={boot.site.title}
               />
             )}
             {tab === 'hilfe' && (

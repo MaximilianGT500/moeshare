@@ -13,6 +13,7 @@ const setup = require('../services/setupService');
 const home = require('../services/homeService');
 const avatars = require('../services/avatarService');
 const legalService = require('../services/legalService');
+const terms = require('../services/termsService');
 const appIcon = require('../lib/appIcon');
 
 const router = express.Router();
@@ -71,6 +72,17 @@ for (const { key, label, path } of LEGAL_PAGES) {
     return renderPage(res, { page: 'legal', title: label, data: { legal: { title: tr(req, label), text } } });
   });
 }
+
+router.get(['/nutzungsbedingungen', '/terms'], (req, res, next) => {
+  const current = terms.current();
+  if (!current.enabled) return next();
+  if (req.customDomain) return res.redirect(`${settings.get('site.baseUrl')}/nutzungsbedingungen`);
+  return renderPage(res, {
+    page: 'legal',
+    title: 'Nutzungsbedingungen',
+    data: { legal: { title: tr(req, 'Nutzungsbedingungen'), text: current.text, updatedAt: current.publishedAt } },
+  });
+});
 
 router.get('/api/home', async (req, res) => {
   if (!settings.get('home.enabled')) throw notFound('Die Startseite ist abgeschaltet.');

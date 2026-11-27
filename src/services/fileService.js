@@ -10,7 +10,7 @@ const { badRequest, notFound } = require('../lib/errors');
 const { durationOf } = require('../lib/expiry');
 const { berlinDate, berlinDay } = require('../lib/format');
 const { displayPath } = require('../lib/slugs');
-const { extensionOf, baseNameOf, userDirs, isSafeFilename, filePaths } = require('../lib/storage');
+const { extensionOf, baseNameOf, userDirs, isSafeFilename, filePaths, ensureUserDirs } = require('../lib/storage');
 const similarity = require('../lib/similarity');
 const exif = require('../lib/exif');
 const media = require('../lib/media');
@@ -36,6 +36,7 @@ const TEXT_SYNTAX = {
   '.md': 'markdown',
   '.markdown': 'markdown',
   '.json': 'json',
+  '.ipynb': 'json',
   '.js': 'javascript',
   '.mjs': 'javascript',
   '.cjs': 'javascript',
@@ -147,6 +148,8 @@ const ROOT_TAKEN = new Set([
   'report',
   'impressum',
   'datenschutz',
+  'nutzungsbedingungen',
+  'terms',
   'healthz',
   'favicon.svg',
   'favicon.ico',
@@ -178,7 +181,9 @@ function urlsFor(record, { domain = null } = {}) {
   const base = settings.get('site.baseUrl');
   const host = hostFor(record, domain);
   const { type } = typeOf(record.filename, record.syntax);
-  const preview = type === 'video' ? `${baseNameOf(record.filename)}.jpg` : record.filename;
+  const covered = type === 'video' || (type === 'audio' && storage.hasVariant(record, 'poster'));
+  const chosen = covered && record.poster_ms !== null && record.poster_ms !== undefined ? `?v=${Math.abs(Number(record.poster_ms))}` : '';
+  const preview = covered ? `${baseNameOf(record.filename)}.jpg${chosen}` : record.filename;
   const slug = record.slug || record.filename;
   const web = type === 'video' && storage.hasVariant(record, 'web');
   return {
@@ -209,6 +214,40 @@ function peaksOf(raw) {
   } catch {
     return null;
   }
+}
+
+const HEX = /^#[0-9a-f]{6}$/;
+
+function paletteOf(raw) {
+  if (typeof raw !== 'string' || !raw) return null;
+  const colors = raw
+    .split(',')
+    .map((color) => color.trim().toLowerCase())
+    .filter((color) => HEX.test(color));
+  return colors.length ? colors.slice(0, 8) : null;
+}
+
+const AUDIO_FIELDS = ['title', 'artist', 'album', 'albumArtist', 'year', 'genre'];
+
+function audioOf(raw) {
+  if (typeof raw !== 'string' || !raw.startsWith('{')) return null;
+  try {
+    const value = JSON.parse(raw);
+    if (!value || typeof value !== 'object') return null;
+    const result = {};
+    for (const key of AUDIO_FIELDS) if (typeof value[key] === 'string' && value[key]) result[key] = value[key].slice(0, 200);
+    if (Number.isInteger(value.track) && value.track > 0) result.track = value.track;
+    result.cover = value.cover === true;
+    return Object.keys(result).length > 1 || result.cover ? result : null;
+  } catch {
+    return null;
+  }
+}
+
+function posterOf(row) {
+  if (row.poster_ms === null || row.poster_ms === undefined) return null;
+  const value = Number(row.poster_ms);
+  return value < 0 ? { custom: true, at: null } : { custom: false, at: value };
 }
 
 const toFile = (row, tags = [], domain = null) => ({
@@ -243,6 +282,11 @@ const toFile = (row, tags = [], domain = null) => ({
   deduped: Boolean(Number(row.deduped)),
   camera: exif.stored(row.exif),
   waveform: peaksOf(row.waveform),
+  audio: audioOf(row.audio_meta),
+  palette: paletteOf(row.palette),
+  poster: posterOf(row),
+  comments: row.comments === null || row.comments === undefined ? null : Boolean(Number(row.comments)),
+  retentionAt: row.retention_at && row.expires_at ? Number(row.expires_at) : null,
   ...protectionOf(row),
   ...typeOf(row.filename, row.syntax),
   urls: urlsFor(row, { domain }),
@@ -289,13 +333,30 @@ async function reactionCounts(ids) {
   return new Map(rows.map((row) => [Number(row.ref_id), Number(row.total) || 0]));
 }
 
+async function commentCounts(ids) {
+  const wanted = [...new Set(ids.map(Number).filter((id) => Number.isSafeInteger(id) && id > 0))];
+  if (!wanted.length) return new Map();
+  const rows = await db.all(
+    `SELECT ref_id, COUNT(*) AS total FROM comments WHERE kind = 'f' AND hidden_at IS NULL AND ref_id IN (${wanted.map(() => '?').join(', ')}) GROUP BY ref_id`,
+    wanted
+  );
+  return new Map(rows.map((row) => [Number(row.ref_id), Number(row.total) || 0]));
+}
+
 async function withTags(rows, { domain = null, matches = null } = {}) {
   const ids = rows.map((row) => row.id);
-  const [tags, versions, twins, reacted] = await Promise.all([tagsByFile(ids), versionCounts(ids), twinCounts(rows), reactionCounts(ids)]);
+  const [tags, versions, twins, reacted, commented] = await Promise.all([
+    tagsByFile(ids),
+    versionCounts(ids),
+    twinCounts(rows),
+    reactionCounts(ids),
+    commentCounts(ids),
+  ]);
   return rows.map((row) => {
     const file = toFile(row, tags.get(Number(row.id)) || [], domain);
     file.versions = versions.get(Number(row.id)) || 0;
     file.reactions = reacted.get(Number(row.id)) || 0;
+    file.commentCount = commented.get(Number(row.id)) || 0;
     file.twins = row.sha256 ? Math.max(0, (twins.get(`${row.username}/${row.sha256}`) || 1) - 1) : 0;
     if (matches && matches.has(Number(row.id))) file.match = matches.get(Number(row.id));
     return file;
@@ -592,6 +653,55 @@ async function measurePeaks(row) {
   }
 }
 
+async function withLocalCopy(row, task) {
+  const { file } = filePaths(row.username, row.filename);
+  if (fs.existsSync(file)) return task(file);
+  const copy = await remoteCopy(row);
+  if (!copy) return null;
+  const temporary = path.join(os.tmpdir(), `moeshare-media-${process.pid}-${row.id}${extensionOf(row.filename)}`);
+  await fsp.writeFile(temporary, copy);
+  try {
+    return await task(temporary);
+  } finally {
+    await fsp.rm(temporary, { force: true });
+  }
+}
+
+async function paletteFor(row) {
+  const local = filePaths(row.username, row.filename);
+  const { type } = typeOf(row.filename, row.syntax);
+  const candidates = type === 'image' ? [local.preview, local.file] : [local.poster];
+  for (const candidate of candidates) if (fs.existsSync(candidate)) return media.palette(candidate);
+  if (row.storage !== 's3') return [];
+  const base = baseNameOf(row.filename);
+  if (type === 'image') {
+    const relative = storage.hasVariant(row, 'preview') ? `${row.username}/preview/${row.filename}` : `${row.username}/${row.filename}`;
+    if (!storage.hasVariant(row, 'preview') && Number(row.size_bytes) > REMOTE_MEDIA_BYTES) return [];
+    return media.palette(await storage.readRemote(relative));
+  }
+  if (!storage.hasVariant(row, 'poster')) return [];
+  return media.palette(await storage.readRemote(`${row.username}/preview/${base}.jpg`));
+}
+
+async function audioFor(row) {
+  return withLocalCopy(row, async (source) => {
+    const details = await media.audioInfo(source);
+    let cover = false;
+    let colors = null;
+    if (details.cover && settings.get('uploads.preview')) {
+      ensureUserDirs(row.username);
+      const target = filePaths(row.username, row.filename).poster;
+      cover = await media
+        .audioCover(source, target)
+        .then(() => true)
+        .catch(() => false);
+      if (cover) colors = await media.palette(target).catch(() => null);
+      if (cover && row.storage === 's3') cover = await storage.storeVariant(row, 'poster').catch(() => false);
+    }
+    return { audio: JSON.stringify({ ...details.tags, cover }), palette: colors && colors.length ? colors.join(',') : null };
+  });
+}
+
 async function backfillMedia({ images = 40, audio = 3 } = {}) {
   const image = typeFilter('image');
   const photos = await db.all(
@@ -620,8 +730,43 @@ async function backfillMedia({ images = 40, audio = 3 } = {}) {
       ]);
     }
   }
-  if (photos.length || tracks.length) cache.clear();
-  return { cameras: photos.length, waveforms: tracks.length };
+  let sounds = [];
+  if (media.ffmpegAvailable) {
+    const sound = typeFilter('audio');
+    sounds = await db.all(
+      `SELECT * FROM file_data WHERE audio_meta IS NULL AND waveform IS NOT NULL AND deleted_at IS NULL AND ${sound.sql} ORDER BY id DESC LIMIT ?`,
+      [...sound.params, audio]
+    );
+    for (const row of sounds) {
+      const found = await audioFor(row).catch((error) => {
+        log.debug('Audiodaten nicht gelesen', { file: row.filename, error });
+        return null;
+      });
+      await db.run('UPDATE file_data SET audio_meta = ?, palette = COALESCE(?, palette) WHERE id = ? AND audio_meta IS NULL', [
+        found ? found.audio : '',
+        found ? found.palette : null,
+        row.id,
+      ]);
+    }
+  }
+  const visual = typeFilter('image');
+  const moving = typeFilter('video');
+  const tints = await db.all(
+    `SELECT * FROM file_data WHERE palette IS NULL AND deleted_at IS NULL AND (${visual.sql} OR ${moving.sql}) ORDER BY id DESC LIMIT ?`,
+    [...visual.params, ...moving.params, images]
+  );
+  for (const row of tints) {
+    const colors = await paletteFor(row).catch((error) => {
+      log.debug('Farbpalette nicht erstellt', { file: row.filename, error });
+      return null;
+    });
+    await db.run('UPDATE file_data SET palette = ? WHERE id = ? AND palette IS NULL', [
+      colors && colors.length ? colors.join(',') : '',
+      row.id,
+    ]);
+  }
+  if (photos.length || tracks.length || sounds.length || tints.length) cache.clear();
+  return { cameras: photos.length, waveforms: tracks.length, audio: sounds.length, palettes: tints.length };
 }
 
 const UNSEEN_AFTER_MS = 14 * 24 * 60 * 60 * 1000;
@@ -841,11 +986,13 @@ async function insert({
   return findById(id);
 }
 
-async function update(username, filename, { dominantColor, width, height, phash, colorFamily, waveform }) {
+async function update(username, filename, { dominantColor, width, height, phash, colorFamily, waveform, palette, audio }) {
   const fields = { dominant_color: dominantColor, resolution_width: width, resolution_height: height };
   if (phash !== undefined) fields.phash = phash;
   if (colorFamily !== undefined) fields.color_family = colorFamily;
   if (waveform !== undefined) fields.waveform = Array.isArray(waveform) ? JSON.stringify(waveform) : waveform;
+  if (palette !== undefined) fields.palette = palette;
+  if (audio !== undefined) fields.audio_meta = audio;
   const columns = Object.keys(fields);
   await db.run(`UPDATE file_data SET ${columns.map((column) => `${column} = ?`).join(', ')} WHERE username = ? AND filename = ?`, [
     ...columns.map((column) => fields[column]),
@@ -881,6 +1028,7 @@ async function forget(record) {
     await tx.run('DELETE FROM file_tags WHERE file_id = ?', [record.id]);
     await tx.run("DELETE FROM reactions WHERE kind = 'f' AND ref_id = ?", [record.id]);
     await tx.run("DELETE FROM reaction_notices WHERE kind = 'f' AND ref_id = ?", [record.id]);
+    await tx.run("DELETE FROM comments WHERE kind = 'f' AND ref_id = ?", [record.id]);
     await tx.run('DELETE FROM file_versions WHERE file_id = ?', [record.id]);
     await tx.run('DELETE FROM file_search WHERE file_id = ?', [record.id]);
     await tx.run("DELETE FROM redirects WHERE kind = 'file' AND target_id = ?", [record.id]);
@@ -1017,6 +1165,7 @@ async function removeAllForUser(username) {
     await tx.run(`DELETE FROM album_files WHERE file_id IN (${own})`, [username]);
     await tx.run(`DELETE FROM file_tags WHERE file_id IN (${own})`, [username]);
     await tx.run(`DELETE FROM reactions WHERE kind = 'f' AND ref_id IN (${own})`, [username]);
+    await tx.run(`DELETE FROM comments WHERE kind = 'f' AND ref_id IN (${own})`, [username]);
     await tx.run(`DELETE FROM file_versions WHERE file_id IN (${own})`, [username]);
     await tx.run(`DELETE FROM file_search WHERE file_id IN (${own})`, [username]);
     await tx.run(`DELETE FROM redirects WHERE kind = 'file' AND target_id IN (${own})`, [username]);
@@ -1036,7 +1185,12 @@ async function removeExpired(now = Date.now()) {
   let removed = 0;
   for (const row of rows) {
     try {
-      await removeRecord(row, 'expired');
+      if (row.retention_at && !row.deleted_at && trashEnabled()) {
+        await db.run('UPDATE file_data SET expires_at = NULL, retention_at = NULL WHERE id = ?', [row.id]);
+        await moveToTrash(row);
+      } else {
+        await removeRecord(row, 'expired');
+      }
       removed += 1;
     } catch (error) {
       log.warn('Abgelaufene Datei konnte nicht gelöscht werden', { file: row.filename, error });
@@ -1302,6 +1456,8 @@ module.exports = {
   origins,
   originsFor,
   toFile,
+  paletteOf,
+  audioOf,
   peaksOf,
   withTags,
   listForUser,

@@ -57,7 +57,12 @@ function assertSameOrigin(req) {
 }
 
 function setupError(setup) {
-  const message = setup === 'password' ? 'Lege zuerst ein neues Passwort fest.' : 'Richte zuerst die Zwei-Faktor-Anmeldung ein.';
+  const message =
+    setup === 'password'
+      ? 'Lege zuerst ein neues Passwort fest.'
+      : setup === 'terms'
+        ? 'Nimm zuerst die Nutzungsbedingungen an.'
+        : 'Richte zuerst die Zwei-Faktor-Anmeldung ein.';
   return new HttpError(403, message, { code: 'setup_required', extra: { setup } });
 }
 

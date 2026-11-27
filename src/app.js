@@ -92,6 +92,8 @@ function createApp() {
   app.use(require('./routes/access'));
   app.use(require('./routes/moderation'));
   app.use(require('./routes/requests'));
+  app.use(require('./routes/phone'));
+  app.use(require('./routes/comments'));
   const fileRoutes = require('./routes/files');
   app.use(fileRoutes);
   app.use(require('./routes/upload'));

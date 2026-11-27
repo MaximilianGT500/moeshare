@@ -17,7 +17,8 @@ import DeleteForeverRounded from '@mui/icons-material/DeleteForeverRounded';
 import DownloadRounded from '@mui/icons-material/DownloadRounded';
 import type { AccountOverview, AuditEvent } from '../../lib/types';
 import { deleteAccount, errorMessage, exportUrl, fetchActivity, probeExport } from '../../lib/api';
-import { formatBytes } from '../../lib/format';
+import { formatBytes, formatDate } from '../../lib/format';
+import GavelRounded from '@mui/icons-material/GavelRounded';
 import { SettingRow, SettingsSection } from '../../components/SettingsKit';
 import { QuotaMeter } from '../../components/QuotaMeter';
 import { ActivityList } from '../../components/ActivityList';
@@ -224,6 +225,24 @@ export function ProfilePanel({ account }: { account: AccountOverview }) {
       </SettingsSection>
 
       {account.choices.export && <ExportSection />}
+
+      {account.terms && (
+        <SettingsSection id="nutzungsbedingungen" title={t('Nutzungsbedingungen')}>
+          <SettingRow
+            icon={<GavelRounded />}
+            label={t('Fassung {version}', { version: account.terms.version })}
+            description={
+              account.terms.mine && account.terms.mine.acceptedAt
+                ? t('Zugestimmt am {date}.', { date: formatDate(new Date(account.terms.mine.acceptedAt)) })
+                : t('Noch nicht zugestimmt.')
+            }
+          >
+            <Button href="/nutzungsbedingungen" target="_blank" rel="noopener">
+              {t('Lesen')}
+            </Button>
+          </SettingRow>
+        </SettingsSection>
+      )}
 
       <SettingsSection id="loeschen" title={t('Konto löschen')}>
         <SettingRow

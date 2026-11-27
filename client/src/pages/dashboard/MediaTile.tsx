@@ -12,6 +12,8 @@ import VisibilityOutlined from '@mui/icons-material/VisibilityOutlined';
 import LockRounded from '@mui/icons-material/LockRounded';
 import StarRounded from '@mui/icons-material/StarRounded';
 import TimerOutlined from '@mui/icons-material/TimerOutlined';
+import AutoDeleteOutlined from '@mui/icons-material/AutoDeleteOutlined';
+import ChatBubbleOutlineRounded from '@mui/icons-material/ChatBubbleOutlineRounded';
 import LooksOneRounded from '@mui/icons-material/LooksOneRounded';
 import CloudOutlined from '@mui/icons-material/CloudOutlined';
 import BlockRounded from '@mui/icons-material/BlockRounded';
@@ -147,6 +149,10 @@ function WarningVeil({ file, compact }: { file: FileItem; compact: boolean }) {
 function AudioArt({ file, compact }: { file: FileItem; compact: boolean }) {
   const audio = useAudioState();
   const playing = audio.src === file.urls.direct && audio.playing;
+  const meta = file.audio || null;
+  const cover = meta && meta.cover ? file.urls.preview : null;
+  const heading = meta && meta.title ? meta.title : extensionOf(file.filename).toUpperCase() || t('Audio');
+  const detail = [meta && meta.artist ? meta.artist : '', formatBytes(file.sizeBytes)].filter(Boolean).join(' · ');
   return (
     <Box
       sx={{
@@ -159,8 +165,26 @@ function AudioArt({ file, compact }: { file: FileItem; compact: boolean }) {
         background: `linear-gradient(155deg, ${mix(fileTypeColor.audio, 34)}, ${c.surfaceContainerHigh} 70%)`,
       }}
     >
+      {cover && (
+        <>
+          <Box
+            component="img"
+            src={cover}
+            alt=""
+            loading="lazy"
+            draggable={false}
+            sx={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+          />
+          <Box
+            aria-hidden
+            sx={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(0,0,0,0) 45%, rgba(0,0,0,0.72) 100%)' }}
+          />
+        </>
+      )}
       <Box sx={{ height: compact ? 20 : 28 }} />
-      {file.waveform && file.waveform.length ? (
+      {cover ? (
+        <Box sx={{ flex: 1 }} />
+      ) : file.waveform && file.waveform.length ? (
         <PeaksWaveform
           peaks={file.waveform}
           progress={audio.src === file.urls.direct ? audio.progress : 0}
@@ -170,18 +194,37 @@ function AudioArt({ file, compact }: { file: FileItem; compact: boolean }) {
       ) : (
         <Waveform seed={file.filename} playing={playing} bars={compact ? 18 : 28} />
       )}
-      <Box sx={{ minWidth: 0, height: 44, pr: 6, display: compact ? 'none' : 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+      <Box
+        sx={{
+          position: 'relative',
+          minWidth: 0,
+          height: 44,
+          pr: 6,
+          display: compact ? 'none' : 'flex',
+          flexDirection: 'column',
+          justifyContent: 'flex-end',
+        }}
+      >
         <Typography
           variant="caption"
           component="p"
           noWrap
-          sx={{ fontWeight: 700, color: c.onSurface, display: 'flex', alignItems: 'center', gap: 0.5, '& svg': { fontSize: 14 } }}
+          sx={{
+            fontWeight: 700,
+            color: cover ? '#fff' : c.onSurface,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 0.5,
+            '& svg': { fontSize: 14, flexShrink: 0 },
+          }}
         >
           {fileIcon(file.filename, 'audio')}
-          {extensionOf(file.filename).toUpperCase() || t('Audio')}
+          <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {heading}
+          </Box>
         </Typography>
-        <Typography variant="caption" component="p" noWrap sx={{ color: c.onSurfaceVariant }}>
-          {formatBytes(file.sizeBytes)}
+        <Typography variant="caption" component="p" noWrap sx={{ color: cover ? 'rgba(255,255,255,0.82)' : c.onSurfaceVariant }}>
+          {detail}
         </Typography>
       </Box>
     </Box>
@@ -218,7 +261,7 @@ function AudioPlayButton({ file, compact }: { file: FileItem; compact: boolean }
   );
 }
 
-export const displayName = (file: FileItem) => file.title || file.originalName || file.filename;
+export const displayName = (file: FileItem) => file.title || (file.audio && file.audio.title) || file.originalName || file.filename;
 
 function TextArt({ file, compact }: { file: FileItem; compact: boolean }) {
   const syntax = file.syntax && !['auto', 'plaintext'].includes(file.syntax) ? syntaxLabel(file.syntax) : '';
@@ -292,7 +335,18 @@ function StatusBadges({ file, compact, onMedia }: { file: FileItem; compact: boo
     file.listed && !compact ? { key: 'listed', icon: <AccountBoxOutlined />, label: t('Im Profil sichtbar') } : null,
     file.password ? { key: 'lock', icon: <LockRounded />, label: t('Mit Passwort geschützt') } : null,
     file.maxViews ? { key: 'once', icon: <LooksOneRounded />, label: t('Nur einmal abrufbar') } : null,
-    file.expiresAt ? { key: 'timer', icon: <TimerOutlined />, label: t('Läuft ab: {when}', { when: relativeMs(file.expiresAt) }) } : null,
+    file.expiresAt
+      ? {
+          key: 'timer',
+          icon: file.retentionAt ? <AutoDeleteOutlined /> : <TimerOutlined />,
+          label: file.retentionAt
+            ? t('Lange nicht aufgerufen, läuft ab: {when}. Mit einem Stern behältst du die Datei.', { when: relativeMs(file.expiresAt) })
+            : t('Läuft ab: {when}', { when: relativeMs(file.expiresAt) }),
+        }
+      : null,
+    file.commentCount && !compact
+      ? { key: 'comments', icon: <ChatBubbleOutlineRounded />, label: tn(file.commentCount, '1 Kommentar', '{count} Kommentare') }
+      : null,
     file.storage === 's3' && !compact ? { key: 's3', icon: <CloudOutlined />, label: t('Liegt in S3') } : null,
     hasWarning(file) && file.type !== 'image' && file.type !== 'video'
       ? { key: 'warning', icon: <WarningAmberRounded />, label: warningLabel(file) }

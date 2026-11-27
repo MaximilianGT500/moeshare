@@ -32,6 +32,8 @@ const TABLES = [
       col('profile', 'text'),
       col('watermark', 'longtext'),
       col('avatar', 'string', { length: 24 }),
+      col('terms_version', 'int'),
+      col('terms_accepted_at', 'bigint'),
     ],
     indexes: [
       { name: 'idx_users_username', columns: ['username'], unique: true },
@@ -103,6 +105,11 @@ const TABLES = [
       col('color_family', 'string', { length: 16 }),
       col('exif', 'text'),
       col('waveform', 'text'),
+      col('audio_meta', 'text'),
+      col('palette', 'string', { length: 64 }),
+      col('poster_ms', 'bigint'),
+      col('comments', 'int'),
+      col('retention_at', 'bigint'),
     ],
     indexes: [
       { name: 'idx_file_data_username_id', columns: ['username', 'id'] },
@@ -116,6 +123,7 @@ const TABLES = [
       { name: 'idx_file_data_publish', columns: ['publish_at'] },
       { name: 'idx_file_data_color', columns: ['username', 'color_family'] },
       { name: 'idx_file_data_phash', columns: ['username', 'phash'] },
+      { name: 'idx_file_data_retention', columns: ['retention_at'] },
     ],
   },
   {
@@ -269,6 +277,7 @@ const TABLES = [
       col('checked_at', 'bigint'),
       col('broken_since', 'bigint'),
       col('interstitial', 'int', { notNull: true, default: 0 }),
+      col('targets', 'text'),
     ],
     indexes: [
       { name: 'idx_links_code', columns: ['code'], unique: true },
@@ -293,6 +302,7 @@ const TABLES = [
       col('blocked_reason', 'string', { length: 200 }),
       col('rule', 'text'),
       col('layout', 'string', { length: 16 }),
+      col('comments', 'int'),
     ],
     indexes: [
       { name: 'idx_albums_code', columns: ['code'], unique: true },
@@ -686,6 +696,7 @@ const TABLES = [
       col('ref_id', 'bigint', { notNull: true }),
       col('reactions', 'int', { notNull: true, default: 0 }),
       col('first_at', 'bigint', { notNull: true }),
+      col('comments', 'int', { notNull: true, default: 0 }),
     ],
     indexes: [
       { name: 'idx_reaction_notices_ref', columns: ['user_id', 'kind', 'ref_id'], unique: true },
@@ -740,6 +751,64 @@ const TABLES = [
     indexes: [
       { name: 'idx_chat_links_chat', columns: ['provider', 'chat_id'], unique: true },
       { name: 'idx_chat_links_user', columns: ['user_id', 'provider'], unique: true },
+    ],
+  },
+  {
+    name: 'upload_rules',
+    columns: [
+      id(),
+      userRef(),
+      col('name', 'string', { length: 80, notNull: true }),
+      col('enabled', 'int', { notNull: true, default: 1 }),
+      col('sort_order', 'int', { notNull: true, default: 0 }),
+      col('conditions', 'text', { notNull: true }),
+      col('actions', 'text', { notNull: true }),
+      col('stop_after', 'int', { notNull: true, default: 0 }),
+      col('matches', 'int', { notNull: true, default: 0 }),
+      col('last_matched_at', 'bigint'),
+      col('created_at', 'bigint', { notNull: true }),
+      col('updated_at', 'bigint', { notNull: true }),
+    ],
+    indexes: [{ name: 'idx_upload_rules_user', columns: ['user_id', 'sort_order'] }],
+  },
+  {
+    name: 'phone_links',
+    columns: [
+      id(),
+      userRef(),
+      col('code_hash', 'string', { length: 64, notNull: true }),
+      col('album_id', 'bigint'),
+      col('created_at', 'bigint', { notNull: true }),
+      col('expires_at', 'bigint', { notNull: true }),
+      col('closed_at', 'bigint'),
+      col('uploads', 'int', { notNull: true, default: 0 }),
+      col('files', 'text'),
+      col('last_upload_at', 'bigint'),
+      col('device', 'string', { length: 120 }),
+    ],
+    indexes: [
+      { name: 'idx_phone_links_code', columns: ['code_hash'], unique: true },
+      { name: 'idx_phone_links_user', columns: ['user_id', 'id'] },
+    ],
+  },
+  {
+    name: 'comments',
+    columns: [
+      id(),
+      col('kind', 'string', { length: 1, notNull: true }),
+      col('ref_id', 'bigint', { notNull: true }),
+      userRef('user_id', 'CASCADE', false),
+      col('name', 'string', { length: 60 }),
+      col('body', 'text', { notNull: true }),
+      col('created_at', 'bigint', { notNull: true }),
+      col('hidden_at', 'bigint'),
+      col('hidden_by', 'bigint'),
+      col('author_key', 'string', { length: 64 }),
+    ],
+    indexes: [
+      { name: 'idx_comments_ref', columns: ['kind', 'ref_id', 'id'] },
+      { name: 'idx_comments_user', columns: ['user_id'] },
+      { name: 'idx_comments_created', columns: ['created_at'] },
     ],
   },
 ];

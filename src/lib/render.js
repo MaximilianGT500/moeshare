@@ -32,7 +32,18 @@ const legalLinks = (language, domain = null) =>
     if (url) return { label: text, url: domain && !/^https?:\/\//.test(url) ? `${settings.get('site.baseUrl')}${url}` : url };
     if (!settings.get(`legal.${key}Text`)) return null;
     return { label: text, url: domain ? `${settings.get('site.baseUrl')}${path}` : path };
-  }).filter(Boolean);
+  })
+    .concat(
+      settings.get('terms.enabled') && Number(settings.get('terms.version')) > 0 && String(settings.get('terms.text') || '').trim()
+        ? [
+            {
+              label: i18n.translate(language, 'Nutzungsbedingungen'),
+              url: domain ? `${settings.get('site.baseUrl')}/nutzungsbedingungen` : '/nutzungsbedingungen',
+            },
+          ]
+        : []
+    )
+    .filter(Boolean);
 
 const siteInfo = (language = settings.get('site.language'), custom = false, admin = false, domain = null) => ({
   title: settings.get('site.title'),
@@ -47,6 +58,8 @@ const siteInfo = (language = settings.get('site.language'), custom = false, admi
   push: settings.get('push.enabled') && !custom,
   frames: Boolean(settings.get('frames.enabled')),
   reactions: Boolean(settings.get('reactions.enabled')),
+  comments: settings.get('comments.mode') !== 'off',
+  retention: settings.get('retention.unused') !== 'off',
   mailShare: Boolean(settings.get('sharing.email') && require('../services/mailService').ready()),
   hotlink: Boolean(settings.get('hotlink.enabled')),
   language: settings.get('site.language'),

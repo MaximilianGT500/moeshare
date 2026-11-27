@@ -72,7 +72,17 @@ import {
   reorderAlbum,
   updateAlbum,
 } from '../../lib/api';
-import type { Album, AlbumLayout, AlbumRule, AlbumVisibility, FileItem, FileType, TagCount, UploadOptionsInfo } from '../../lib/types';
+import type {
+  Album,
+  AlbumLayout,
+  AlbumRule,
+  AlbumVisibility,
+  DashboardBoot,
+  FileItem,
+  FileType,
+  TagCount,
+  UploadOptionsInfo,
+} from '../../lib/types';
 import { EmailShareDialog, type EmailTarget } from '../../components/EmailShareDialog';
 import { relativeMs } from '../../lib/format';
 import { readBoot } from '../../lib/boot';
@@ -259,6 +269,8 @@ export function AlbumEditorDialog({
   const [error, setError] = useState('');
   const [mode, setMode] = useState<'manual' | 'smart'>('manual');
   const [layout, setLayout] = useState<AlbumLayout>('rows');
+  const [comments, setComments] = useState<'default' | 'on' | 'off'>('default');
+  const commentsOn = readBoot<DashboardBoot>().options?.comments !== 'off';
   const [rule, setRule] = useState<RuleDraft>(ruleDraftOf(null));
   const [tags, setTags] = useState<TagCount[]>([]);
   const canChooseMode = !fileIds.length && (!album || (album.role !== 'member' && !(album.members ?? 0)));
@@ -280,6 +292,7 @@ export function AlbumEditorDialog({
     setDescription(album?.description || '');
     setVisibility(album?.visibility || 'link');
     setLayout(album?.layout || 'rows');
+    setComments(album?.comments === true ? 'on' : album?.comments === false ? 'off' : 'default');
     setPasswordEnabled(Boolean(album?.password));
     setPassword('');
     setError('');
@@ -294,6 +307,7 @@ export function AlbumEditorDialog({
     setError('');
     try {
       const wanted = code.trim();
+      const nextComments = comments === 'on' ? true : comments === 'off' ? false : null;
       const data = {
         title: title.trim(),
         description,
@@ -302,6 +316,7 @@ export function AlbumEditorDialog({
         ...(passwordEnabled ? (password ? { password } : {}) : album?.password ? { password: null } : {}),
         ...(customAddresses && wanted && wanted !== album?.code ? { code: wanted } : {}),
         ...(mode === 'smart' ? { rule: ruleOfDraft(rule) } : album?.rule ? { rule: null } : {}),
+        ...(album && commentsOn && nextComments !== (album.comments ?? null) ? { comments: nextComments } : {}),
       };
       const result = album
         ? await updateAlbum(album.id, data)
@@ -471,6 +486,19 @@ export function AlbumEditorDialog({
                   {LAYOUTS.find((entry) => entry.key === layout)?.text()}
                 </Typography>
               </Box>
+              {album && commentsOn && album.role !== 'member' && (
+                <TextField
+                  select
+                  size="small"
+                  label={t('Kommentare')}
+                  value={comments}
+                  onChange={(event) => setComments(event.target.value as typeof comments)}
+                >
+                  <MenuItem value="default">{t('Wie unter Gestalten eingestellt')}</MenuItem>
+                  <MenuItem value="on">{t('Erlaubt')}</MenuItem>
+                  <MenuItem value="off">{t('Abgeschaltet')}</MenuItem>
+                </TextField>
+              )}
               <FormControlLabel
                 control={<Switch checked={passwordEnabled} onChange={(event) => setPasswordEnabled(event.target.checked)} />}
                 label={t('Mit Passwort schützen')}

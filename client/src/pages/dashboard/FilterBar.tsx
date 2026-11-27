@@ -9,6 +9,8 @@ import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import Tooltip from '@mui/material/Tooltip';
 import ScreenshotMonitorRounded from '@mui/icons-material/ScreenshotMonitorRounded';
+import QrCode2Rounded from '@mui/icons-material/QrCode2Rounded';
+import MicNoneRounded from '@mui/icons-material/MicNoneRounded';
 import CheckRounded from '@mui/icons-material/CheckRounded';
 import ExpandMoreRounded from '@mui/icons-material/ExpandMoreRounded';
 import SortRounded from '@mui/icons-material/SortRounded';
@@ -120,6 +122,8 @@ export function FilterBar({
   counts,
   onUrl,
   onCapture,
+  onPhone,
+  onVoice,
   onText,
   onFolder,
   duplicates = 0,
@@ -153,6 +157,8 @@ export function FilterBar({
   counts: TypeCounts;
   onUrl?: () => void;
   onCapture?: () => void;
+  onPhone?: () => void;
+  onVoice?: () => void;
   onText?: () => void;
   onFolder?: () => void;
   duplicates?: number;
@@ -375,6 +381,20 @@ export function FilterBar({
         <Tooltip title={t('Bildschirm aufnehmen')}>
           <IconButton aria-label={t('Bildschirm aufnehmen')} onClick={onCapture} sx={{ display: { xs: 'none', sm: 'inline-flex' } }}>
             <ScreenshotMonitorRounded />
+          </IconButton>
+        </Tooltip>
+      )}
+      {onPhone && (
+        <Tooltip title={t('Vom Handy hochladen')}>
+          <IconButton aria-label={t('Vom Handy hochladen')} onClick={onPhone} sx={{ display: { xs: 'none', sm: 'inline-flex' } }}>
+            <QrCode2Rounded />
+          </IconButton>
+        </Tooltip>
+      )}
+      {onVoice && (
+        <Tooltip title={t('Sprachnotiz aufnehmen')}>
+          <IconButton aria-label={t('Sprachnotiz aufnehmen')} onClick={onVoice}>
+            <MicNoneRounded />
           </IconButton>
         </Tooltip>
       )}

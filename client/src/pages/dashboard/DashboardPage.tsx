@@ -22,6 +22,8 @@ import ScheduleRounded from '@mui/icons-material/ScheduleRounded';
 import SellOutlined from '@mui/icons-material/SellOutlined';
 import AccessibilityNewRounded from '@mui/icons-material/AccessibilityNewRounded';
 import InsightsRounded from '@mui/icons-material/InsightsRounded';
+import QrCode2Rounded from '@mui/icons-material/QrCode2Rounded';
+import MicRounded from '@mui/icons-material/MicRounded';
 import { readBoot, siteName } from '../../lib/boot';
 import { RequestsView } from './requests';
 import { SubtitlesDialog } from './subtitles';
@@ -67,6 +69,9 @@ import { FilterBar, type TypeCounts } from './FilterBar';
 import { BulkDialog, EmptyState, FileMenu, SelectionBar, UrlUploadDialog, type BulkAction, type QuickAction } from './parts';
 import { ResumeNotice, UploadProvider, useUploads } from './uploads';
 import { ScreenCapture, canCapture } from './capture';
+import { PhoneDialog } from './phone';
+import { PosterDialog } from './poster';
+import { VoiceMemoDialog, canRecordVoice } from './voice';
 import { FolderImportDialog, type FolderSource } from './folders';
 import { VersionsDialog } from './versions';
 import { ClipDialog } from './clip';
@@ -223,6 +228,10 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
   const [textOpen, setTextOpen] = useState(false);
   const [captureOpen, setCaptureOpen] = useState(false);
   const capture = useMemo(() => canCapture(), []);
+  const [phoneOpen, setPhoneOpen] = useState(false);
+  const [voiceOpen, setVoiceOpen] = useState(false);
+  const voice = useMemo(() => canRecordVoice(), []);
+  const phoneOn = Boolean(boot.options.phone);
   const [textInitial, setTextInitial] = useState('');
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkInitial, setLinkInitial] = useState('');
@@ -280,11 +289,11 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
   }, []);
 
   useEffect(() => {
-    if (!optionsOpen || !boot.options.albums) return;
+    if ((!optionsOpen && !phoneOpen) || !boot.options.albums) return;
     listAlbums()
       .then((res) => setAlbums(res.albums))
       .catch(() => {});
-  }, [optionsOpen, boot.options.albums]);
+  }, [optionsOpen, phoneOpen, boot.options.albums]);
 
   const [files, setFiles] = useState<FileItem[]>(() => boot.files.files.map(withSavedKey));
   const [page, setPage] = useState(boot.files.page || 1);
@@ -301,6 +310,7 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
   const [selectMode, setSelectMode] = useState(false);
   const [viewer, setViewer] = useState<ViewerState | null>(null);
   const [subtitlesFile, setSubtitlesFile] = useState<FileItem | null>(null);
+  const [posterFile, setPosterFile] = useState<FileItem | null>(null);
   const [tracksVersion, setTracksVersion] = useState(0);
   const viewerIndex = viewer ? viewer.index : null;
   const [hidden, setHidden] = useState<string | null>(null);
@@ -460,6 +470,26 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
           return;
         }
         const twins = results.filter((result) => result.duplicateOf).length;
+        const sorted = results.filter((result) => result.rules && result.rules.length);
+        if (!twins && sorted.length) {
+          const ruleNames = [...new Set(sorted.flatMap((result) => (result.rules || []).map((rule) => `„${rule.name}“`)))];
+          toast(
+            names.length === 1
+              ? t('Datei hochgeladen und nach {rules} einsortiert', { rules: ruleNames.join(', ') })
+              : tn(
+                  sorted.length,
+                  '{total} Dateien hochgeladen, eine davon nach deinen Regeln einsortiert',
+                  '{total} Dateien hochgeladen, {count} davon nach deinen Regeln einsortiert',
+                  { total: names.length }
+                ),
+            {
+              variant: 'success',
+              duration: 5000,
+              action: { label: t('Regeln'), onClick: () => window.location.assign('/account#sortieren') },
+            }
+          );
+          return;
+        }
         if (!twins) {
           toast(tn(names.length, 'Datei hochgeladen', '{count} Dateien hochgeladen'), { variant: 'success', duration: 2600 });
           return;
@@ -748,6 +778,22 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
         keywords: 'screenshot video aufnahme',
         run: () => setCaptureOpen(true),
       },
+      phoneOn && {
+        id: 'phone',
+        group: 'actions',
+        label: t('Vom Handy hochladen'),
+        icon: <QrCode2Rounded />,
+        keywords: 'qr code smartphone telefon kamera foto',
+        run: () => setPhoneOpen(true),
+      },
+      voice && {
+        id: 'voice',
+        group: 'actions',
+        label: t('Sprachnotiz aufnehmen'),
+        icon: <MicRounded />,
+        keywords: 'audio mikrofon memo stimme diktat',
+        run: () => setVoiceOpen(true),
+      },
       {
         id: 'starred',
         group: 'actions',
@@ -810,7 +856,7 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
       },
     ];
     return list.filter(Boolean) as PaletteCommand[];
-  }, [pick, pickFolder, boot.options.texts, boot.options.links, boot.options.stats, boot.urlFetch, capture, goSection]);
+  }, [pick, pickFolder, boot.options.texts, boot.options.links, boot.options.stats, boot.urlFetch, capture, phoneOn, voice, goSection]);
   usePaletteCommands(paletteCommands);
   useHotkey('Escape', () => !overlay && selecting && clearSelection(), { enabled: selecting });
   useEffect(() => {
@@ -1154,6 +1200,8 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
               onUrl={boot.urlFetch ? () => setUrlOpen(true) : undefined}
               onText={boot.options.texts ? () => setTextOpen(true) : undefined}
               onCapture={capture ? () => setCaptureOpen(true) : undefined}
+              onPhone={phoneOn ? () => setPhoneOpen(true) : undefined}
+              onVoice={voice ? () => setVoiceOpen(true) : undefined}
               onFolder={pickFolder}
               duplicates={stats.duplicates || 0}
               onDuplicates={() => setDuplicatesOpen(true)}
@@ -1209,6 +1257,8 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
               onUrl={boot.urlFetch ? () => setUrlOpen(true) : undefined}
               onText={boot.options.texts ? () => setTextOpen(true) : undefined}
               onCapture={capture ? () => setCaptureOpen(true) : undefined}
+              onPhone={phoneOn ? () => setPhoneOpen(true) : undefined}
+              onVoice={voice ? () => setVoiceOpen(true) : undefined}
               onOptions={() => setOptionsOpen(true)}
             />
           ) : (
@@ -1241,6 +1291,7 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
         onImageEdit={menu && canEditImage(menu.file) ? (file) => setImageEdit(file) : undefined}
         onClip={menu && boot.options.clips && menu.file.type === 'video' ? (file) => setClipFile(file) : undefined}
         onSubtitles={(file) => setSubtitlesFile(file)}
+        onPoster={(file) => setPosterFile(file)}
         onVersions={(file) => setVersionsFile(file)}
         onWarning={toggleWarning}
         onStar={toggleStar}
@@ -1288,14 +1339,17 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
         onVersions={(file) => setVersionsFile(file)}
         onClip={boot.options.clips ? (file) => setClipFile(file) : undefined}
         onSubtitles={(file) => setSubtitlesFile(file)}
+        onPoster={(file) => setPosterFile(file)}
         onWarning={toggleWarning}
         onStar={toggleStar}
         onCodes={(file) => setCodesFor(shareTargetOf(file))}
         onEmail={boot.site.mailShare ? (file) => setEmailTarget({ kind: 'file', id: file.id, name: displayName(file) }) : undefined}
         trash={trashOn}
-        paused={!!imageEdit || !!versionsFile || !!clipFile || !!subtitlesFile || !!codesFor || !!emailTarget}
+        paused={!!imageEdit || !!versionsFile || !!clipFile || !!subtitlesFile || !!posterFile || !!codesFor || !!emailTarget}
         tracksVersion={tracksVersion}
       />
+
+      <PosterDialog file={posterFile} onClose={() => setPosterFile(null)} onSaved={replaceFile} />
 
       <SubtitlesDialog
         file={subtitlesFile}
@@ -1370,6 +1424,20 @@ function Dashboard({ boot, registerRoutes }: DashboardProps) {
       />
 
       {capture && <ScreenCapture open={captureOpen} onClose={() => setCaptureOpen(false)} onFile={(file) => enqueue([file])} />}
+      {voice && <VoiceMemoDialog open={voiceOpen} onClose={() => setVoiceOpen(false)} onFile={(file) => enqueue([file])} />}
+      {phoneOn && (
+        <PhoneDialog
+          open={phoneOpen}
+          onClose={() => setPhoneOpen(false)}
+          albums={albums}
+          initialAlbum={prefs.album}
+          onReceived={(names) => {
+            reload(names);
+            refreshStats();
+            toast(tn(names.length, 'Vom Handy angekommen', '{count} Dateien vom Handy angekommen'), { variant: 'success', duration: 2600 });
+          }}
+        />
+      )}
 
       <TextDialog
         open={textOpen}

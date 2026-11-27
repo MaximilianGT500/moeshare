@@ -17,7 +17,8 @@ import DnsRounded from '@mui/icons-material/DnsRounded';
 import WarningAmberRounded from '@mui/icons-material/WarningAmberRounded';
 import StorageRounded from '@mui/icons-material/StorageRounded';
 import VolunteerActivismOutlined from '@mui/icons-material/VolunteerActivismOutlined';
-import type { DatabaseInfo, Job, PulseAdminState, SettingsPayload, SystemInfo, UpdateInfo } from '../../lib/types';
+import type { DatabaseInfo, DoctorReport, Job, PulseAdminState, SettingsPayload, SystemInfo, UpdateInfo } from '../../lib/types';
+import { DoctorCard } from './DoctorCard';
 import {
   ApiError,
   checkForUpdate,
@@ -40,14 +41,26 @@ import { updateError, updateSteps } from '../../lib/updates';
 import { PulseConsent, PulseUpdate, type PulseChoice } from '../../moepulse';
 import { c, ease, fonts, radius } from '../../theme/tokens';
 
-export function Card({ icon, title, children, wide = false }: { icon: ReactNode; title: string; children: ReactNode; wide?: boolean }) {
+export function Card({
+  icon,
+  title,
+  children,
+  wide = false,
+  full = false,
+}: {
+  icon: ReactNode;
+  title: string;
+  children: ReactNode;
+  wide?: boolean;
+  full?: boolean;
+}) {
   const id = useId();
   return (
     <Box
       component="section"
       aria-labelledby={id}
       sx={{
-        gridColumn: wide ? { md: 'span 2' } : undefined,
+        gridColumn: full ? '1 / -1' : wide ? { md: 'span 2' } : undefined,
         p: { xs: 2.5, md: 3 },
         borderRadius: `${radius.lg}px`,
         bgcolor: c.surfaceContainerLow,
@@ -459,6 +472,8 @@ export function SystemPanel({
   videos,
   pulse,
   onPulse,
+  doctor = null,
+  site = '',
 }: {
   initial: SystemInfo;
   database: DatabaseInfo;
@@ -470,6 +485,8 @@ export function SystemPanel({
   videos: { running: string | null; ffmpeg: boolean };
   pulse: PulseAdminState;
   onPulse: (next: PulseAdminState) => void;
+  doctor?: DoctorReport | null;
+  site?: string;
 }) {
   const [info, setInfo] = useState(initial);
   const [updatedAt, setUpdatedAt] = useState(() => Date.now());
@@ -528,6 +545,8 @@ export function SystemPanel({
           gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'repeat(2, minmax(0, 1fr))', xl: 'repeat(3, minmax(0, 1fr))' },
         }}
       >
+        <DoctorCard initial={doctor} site={site} />
+
         <Card icon={<MemoryRounded />} title={t('Arbeitsspeicher')}>
           <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mb: 1.5 }}>
             <Typography sx={{ fontSize: '2.25rem', fontWeight: 800, lineHeight: 1 }}>{memPercent} %</Typography>

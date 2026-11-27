@@ -29,6 +29,8 @@ const archives = require('../services/archiveService');
 const { isSealedName } = require('../lib/sealed');
 const hotlink = require('../services/hotlinkService');
 const reactions = require('../services/reactionService');
+const comments = require('../services/commentService');
+const transforms = require('../services/transformService');
 const designs = require('../services/designService');
 const { displayPath } = require('../lib/slugs');
 
@@ -41,6 +43,7 @@ const BLOCKED = 'Diese Datei wurde von der Moderation gesperrt.';
 
 const unlockLimiter = limiter({ windowMs: 15 * 60 * 1000, limit: 30 });
 const reactLimiter = limiter({ windowMs: 60 * 1000, limit: 30 });
+const commentLimiter = limiter({ windowMs: 60 * 1000, limit: 30 });
 
 async function existing(req, slug) {
   const record = await files.findBySlug(slug);
@@ -229,6 +232,33 @@ router.post('/view/:slug/react', sameOriginOnly, reactLimiter, async (req, res) 
   res.json(await reactions.react({ kind: 'f', id: record.id, ownerId: owner && owner.id }, String((req.body || {}).reaction || ''), req));
 });
 
+async function commentTarget(req, res) {
+  const record = await existing(req, req.params.slug);
+  if (!record || isSealedName(record.filename)) throw notFound('Datei nicht gefunden');
+  const access = protection.fileAccess(req, record);
+  if (access.state === 'expired') throw gone(EXPIRED);
+  if (access.state === 'blocked') throw new HttpError(451, BLOCKED);
+  if (access.state !== 'open') throw forbidden('Diese Datei ist geschützt. Öffne sie über ihre Ansichtsseite.', { code: 'protected' });
+  const { design } = await designs.forOwner(record.username);
+  const owner = await db.get('SELECT id FROM users WHERE username = ?', [record.username]);
+  res.set('Cache-Control', 'no-store');
+  return {
+    kind: 'f',
+    id: record.id,
+    ownerId: owner ? owner.id : null,
+    override: record.comments === null || record.comments === undefined ? null : Number(record.comments),
+    byDefault: !(design.show && design.show.comments === false),
+  };
+}
+
+router.get('/view/:slug/comments', async (req, res) => {
+  res.json(await comments.list(await commentTarget(req, res), req.user, { before: req.query.before }));
+});
+
+router.post('/view/:slug/comments', sameOriginOnly, commentLimiter, async (req, res) => {
+  res.status(201).json(await comments.create(await commentTarget(req, res), req.body || {}, req));
+});
+
 router.get('/view/:slug/zip', async (req, res) => {
   const { record } = await openArchive(req, req.params.slug);
   res.set('Cache-Control', 'private, no-store');
@@ -337,6 +367,8 @@ function serveUpload(kind) {
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     protectUpload(res, name);
     if (kind === 'original' && /\.pdf$/i.test(name)) res.setHeader('Content-Disposition', inlineDisposition(downloadName(record)));
+    if (kind === 'original' && transforms.wanted(req.query) && (await transforms.send(req, res, record, { relative, file, cacheControl })))
+      return;
     if (record.storage === 's3' && !fs.existsSync(file)) return storage.sendRemote(req, res, relative, { cacheControl });
     if (!fs.existsSync(file)) {
       const original = path.join(config.paths.uploads, user, record.filename);

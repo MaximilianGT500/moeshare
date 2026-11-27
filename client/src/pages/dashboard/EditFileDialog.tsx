@@ -29,6 +29,7 @@ import {
 } from '../../components/ShareOptions';
 import Alert from '@mui/material/Alert';
 import { SYNTAXES } from './TextDialog';
+import { isSealedName } from '../../lib/sealed';
 import { c } from '../../theme/tokens';
 
 export function EditFileDialog({
@@ -57,6 +58,7 @@ export function EditFileDialog({
   const [publishError, setPublishError] = useState('');
   const [address, setAddress] = useState('');
   const [addressError, setAddressError] = useState('');
+  const [comments, setComments] = useState<'default' | 'on' | 'off'>('default');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -75,6 +77,7 @@ export function EditFileDialog({
     setPublishError('');
     setAddress(file.slug);
     setAddressError('');
+    setComments(file.comments === true ? 'on' : file.comments === false ? 'off' : 'default');
     setError('');
   }, [file]);
 
@@ -93,6 +96,8 @@ export function EditFileDialog({
     const nextWarning = warning === null ? null : warning.trim();
     if (nextWarning !== (typeof file.warning === 'string' ? file.warning : null)) patch.warning = nextWarning;
     if (info.customAddresses && address.trim() && address.trim() !== file.slug) patch.slug = address.trim();
+    const nextComments = comments === 'on' ? true : comments === 'off' ? false : null;
+    if (nextComments !== (file.comments ?? null)) patch.comments = nextComments;
     if (publishAt === null && file.publishAt) patch.publishAt = null;
     if (publishAt !== null && publishAt !== (file.publishAt ?? null)) {
       const problem = scheduleError(publishAt);
@@ -226,6 +231,20 @@ export function EditFileDialog({
             <Alert severity="info" sx={{ mt: -1 }}>
               {t('Beim Speichern wird die Datei sofort veröffentlicht.')}
             </Alert>
+          )}
+          {info.comments && info.comments !== 'off' && !isSealedName(file.filename) && (
+            <TextField
+              select
+              size="small"
+              label={t('Kommentare')}
+              value={comments}
+              onChange={(event) => setComments(event.target.value as typeof comments)}
+              helperText={t('Ob Besucher unter dieser Datei kommentieren dürfen.')}
+            >
+              <MenuItem value="default">{t('Wie unter Gestalten eingestellt')}</MenuItem>
+              <MenuItem value="on">{t('Erlaubt')}</MenuItem>
+              <MenuItem value="off">{t('Abgeschaltet')}</MenuItem>
+            </TextField>
           )}
           {info.profiles && (
             <Box>

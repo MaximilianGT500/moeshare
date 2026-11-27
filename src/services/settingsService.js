@@ -44,6 +44,10 @@ const oidcGroup = (item) => {
   const text = String(item).trim();
   return text && text.length <= 200 && !/[\r\n]/.test(text) ? text : null;
 };
+const blockedWord = (item) => {
+  const text = String(item).replace(/\s+/g, ' ').trim().toLowerCase();
+  return text && text.length <= 60 ? text : null;
+};
 
 const clientId = (max = 200) => ({
   type: 'string',
@@ -110,7 +114,12 @@ const DEFINITIONS = {
     default: ['.jpg', '.jpeg', '.png', '.bmp', '.svg', '.webp', '.tiff', '.avif'],
   },
   'uploads.formats.video': { type: 'list', item: extension, max: 40, default: ['.mp4', '.webm', '.mov', '.mkv', '.avi', '.wmv'] },
-  'uploads.formats.audio': { type: 'list', item: extension, max: 40, default: ['.mp3', '.wav', '.ogg', '.aac', '.flac', '.m4a', '.opus'] },
+  'uploads.formats.audio': {
+    type: 'list',
+    item: extension,
+    max: 40,
+    default: ['.mp3', '.wav', '.ogg', '.aac', '.flac', '.m4a', '.opus', '.weba'],
+  },
   'uploads.blockedTypes': { type: 'list', item: extension, max: 100, default: [] },
   'uploads.blockPrograms': { type: 'bool', default: false },
   'uploads.encrypted': { type: 'bool', default: true },
@@ -122,6 +131,7 @@ const DEFINITIONS = {
   'uploads.deduplicate': { type: 'bool', default: true },
   'uploads.versions': { type: 'bool', default: true },
   'uploads.versionsKeep': { type: 'int', min: 1, max: 100, default: 10 },
+  'uploads.phone': { type: 'bool', default: true },
 
   'images.optimize': { type: 'bool', default: false },
   'images.format': { type: 'enum', values: ['keep', 'webp', 'avif'], default: 'webp' },
@@ -129,6 +139,8 @@ const DEFINITIONS = {
   'images.maxDimension': { type: 'int', min: 0, max: 30000, default: 0 },
   'images.keepOriginal': { type: 'bool', default: false },
   'images.watermarks': { type: 'bool', default: true },
+  'images.transforms': { type: 'bool', default: true },
+  'images.transformCache': { type: 'bytes', default: 512 * 1024 * 1024 },
 
   'search.content': { type: 'bool', default: true },
   'export.enabled': { type: 'bool', default: true },
@@ -270,6 +282,9 @@ const DEFINITIONS = {
   'profiles.animatedAvatars': { type: 'bool', default: true },
   'profiles.customIcons': { type: 'bool', default: true },
   'reactions.enabled': { type: 'bool', default: true },
+  'comments.mode': { type: 'enum', values: ['off', 'accounts', 'everyone'], default: 'accounts' },
+  'comments.guestLinks': { type: 'bool', default: false },
+  'comments.blockedWords': { type: 'list', item: blockedWord, max: 200, default: [] },
   'sharing.email': { type: 'bool', default: true },
   'frames.enabled': { type: 'bool', default: true },
   'autoShare.enabled': { type: 'bool', default: true },
@@ -307,6 +322,13 @@ const DEFINITIONS = {
 
   'stats.enabled': { type: 'bool', default: true },
   'stats.retentionDays': { type: 'int', min: 30, max: 1825, default: 365 },
+  'retention.unused': { type: 'enum', values: ['off', '30d', '60d', '90d', '180d', '365d', '730d'], default: 'off' },
+  'retention.grace': { type: 'enum', values: ['3d', '7d', '14d', '30d'], default: '7d' },
+  'retention.admins': { type: 'bool', default: false },
+  'terms.enabled': { type: 'bool', default: false },
+  'terms.text': { type: 'string', default: '', allowEmpty: true, multiline: true, max: 100000 },
+  'terms.version': { type: 'int', min: 0, max: 100000, default: 0 },
+  'terms.publishedAt': { type: 'int', min: 0, max: 99999999999999, default: 0 },
 
   'zip.enabled': { type: 'bool', default: true },
 

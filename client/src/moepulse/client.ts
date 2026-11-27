@@ -65,6 +65,8 @@ export interface UpdateInfo {
   update: boolean;
   security: boolean;
   yanked: boolean;
+  supported?: boolean;
+  minimum?: string | null;
   behind: number;
   releases: Release[];
   checkedAt: number;

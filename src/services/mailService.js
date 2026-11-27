@@ -187,4 +187,9 @@ function onSettings(keys) {
 
 settings.onChange(onSettings);
 
-module.exports = { ready, send, sendSafely, render, notifyUser, notifyAdmins, languageFor, test };
+async function verify() {
+  if (!ready()) throw new Error('Mailserver oder Absender fehlen.');
+  return transporter().verify();
+}
+
+module.exports = { ready, send, sendSafely, render, notifyUser, notifyAdmins, languageFor, test, verify };

@@ -16,6 +16,8 @@ import EventRepeatOutlined from '@mui/icons-material/EventRepeatOutlined';
 import InsightsOutlined from '@mui/icons-material/InsightsOutlined';
 import StorageOutlined from '@mui/icons-material/StorageOutlined';
 import TimerOutlined from '@mui/icons-material/TimerOutlined';
+import ChatBubbleOutlineRounded from '@mui/icons-material/ChatBubbleOutlineRounded';
+import AutoDeleteOutlined from '@mui/icons-material/AutoDeleteOutlined';
 import type { EmailState, NotifyKey, Preferences } from '../../lib/types';
 import { readBoot } from '../../lib/boot';
 import { ApiError, errorMessage, removeEmail, startEmailVerification } from '../../lib/api';
@@ -247,6 +249,17 @@ export function EmailSection({
           onChange={(on) => toggle('reactions', on)}
         />
       )}
+      {state.email && state.verifiedAt && readBoot().site.comments && (
+        <SwitchRow
+          id="notify-comments"
+          icon={<ChatBubbleOutlineRounded />}
+          label={t('Kommentare zu deinen Uploads')}
+          description={t('Eine gesammelte E-Mail, wenn jemand deine Dateien oder Alben kommentiert hat, höchstens alle paar Minuten.')}
+          checked={notify.comments !== false}
+          disabled={saving}
+          onChange={(on) => toggle('comments', on)}
+        />
+      )}
       {state.email && state.verifiedAt && (
         <SwitchRow
           id="notify-memories"
@@ -291,6 +304,19 @@ export function EmailSection({
           checked={notify.expiring}
           disabled={saving}
           onChange={(on) => toggle('expiring', on)}
+        />
+      )}
+      {state.email && state.verifiedAt && readBoot().site.retention && (
+        <SwitchRow
+          id="notify-retention"
+          icon={<AutoDeleteOutlined />}
+          label={t('Unbenutzte Dateien')}
+          description={t(
+            'Eine E-Mail, wenn Dateien lange nicht aufgerufen wurden und deshalb bald in den Papierkorb wandern. So kannst du sie vorher behalten.'
+          )}
+          checked={notify.retention !== false}
+          disabled={saving}
+          onChange={(on) => toggle('retention', on)}
         />
       )}
     </SettingsSection>

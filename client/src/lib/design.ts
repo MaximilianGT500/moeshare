@@ -19,8 +19,12 @@ export const DESIGN_ELEMENTS: DesignElement[] = [
   'frame',
   'original',
   'reactions',
+  'comments',
+  'palette',
   'footer',
 ];
+
+const OFF_BY_DEFAULT: DesignElement[] = ['palette'];
 
 export const FALLBACK_DESIGN: ViewDesign = {
   layout: 'standard',
@@ -29,7 +33,7 @@ export const FALLBACK_DESIGN: ViewDesign = {
   background: 'ambient',
   font: 'rounded',
   corners: 'round',
-  show: Object.fromEntries(DESIGN_ELEMENTS.map((key) => [key, true])) as Record<DesignElement, boolean>,
+  show: Object.fromEntries(DESIGN_ELEMENTS.map((key) => [key, !OFF_BY_DEFAULT.includes(key)])) as Record<DesignElement, boolean>,
   note: '',
   button: { label: '', url: '' },
   css: '',
@@ -62,11 +66,14 @@ export function toolsFor(design: ViewDesign, inert = false): DesignTools {
   return {
     design,
     r: (px: number) => Math.round(px * scale),
-    shows: (element: DesignElement) => design.show[element] !== false,
+    shows: (element: DesignElement) => shownIn(design, element),
     font: FONT_STACKS[design.font] || fonts.sans,
     inert,
   };
 }
+
+export const shownIn = (design: ViewDesign, element: DesignElement) =>
+  design.show[element] === undefined ? !OFF_BY_DEFAULT.includes(element) : design.show[element] !== false;
 
 export function withDefaults(design: Partial<ViewDesign> | null | undefined): ViewDesign {
   const base = { ...FALLBACK_DESIGN, ...(design || {}) };
@@ -132,6 +139,8 @@ export const ELEMENT_LABELS: Record<DesignElement, () => string> = {
   frame: () => t('Einbetten'),
   original: () => t('Original öffnen'),
   reactions: () => t('Reaktionen'),
+  comments: () => t('Kommentare'),
+  palette: () => t('Farbpalette'),
   footer: () => t('Fußzeile mit Links'),
 };
 

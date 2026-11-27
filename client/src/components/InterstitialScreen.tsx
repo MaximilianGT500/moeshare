@@ -7,13 +7,22 @@ import ArrowForwardRounded from '@mui/icons-material/ArrowForwardRounded';
 import LinkRounded from '@mui/icons-material/LinkRounded';
 import type { InterstitialInfo, SiteInfo } from '../lib/types';
 import { formatDateTime } from '../lib/format';
-import { t } from '../lib/i18n';
+import { locale, t } from '../lib/i18n';
 import { mix } from '../lib/color';
 import { AmbientBackdrop } from './Ambient';
 import { BrandMark } from './BrandMark';
 import { SiteFooter } from './SiteFooter';
 import { ThemeToggleButton } from './ThemeToggle';
 import { c, ease, elevation, fonts, radius } from '../theme/tokens';
+
+function languageName(code: string) {
+  try {
+    const name = new Intl.DisplayNames([locale], { type: 'language' }).of(code);
+    return name && name.toLowerCase() !== code.toLowerCase() ? name : code;
+  } catch {
+    return code;
+  }
+}
 
 function splitUrl(url: string) {
   const match = /^(https?:\/\/)([^/?#]+)(.*)$/i.exec(url);
@@ -67,7 +76,15 @@ export function InterstitialScreen({ site, info }: { site: SiteInfo; info: Inter
               >
                 <LinkRounded />
               </Box>
-              <Typography variant="body2">{t('Dieser Kurzlink führt zu')}</Typography>
+              <Typography variant="body2">
+                {info.via === 'ios'
+                  ? t('Auf iPhone und iPad führt dieser Kurzlink zu')
+                  : info.via === 'android'
+                    ? t('Auf Android führt dieser Kurzlink zu')
+                    : info.via
+                      ? t('In deiner Sprache ({language}) führt dieser Kurzlink zu', { language: languageName(info.via) })
+                      : t('Dieser Kurzlink führt zu')}
+              </Typography>
             </Box>
             <Typography
               component="h1"

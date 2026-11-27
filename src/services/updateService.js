@@ -30,6 +30,8 @@ const blank = () => ({
   notes: { de: [], en: [] },
   security: false,
   yanked: false,
+  supported: true,
+  minimum: null,
   behind: 0,
   markdown: null,
   releases: [],
@@ -143,6 +145,8 @@ async function fromPulse() {
     notes: { de: bullets, en: [] },
     security: found.security === true,
     yanked: found.yanked === true,
+    supported: found.supported !== false,
+    minimum: typeof found.minimum === 'string' ? found.minimum : null,
     behind: Number.isInteger(found.behind) ? found.behind : releases.length,
     markdown: latest.notes,
     releases: releases.length ? releases : [latest],
@@ -158,7 +162,16 @@ async function fetchLatest() {
     });
     if (found) return found;
   }
-  return { ...(await fetchWebsite()), yanked: false, behind: 0, markdown: null, releases: [], source: 'website' };
+  return {
+    ...(await fetchWebsite()),
+    yanked: false,
+    supported: true,
+    minimum: null,
+    behind: 0,
+    markdown: null,
+    releases: [],
+    source: 'website',
+  };
 }
 
 async function fetchWebsite() {
@@ -322,6 +335,8 @@ function details(language) {
     update,
     security: update && state.security,
     yanked: state.yanked,
+    supported: state.supported !== false,
+    minimum: state.minimum || null,
     behind: update ? Math.max(1, state.behind || releases.length) : 0,
     releases: update ? releases.filter((entry) => newer(entry.version, config.version)) : [],
     checkedAt: state.checkedAt || 0,
@@ -348,6 +363,8 @@ async function info(language = 'de') {
     error: off ? null : state.error,
     changelog: (!off && state.changelog) || CHANGELOG,
     yanked: !off && state.yanked === true,
+    supported: off || state.supported !== false,
+    minimum: off ? null : state.minimum || null,
     behind: off || !available ? 0 : Math.max(1, state.behind || 1),
     via: off ? null : state.source,
     details: off ? null : details(language),
@@ -367,12 +384,15 @@ function describe(error) {
 function notice() {
   if (disabledBy() || !state.latest) return null;
   const available = newer(state.latest, config.version);
-  if (!available && !state.yanked) return null;
+  const unsupported = state.supported === false;
+  if (!available && !state.yanked && !unsupported) return null;
   return {
     version: state.latest,
     current: config.version,
     security: available && state.security,
     yanked: state.yanked === true,
+    unsupported,
+    minimum: unsupported ? state.minimum || null : null,
     changelog: state.changelog || CHANGELOG,
   };
 }

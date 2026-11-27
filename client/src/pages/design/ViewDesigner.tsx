@@ -22,6 +22,7 @@ import {
   BACKGROUND_LABELS,
   CORNER_LABELS,
   ELEMENT_LABELS,
+  shownIn,
   FALLBACK_DESIGN,
   FONT_LABELS,
   FONT_STACKS,
@@ -448,10 +449,7 @@ export function ViewDesigner({ user, data }: { user: SessionUser; data: ViewDesi
                   <FormControlLabel
                     key={element}
                     control={
-                      <Checkbox
-                        checked={draft.show[element] !== false}
-                        onChange={(event) => toggleElement(element, event.target.checked)}
-                      />
+                      <Checkbox checked={shownIn(draft, element)} onChange={(event) => toggleElement(element, event.target.checked)} />
                     }
                     label={ELEMENT_LABELS[element]()}
                     disabled={readOnly}

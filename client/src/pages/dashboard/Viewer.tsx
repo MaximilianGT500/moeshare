@@ -29,13 +29,19 @@ import StarRounded from '@mui/icons-material/StarRounded';
 import StarBorderRounded from '@mui/icons-material/StarBorderRounded';
 import CodeRounded from '@mui/icons-material/CodeRounded';
 import ForwardToInboxRounded from '@mui/icons-material/ForwardToInboxRounded';
+import WallpaperRounded from '@mui/icons-material/WallpaperRounded';
+import MenuItemField from '@mui/material/MenuItem';
+import TextField from '@mui/material/TextField';
+import { PaletteSwatches, audioByline, hasAudioMeta } from '../../components/MediaExtras';
+import { Comments } from '../../components/Comments';
+import { readBoot } from '../../lib/boot';
 import { isSealedName } from '../../lib/sealed';
 import { QrDialog } from '../../components/QrDialog';
 import MenuItem from '@mui/material/MenuItem';
-import type { CameraInfo, FileItem, Subtitle } from '../../lib/types';
+import type { AudioMeta, CameraInfo, DashboardBoot, FileItem, Subtitle } from '../../lib/types';
 import { hasCamera, settingsText, takenText } from '../../lib/camera';
 import { PeaksWaveform } from '../../components/PeaksWaveform';
-import { extensionOf, formatBytes, formatDateTime, formatNumber, parseServerDate, relativeFromServer } from '../../lib/format';
+import { extensionOf, formatBytes, formatDate, formatDateTime, formatNumber, parseServerDate, relativeFromServer } from '../../lib/format';
 import { shareFormats } from '../../lib/share';
 import { meaningfulColor, mix } from '../../lib/color';
 import { CopyIconButton, CopyTextButton } from '../../components/CopyButton';
@@ -71,6 +77,7 @@ interface ViewerProps {
   onVersions?: (file: FileItem) => void;
   onClip?: (file: FileItem) => void;
   onSubtitles?: (file: FileItem) => void;
+  onPoster?: (file: FileItem) => void;
   onWarning?: (file: FileItem) => void;
   onStar?: (file: FileItem) => void;
   onCodes?: (file: FileItem) => void;
@@ -159,6 +166,77 @@ function CameraRows({ camera }: { camera: CameraInfo }) {
   );
 }
 
+function AudioRows({ meta }: { meta: AudioMeta }) {
+  return (
+    <>
+      {meta.title && <DetailRow label={t('Titel')}>{meta.title}</DetailRow>}
+      {(meta.artist || meta.albumArtist) && <DetailRow label={t('Interpret')}>{meta.artist || meta.albumArtist}</DetailRow>}
+      {meta.album && (
+        <DetailRow label={t('Album')}>
+          {meta.album}
+          {meta.track ? (
+            <Typography variant="caption" component="p" sx={{ color: 'text.secondary' }}>
+              {t('Titel {track}', { track: meta.track })}
+            </Typography>
+          ) : null}
+        </DetailRow>
+      )}
+      {meta.year && <DetailRow label={t('Jahr')}>{meta.year}</DetailRow>}
+      {meta.genre && <DetailRow label={t('Genre')}>{meta.genre}</DetailRow>}
+    </>
+  );
+}
+
+const RESIZE_FORMATS = ['', 'webp', 'avif', 'jpeg', 'png'] as const;
+
+function ResizeLink({ file }: { file: FileItem }) {
+  const [width, setWidth] = useState('');
+  const [format, setFormat] = useState<(typeof RESIZE_FORMATS)[number]>('');
+  const size = Math.round(Number(width));
+  const query = new URLSearchParams();
+  if (width.trim() && Number.isFinite(size) && size >= 1 && size <= 4096) query.set('w', String(size));
+  if (format) query.set('format', format);
+  const value = query.toString() ? `${file.urls.direct}${file.urls.direct.includes('?') ? '&' : '?'}${query}` : '';
+  return (
+    <Box sx={{ p: 1.5, borderRadius: `${radius.tile}px`, bgcolor: c.surfaceContainerHigh, display: 'grid', gap: 1.25 }}>
+      <Typography variant="caption" component="p" sx={{ color: 'text.secondary' }}>
+        {t('Andere Größe oder anderes Format, direkt über die Adresse')}
+      </Typography>
+      <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1 }}>
+        <TextField
+          size="small"
+          label={t('Breite')}
+          value={width}
+          onChange={(event) => setWidth(event.target.value.replace(/[^\d]/g, '').slice(0, 4))}
+          placeholder={file.width ? String(Math.min(file.width, 1200)) : '1200'}
+          slotProps={{ htmlInput: { inputMode: 'numeric' }, input: { endAdornment: <Typography variant="caption">px</Typography> } }}
+        />
+        <TextField
+          size="small"
+          select
+          label={t('Format')}
+          value={format}
+          onChange={(event) => setFormat(event.target.value as typeof format)}
+        >
+          {RESIZE_FORMATS.map((entry) => (
+            <MenuItemField key={entry || 'same'} value={entry}>
+              {entry ? entry.toUpperCase() : t('Wie das Original')}
+            </MenuItemField>
+          ))}
+        </TextField>
+      </Box>
+      {value && (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Typography variant="body2" noWrap sx={{ flex: 1, minWidth: 0, fontFamily: fonts.mono, fontSize: '0.75rem' }} title={value}>
+            {value}
+          </Typography>
+          <CopyIconButton value={value} size="small" />
+        </Box>
+      )}
+    </Box>
+  );
+}
+
 function FileStats({ id }: { id: number }) {
   const load = useCallback((days: number) => fetchFileStats(id, days), [id]);
   return <StatsPanel load={load} compact />;
@@ -216,7 +294,24 @@ function InfoPanel({ file, stats }: { file: FileItem; stats: boolean }) {
           </DetailRow>
         )}
         {file.scan === 'clean' && <DetailRow label={t('Virenscan')}>{t('Geprüft, nichts gefunden')}</DetailRow>}
+        {file.retentionAt && file.expiresAt ? (
+          <DetailRow label={t('Läuft ab')}>
+            {formatDate(new Date(file.expiresAt))}
+            <Typography variant="caption" component="p" sx={{ color: 'text.secondary' }}>
+              {t('Lange nicht aufgerufen. Mit einem Stern behältst du die Datei.')}
+            </Typography>
+          </DetailRow>
+        ) : null}
+        {file.type === 'audio' && hasAudioMeta(file.audio) && <AudioRows meta={file.audio} />}
+        {file.type === 'video' && file.poster ? (
+          <DetailRow label={t('Vorschaubild')}>{file.poster.custom ? t('Eigenes Bild') : t('Selbst gewählt')}</DetailRow>
+        ) : null}
         {hasCamera(file.camera) && <CameraRows camera={file.camera} />}
+        {file.palette && file.palette.length > 0 && (
+          <DetailRow label={t('Farben')}>
+            <PaletteSwatches colors={file.palette} size={24} />
+          </DetailRow>
+        )}
         {file.alt && <DetailRow label={t('Alternativtext')}>{file.alt}</DetailRow>}
         <DetailRow label={t('Dateiname')}>
           <Box component="span" sx={{ fontFamily: fonts.mono, fontSize: '0.8rem' }}>
@@ -260,7 +355,16 @@ function InfoPanel({ file, stats }: { file: FileItem; stats: boolean }) {
             />
           </Box>
         ))}
+        {file.type === 'image' && !isSealedName(file.filename) && readBoot<DashboardBoot>().options?.transforms && (
+          <ResizeLink file={file} />
+        )}
       </Box>
+
+      {readBoot<DashboardBoot>().options?.comments !== 'off' && !isSealedName(file.filename) && !file.deletedAt && (
+        <Box sx={{ mt: 3 }}>
+          <Comments key={file.id} base={`/view/${encodeURIComponent(file.slug)}`} />
+        </Box>
+      )}
 
       {stats && (
         <>
@@ -313,6 +417,8 @@ function AudioWithPeaks({ file }: { file: FileItem }) {
 function MediaCard({ file }: { file: FileItem }) {
   const isAudio = file.type === 'audio';
   const font = isFontName(file.filename) && !file.blocked;
+  const meta = isAudio && hasAudioMeta(file.audio) ? file.audio : null;
+  const cover = isAudio && file.audio && file.audio.cover ? file.urls.preview : null;
   return (
     <Box
       sx={{
@@ -327,6 +433,21 @@ function MediaCard({ file }: { file: FileItem }) {
     >
       {font ? (
         <FontSample url={fileContentUrl(file.id)} name={file.originalName || file.filename} />
+      ) : cover ? (
+        <Box
+          component="img"
+          src={cover}
+          alt={t('Cover')}
+          sx={{
+            width: 'min(240px, 60vw)',
+            aspectRatio: '1',
+            objectFit: 'cover',
+            mx: 'auto',
+            display: 'block',
+            borderRadius: `${radius.lg}px`,
+            boxShadow: elevation[3],
+          }}
+        />
       ) : (
         <Box
           sx={{
@@ -344,12 +465,25 @@ function MediaCard({ file }: { file: FileItem }) {
           {fileIcon(file.filename, file.type)}
         </Box>
       )}
-      <Typography variant="h5" component="p" sx={{ mt: 2.5, fontWeight: 800 }}>
-        .{extensionOf(file.filename) || 'datei'}
-      </Typography>
-      <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
-        {formatBytes(file.sizeBytes)}
-      </Typography>
+      {meta && meta.title ? (
+        <>
+          <Typography variant="h5" component="p" sx={{ mt: 2.5, fontWeight: 800, overflowWrap: 'anywhere' }}>
+            {meta.title}
+          </Typography>
+          <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5, overflowWrap: 'anywhere' }}>
+            {[audioByline(meta), formatBytes(file.sizeBytes)].filter(Boolean).join(' · ')}
+          </Typography>
+        </>
+      ) : (
+        <>
+          <Typography variant="h5" component="p" sx={{ mt: 2.5, fontWeight: 800 }}>
+            .{extensionOf(file.filename) || 'datei'}
+          </Typography>
+          <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
+            {formatBytes(file.sizeBytes)}
+          </Typography>
+        </>
+      )}
       {isAudio ? (
         <AudioWithPeaks file={file} />
       ) : (
@@ -397,6 +531,7 @@ export function Viewer({
   onVersions,
   onClip,
   onSubtitles,
+  onPoster,
   onWarning,
   onStar,
   onCodes,
@@ -702,7 +837,7 @@ export function Viewer({
               </IconButton>
             </Tooltip>
           )}
-          {(phone || onVersions || onWarning || ((onClip || onSubtitles) && file.type === 'video')) && (
+          {(phone || onVersions || onWarning || ((onClip || onSubtitles || onPoster) && file.type === 'video')) && (
             <Tooltip title={t('Mehr')}>
               <IconButton
                 aria-label={t('Weitere Aktionen')}
@@ -809,6 +944,19 @@ export function Viewer({
                 <SubtitlesOutlined />
               </ListItemIcon>
               {t('Untertitel')}
+            </MenuItem>
+          )}
+          {onPoster && file.type === 'video' && (
+            <MenuItem
+              onClick={() => {
+                setMoreAnchor(null);
+                onPoster(file);
+              }}
+            >
+              <ListItemIcon>
+                <WallpaperRounded />
+              </ListItemIcon>
+              {t('Vorschaubild wählen')}
             </MenuItem>
           )}
           {onVersions && (

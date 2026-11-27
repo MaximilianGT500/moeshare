@@ -29,7 +29,9 @@ import LinkOffRounded from '@mui/icons-material/LinkOffRounded';
 import FactCheckOutlined from '@mui/icons-material/FactCheckOutlined';
 import SignpostOutlined from '@mui/icons-material/SignpostOutlined';
 import { ApiError, checkLink, createLink, deleteLink, listLinks, updateLink } from '../../lib/api';
-import type { ExpiryChoice, ShortLink, UploadOptionsInfo, UrlStyle } from '../../lib/types';
+import type { ExpiryChoice, LinkTargets, ShortLink, UploadOptionsInfo, UrlStyle } from '../../lib/types';
+import AltRouteRounded from '@mui/icons-material/AltRouteRounded';
+import TranslateRounded from '@mui/icons-material/TranslateRounded';
 import { formatDateTime, formatNumber, relativeMs } from '../../lib/format';
 import { t, tn } from '../../lib/i18n';
 import { useDebouncedValue, useInView } from '../../lib/hooks';
@@ -75,6 +77,124 @@ function InterstitialSwitch({
   );
 }
 
+interface TargetsDraft {
+  ios: string;
+  android: string;
+  languages: Array<{ code: string; url: string }>;
+}
+
+const MAX_LANGUAGES = 10;
+
+const targetsDraft = (targets?: LinkTargets | null): TargetsDraft => ({
+  ios: targets?.ios || '',
+  android: targets?.android || '',
+  languages: Object.entries(targets?.languages || {}).map(([code, url]) => ({ code, url })),
+});
+
+function targetsOfDraft(draft: TargetsDraft): LinkTargets | null {
+  const languages = Object.fromEntries(
+    draft.languages
+      .filter((entry) => entry.code.trim() && entry.url.trim())
+      .map((entry) => [entry.code.trim().toLowerCase(), entry.url.trim()])
+  );
+  const result = { ios: draft.ios.trim() || null, android: draft.android.trim() || null, languages };
+  return result.ios || result.android || Object.keys(languages).length ? result : null;
+}
+
+const sameTargets = (a: LinkTargets | null | undefined, b: LinkTargets | null | undefined) =>
+  JSON.stringify(a ? targetsOfDraft(targetsDraft(a)) : null) === JSON.stringify(b ? targetsOfDraft(targetsDraft(b)) : null);
+
+function TargetsFields({ value, onChange, error }: { value: TargetsDraft; onChange: (next: TargetsDraft) => void; error?: string }) {
+  const [open, setOpen] = useState(() => Boolean(targetsOfDraft(value)));
+  const used = Boolean(targetsOfDraft(value));
+  const setLanguage = (index: number, patch: Partial<{ code: string; url: string }>) =>
+    onChange({ ...value, languages: value.languages.map((entry, position) => (position === index ? { ...entry, ...patch } : entry)) });
+  return (
+    <Box>
+      <Button
+        onClick={() => setOpen((current) => !current)}
+        startIcon={<AltRouteRounded />}
+        endIcon={<ExpandMoreRounded sx={{ transform: open ? 'rotate(180deg)' : 'none', transition: `transform 200ms ${css.standard}` }} />}
+        aria-expanded={open}
+      >
+        {used ? t('Ziele nach Gerät und Sprache (aktiv)') : t('Ziele nach Gerät und Sprache')}
+      </Button>
+      <Collapse in={open}>
+        <Box sx={{ display: 'grid', gap: 1.5, pt: 1.5 }}>
+          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+            {t('Gerät geht vor Sprache. Wer zu keiner Angabe passt, landet beim normalen Ziel.')}
+          </Typography>
+          <TextField
+            size="small"
+            label={t('Auf iPhone und iPad')}
+            placeholder="https://apps.apple.com/…"
+            value={value.ios}
+            onChange={(event) => onChange({ ...value, ios: event.target.value })}
+            slotProps={{ htmlInput: { inputMode: 'url', spellCheck: false, autoComplete: 'off' } }}
+          />
+          <TextField
+            size="small"
+            label={t('Auf Android')}
+            placeholder="https://play.google.com/…"
+            value={value.android}
+            onChange={(event) => onChange({ ...value, android: event.target.value })}
+            slotProps={{ htmlInput: { inputMode: 'url', spellCheck: false, autoComplete: 'off' } }}
+          />
+          {value.languages.map((entry, index) => (
+            <Box key={index} sx={{ display: 'grid', gridTemplateColumns: '96px minmax(0, 1fr) auto', gap: 1, alignItems: 'start' }}>
+              <TextField
+                size="small"
+                label={t('Sprache')}
+                placeholder="en"
+                value={entry.code}
+                onChange={(event) => setLanguage(index, { code: event.target.value.replace(/[^A-Za-z0-9-]/g, '').slice(0, 12) })}
+                slotProps={{
+                  htmlInput: { spellCheck: false, autoCapitalize: 'off', 'aria-label': t('Sprachcode {number}', { number: index + 1 }) },
+                }}
+              />
+              <TextField
+                size="small"
+                label={t('Ziel')}
+                placeholder="https://example.com/en"
+                value={entry.url}
+                onChange={(event) => setLanguage(index, { url: event.target.value })}
+                slotProps={{ htmlInput: { inputMode: 'url', spellCheck: false, autoComplete: 'off' } }}
+              />
+              <Tooltip title={t('Entfernen')}>
+                <IconButton
+                  aria-label={t('Sprache {code} entfernen', { code: entry.code || String(index + 1) })}
+                  onClick={() => onChange({ ...value, languages: value.languages.filter((_entry, position) => position !== index) })}
+                  sx={{ mt: 0.25 }}
+                >
+                  <DeleteOutlineRounded fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            </Box>
+          ))}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+            <Button
+              size="small"
+              startIcon={<TranslateRounded />}
+              onClick={() => onChange({ ...value, languages: [...value.languages, { code: '', url: '' }] })}
+              disabled={value.languages.length >= MAX_LANGUAGES}
+            >
+              {t('Sprache hinzufügen')}
+            </Button>
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+              {t('Zum Beispiel de, en oder pt-br. Es zählt die Spracheinstellung im Browser.')}
+            </Typography>
+          </Box>
+          {error && (
+            <Typography variant="body2" sx={{ color: c.error }}>
+              {error}
+            </Typography>
+          )}
+        </Box>
+      </Collapse>
+    </Box>
+  );
+}
+
 export function brokenText(link: ShortLink) {
   const check = link.check;
   if (!check || !check.brokenSince) return '';
@@ -101,6 +221,7 @@ function LinkEditDialog({
   const [title, setTitle] = useState('');
   const [code, setCode] = useState('');
   const [interstitial, setInterstitial] = useState(false);
+  const [targets, setTargets] = useState<TargetsDraft>(targetsDraft(null));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
 
@@ -110,6 +231,7 @@ function LinkEditDialog({
     setTitle(link.title || '');
     setCode(link.code);
     setInterstitial(link.interstitial);
+    setTargets(targetsDraft(link.targets));
     setErrors({});
   }, [link]);
 
@@ -119,10 +241,12 @@ function LinkEditDialog({
     setBusy(true);
     setErrors({});
     try {
-      const data: { url?: string; title?: string | null; code?: string; interstitial?: boolean } = {};
+      const data: { url?: string; title?: string | null; code?: string; interstitial?: boolean; targets?: LinkTargets | null } = {};
       if (url.trim() !== link.url) data.url = url.trim();
       if ((title.trim() || null) !== (link.title || null)) data.title = title.trim() || null;
       if (interstitial !== link.interstitial) data.interstitial = interstitial;
+      const nextTargets = targetsOfDraft(targets);
+      if (!sameTargets(nextTargets, link.targets)) data.targets = nextTargets;
       if (info.customAddresses && code.trim() && code.trim() !== link.code) data.code = code.trim();
       const result = Object.keys(data).length ? await updateLink(link.id, data) : { link };
       onSaved(result.link);
@@ -174,6 +298,7 @@ function LinkEditDialog({
             />
           )}
           <InterstitialSwitch info={info} checked={interstitial} onChange={setInterstitial} />
+          <TargetsFields value={targets} onChange={setTargets} error={errors.targets} />
           {errors.form && (
             <Typography variant="body2" sx={{ color: c.error }}>
               {errors.form}
@@ -221,6 +346,8 @@ export function LinkDialog({
   const [code, setCode] = useState('');
   const [codeError, setCodeError] = useState('');
   const [interstitial, setInterstitial] = useState(false);
+  const [targets, setTargets] = useState<TargetsDraft>(targetsDraft(null));
+  const [targetsError, setTargetsError] = useState('');
   const [more, setMore] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -244,6 +371,8 @@ export function LinkDialog({
     setCode('');
     setCodeError('');
     setInterstitial(false);
+    setTargets(targetsDraft(null));
+    setTargetsError('');
     setMore(false);
   };
 
@@ -275,7 +404,7 @@ export function LinkDialog({
           domain: domain || undefined,
           code: code.trim() || undefined,
         },
-        { interstitial }
+        { interstitial, targets: targetsOfDraft(targets) }
       );
       setCreated(result.url);
       reset();
@@ -284,6 +413,9 @@ export function LinkDialog({
       if (err instanceof ApiError && err.field === 'code') {
         setMore(true);
         setCodeError(err.message);
+      } else if (err instanceof ApiError && err.field === 'targets') {
+        setMore(true);
+        setTargetsError(err.message);
       } else setError(err instanceof ApiError ? err.message : t('Der Link konnte nicht gekürzt werden.'));
     } finally {
       setBusy(false);
@@ -392,6 +524,14 @@ export function LinkDialog({
                 {!code.trim() && <UrlStyleSelect value={style} onChange={setStyle} styles={LINK_STYLES} includeDefault={t('Standard')} />}
                 <DomainSelect value={domain} onChange={setDomain} domains={info.domains} includeDefault={t('Standard')} />
                 <InterstitialSwitch info={info} checked={interstitial} onChange={setInterstitial} />
+                <TargetsFields
+                  value={targets}
+                  onChange={(next) => {
+                    setTargets(next);
+                    setTargetsError('');
+                  }}
+                  error={targetsError}
+                />
               </Box>
             </Collapse>
           </Box>
@@ -511,6 +651,12 @@ function LinkRow({
             <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
               <SignpostOutlined sx={{ fontSize: 14 }} />
               {t('mit Zwischenseite')}
+            </Box>
+          )}
+          {link.targets && (
+            <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+              <AltRouteRounded sx={{ fontSize: 14 }} />
+              {t('Ziel nach Gerät oder Sprache')}
             </Box>
           )}
           {link.blocked && (

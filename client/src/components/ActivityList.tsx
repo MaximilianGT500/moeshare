@@ -44,6 +44,10 @@ import DnsRounded from '@mui/icons-material/DnsRounded';
 import CampaignRounded from '@mui/icons-material/CampaignRounded';
 import GavelRounded from '@mui/icons-material/GavelRounded';
 import MoveToInboxRounded from '@mui/icons-material/MoveToInboxRounded';
+import FilterAltOutlined from '@mui/icons-material/FilterAltOutlined';
+import QrCode2Rounded from '@mui/icons-material/QrCode2Rounded';
+import ChatBubbleOutlineRounded from '@mui/icons-material/ChatBubbleOutlineRounded';
+import AutoDeleteOutlined from '@mui/icons-material/AutoDeleteOutlined';
 import type { AuditEvent } from '../lib/types';
 import { formatDateTime, formatNumber, formatRelative } from '../lib/format';
 import { providerIcon, providerLabel } from '../lib/providers';
@@ -457,6 +461,53 @@ function describeEvent(event: AuditEvent): Described {
         title: t('Eigener Pfad von einem Admin entfernt'),
         detail: d.path ? `/${str(d.path)}/` : undefined,
         tone: 'bad',
+      };
+    case 'sort_rules_updated':
+      return {
+        icon: <FilterAltOutlined />,
+        title: d.created ? t('Sortierregel angelegt') : d.removed ? t('Sortierregel entfernt') : t('Sortierregel geändert'),
+        detail: d.created ? str(d.created) : d.changed ? str(d.changed) : undefined,
+        tone: 'neutral',
+      };
+    case 'phone_link_created':
+      return {
+        icon: <QrCode2Rounded />,
+        title: t('QR-Code zum Hochladen vom Handy erstellt'),
+        detail: d.album ? t('Album „{album}“', { album: str(d.album) }) : undefined,
+        tone: 'neutral',
+      };
+    case 'comment_removed':
+      return {
+        icon: <ChatBubbleOutlineRounded />,
+        title: d.kind === 'album' ? t('Kommentar unter einem Album gelöscht') : t('Kommentar unter einer Datei gelöscht'),
+        detail: d.excerpt ? `„${str(d.excerpt)}“` : undefined,
+        tone: 'warn',
+      };
+    case 'terms_accepted':
+      return {
+        icon: <GavelRounded />,
+        title: t('Nutzungsbedingungen zugestimmt'),
+        detail: d.version ? t('Fassung {version}', { version: String(d.version) }) : undefined,
+        tone: 'good',
+      };
+    case 'terms_published':
+      return {
+        icon: <GavelRounded />,
+        title:
+          d.enabled === false
+            ? t('Nutzungsbedingungen abgeschaltet')
+            : d.minor
+              ? t('Nutzungsbedingungen korrigiert')
+              : t('Neue Nutzungsbedingungen veröffentlicht'),
+        detail: d.version && d.enabled !== false ? t('Fassung {version}', { version: String(d.version) }) : undefined,
+        tone: 'neutral',
+      };
+    case 'retention_applied':
+      return {
+        icon: <AutoDeleteOutlined />,
+        title: t('Regel für unbenutzte Dateien angewendet'),
+        detail: t('{files} markiert, {released} wieder freigegeben', { files: String(d.files ?? 0), released: String(d.released ?? 0) }),
+        tone: 'neutral',
       };
     default:
       return { icon: <HistoryRounded />, title: event.action, tone: 'neutral' };

@@ -52,6 +52,10 @@ const discordApp = require('../services/discordAppService');
 const telegram = require('../services/telegramService');
 const pulse = require('../services/pulseService');
 const inventory = require('../services/inventoryService');
+const doctor = require('../services/doctorService');
+const transforms = require('../services/transformService');
+const terms = require('../services/termsService');
+const retention = require('../services/retentionService');
 
 const router = express.Router();
 const admin = requireApi({ admin: true });
@@ -234,6 +238,7 @@ router.get('/admin', requirePage({ admin: true }), async (req, res) => {
       pulse: { ...pulse.state(req.language), defaults: await supportDefaults(req.user) },
       announcements: await announcementService.list(),
       videos: { running: videoService.running(), ffmpeg: media.ffmpegAvailable },
+      doctor: doctor.recent(req.language),
     },
   });
 });
@@ -299,6 +304,44 @@ router.post('/api/admin/storage/migrate', adminSudo, async (req, res) => {
     .then((result) => Object.assign(migration, result, { finishedAt: Date.now() }))
     .catch((error) => Object.assign(migration, { error: error.message, finishedAt: Date.now() }));
   res.status(202).json({ ok: true, migration });
+});
+
+router.get('/api/admin/doctor', admin, async (req, res) => {
+  res.json(await doctor.run({ req, clientNow: req.query.now, language: req.language }));
+});
+
+router.get('/api/admin/transforms', admin, async (req, res) => {
+  res.json({ enabled: transforms.enabled(), ...(await transforms.usage()) });
+});
+
+router.post('/api/admin/transforms/clear', admin, async (req, res) => {
+  await transforms.clear();
+  res.json({ ok: true, ...(await transforms.usage()) });
+});
+
+router.get('/api/admin/terms', admin, async (req, res) => {
+  res.json(await terms.stats());
+});
+
+router.post('/api/admin/terms', adminSudo, async (req, res) => {
+  const body = req.body || {};
+  const published = await terms.publish({ text: body.text, minor: body.minor === true, enabled: body.enabled !== false }, req.user.id);
+  audit.log('terms_published', {
+    userId: req.user.id,
+    req,
+    details: { version: published.version, minor: !published.bumped, enabled: published.enabled },
+  });
+  res.json({ ok: true, ...(await terms.stats()) });
+});
+
+router.get('/api/admin/retention', admin, async (req, res) => {
+  res.json(await retention.preview());
+});
+
+router.post('/api/admin/retention/run', admin, async (req, res) => {
+  const done = await retention.run({ force: true });
+  audit.log('retention_applied', { userId: req.user.id, req, details: { files: done.marked || 0, released: done.released || 0 } });
+  res.json({ ok: true, done, preview: await retention.preview() });
 });
 
 router.get('/api/admin/storage/analysis', admin, async (req, res) => {

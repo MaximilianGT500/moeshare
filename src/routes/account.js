@@ -35,6 +35,8 @@ const legalService = require('../services/legalService');
 const push = require('../services/pushService');
 const telegram = require('../services/telegramService');
 const uploads = require('../services/uploadService');
+const sorting = require('../services/sortService');
+const terms = require('../services/termsService');
 const { deviceLabel } = require('../lib/request');
 const { limiter } = require('../lib/limiter');
 const { filePaths } = require('../lib/storage');
@@ -90,6 +92,10 @@ const OWN_ACTIVITY = [
   'avatar_revoked',
   'link_path_changed',
   'link_path_revoked',
+  'sort_rules_updated',
+  'phone_link_created',
+  'terms_accepted',
+  'comment_removed',
 ];
 
 const mfaRequired = (user) => {
@@ -165,6 +171,7 @@ async function overview(req) {
     telegram: await telegram.accountState(req.user),
     activity,
     setup: sessions.pendingSetup(req.user),
+    terms: terms.active() ? { ...terms.current(), mine: terms.stateOf(row) } : null,
     preferences: await preferences.get(row.id),
     email,
     domains: domainState,
@@ -216,6 +223,12 @@ router.get('/account', requirePage(), async (req, res) => {
 
 router.get('/api/account', signedIn, async (req, res) => {
   res.json(await overview(req));
+});
+
+router.post('/api/account/terms', signedIn, async (req, res) => {
+  const done = await terms.accept(req.user.id, (req.body || {}).version);
+  if (done.accepted) audit.log('terms_accepted', { userId: req.user.id, req, details: { version: done.version } });
+  res.json({ ok: true, ...done, redirect: '/dashboard' });
 });
 
 router.patch('/api/account/preferences', signedIn, async (req, res) => {
@@ -572,6 +585,36 @@ router.delete('/api/account/autoshare/:id', signedIn, async (req, res) => {
 
 router.post('/api/account/autoshare/:id/test', signedIn, shareTestLimiter, async (req, res) => {
   res.json({ ok: true, rule: await autoShare.test(req.user, req.params.id) });
+});
+
+router.get('/api/account/rules', signedIn, async (req, res) => {
+  res.json({ rules: await sorting.list(req.user.id), max: sorting.MAX_RULES, types: sorting.TYPES, sources: sorting.SOURCES });
+});
+
+router.post('/api/account/rules', signedIn, async (req, res) => {
+  const rule = await sorting.create(req.user.id, req.body || {});
+  audit.log('sort_rules_updated', { userId: req.user.id, req, details: { created: rule.name } });
+  res.json({ ok: true, rule });
+});
+
+router.post('/api/account/rules/order', signedIn, async (req, res) => {
+  res.json({ ok: true, rules: await sorting.reorder(req.user.id, (req.body || {}).ids) });
+});
+
+router.post('/api/account/rules/test', signedIn, async (req, res) => {
+  res.json(await sorting.test(req.user, req.body || {}));
+});
+
+router.patch('/api/account/rules/:id', signedIn, async (req, res) => {
+  const rule = await sorting.update(req.user.id, req.params.id, req.body || {});
+  audit.log('sort_rules_updated', { userId: req.user.id, req, details: { changed: rule.name } });
+  res.json({ ok: true, rule });
+});
+
+router.delete('/api/account/rules/:id', signedIn, async (req, res) => {
+  await sorting.remove(req.user.id, req.params.id);
+  audit.log('sort_rules_updated', { userId: req.user.id, req, details: { removed: true } });
+  res.json({ ok: true });
 });
 
 router.get('/api/profile/icons', signedIn, async (req, res) => {

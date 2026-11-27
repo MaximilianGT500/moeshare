@@ -47,6 +47,8 @@ import { CaddyHint, DomainList } from './DomainTools';
 import { MetricsTools } from './MetricsTools';
 import { DiscordAppTools } from './DiscordAppTools';
 import { TelegramTools } from './TelegramTools';
+import { RetentionPreviewCard } from './RetentionTools';
+import { TermsEditor } from './TermsTools';
 import { SaveBar, SettingRow, SettingsSection, SwitchRow } from '../../components/SettingsKit';
 import { BytesField, ColorField } from '../../components/Fields';
 import { formatNumber } from '../../lib/format';
@@ -80,7 +82,7 @@ type SectionKey =
 
 const SECTIONS: Array<{ key: SectionKey; label: string; icon: ReactNode; prefixes: string[] }> = [
   { key: 'allgemein', label: t('Allgemein'), icon: <TuneRounded />, prefixes: ['site.', 'push.'] },
-  { key: 'uploads', label: t('Uploads'), icon: <CloudUploadRounded />, prefixes: ['uploads.', 'hotlink.'] },
+  { key: 'uploads', label: t('Uploads'), icon: <CloudUploadRounded />, prefixes: ['uploads.', 'hotlink.', 'retention.'] },
   { key: 'bilder', label: t('Bilder'), icon: <PhotoSizeSelectLargeRounded />, prefixes: ['images.'] },
   {
     key: 'funktionen',
@@ -98,6 +100,7 @@ const SECTIONS: Array<{ key: SectionKey; label: string; icon: ReactNode; prefixe
       'export.',
       'requests.',
       'reactions.',
+      'comments.',
       'frames.',
       'autoShare.',
       'telegram.',
@@ -984,6 +987,13 @@ export function SettingsPanel({
             t('Hochladen per Link'),
             t('Im Dashboard Dateien direkt aus dem Internet übernehmen. Adressen im internen Netz sind immer gesperrt.')
           )}
+          {toggle(
+            'uploads.phone',
+            t('Vom Handy hochladen'),
+            t(
+              'Im Dashboard erscheint ein QR-Code. Wer ihn mit dem Handy scannt, lädt ohne Anmeldung Fotos und Dateien ins eigene Konto, bis zu 15 Minuten lang.'
+            )
+          )}
         </SettingsSection>
         <SettingsSection
           title={t('Große Dateien')}
@@ -1022,6 +1032,44 @@ export function SettingsPanel({
               'Lädt jemand dieselbe Datei mehrmals hoch, liegt sie nur einmal auf der Festplatte und zählt nur einmal. Gilt für Dateien auf dem Server, nicht in S3.'
             )
           )}
+        </SettingsSection>
+        <SettingsSection
+          title={t('Unbenutzte Dateien')}
+          description={t(
+            'Dateien, die lange niemand aufgerufen oder heruntergeladen hat, laufen nach einer Vorwarnung ab und landen im Papierkorb. Favoriten, Dateien mit eigener Ablaufzeit, gesperrte und geplante Dateien bleiben.'
+          )}
+        >
+          {select('retention.unused', t('Ablaufen lassen'), t('Gezählt ab dem letzten Aufruf. Braucht die Statistik.'), [
+            { value: 'off', label: t('Nie') },
+            { value: '30d', label: t('Nach 30 Tagen ohne Aufruf') },
+            { value: '60d', label: t('Nach 60 Tagen ohne Aufruf') },
+            { value: '90d', label: t('Nach 90 Tagen ohne Aufruf') },
+            { value: '180d', label: t('Nach einem halben Jahr ohne Aufruf') },
+            { value: '365d', label: t('Nach einem Jahr ohne Aufruf') },
+            { value: '730d', label: t('Nach zwei Jahren ohne Aufruf') },
+          ])}
+          {select(
+            'retention.grace',
+            t('Vorwarnung'),
+            t('So lange haben die Besitzer Zeit, die Dateien zu behalten. Sie bekommen dazu eine E-Mail oder Push-Nachricht.'),
+            [
+              { value: '3d', label: t('3 Tage') },
+              { value: '7d', label: t('7 Tage') },
+              { value: '14d', label: t('14 Tage') },
+              { value: '30d', label: t('30 Tage') },
+            ]
+          )}
+          {toggle('retention.admins', t('Auch für Admins'), t('Ausgeschaltet bleiben die Dateien von Admins immer.'))}
+          <RetentionPreviewCard
+            dirty={changedKeys.some((key) => key.startsWith('retention.') || key === 'stats.enabled' || key === 'stats.retentionDays')}
+            version={JSON.stringify([
+              saved['retention.unused'],
+              saved['retention.grace'],
+              saved['retention.admins'],
+              saved['stats.enabled'],
+              saved['stats.retentionDays'],
+            ])}
+          />
         </SettingsSection>
         <SettingsSection
           title={t('Dateitypen')}
@@ -1129,6 +1177,32 @@ export function SettingsPanel({
             t('Original aufheben'),
             t('Das unveränderte Bild bleibt als ältere Fassung erhalten. Braucht eingeschaltete Versionen unter Uploads.')
           )}
+        </SettingsSection>
+        <SettingsSection
+          title={t('Bildgrößen über die Adresse')}
+          description={t(
+            'Mit ?w=800, ?h=600, ?fit=cover oder ?format=webp an der direkten Adresse eines Bildes liefert der Server eine passende Fassung. Passwörter, Aufruflimits und Hotlink-Schutz gelten weiter.'
+          )}
+        >
+          {toggle(
+            'images.transforms',
+            t('Andere Größen und Formate liefern'),
+            t('Gut für Websites und Foren, die kleinere Bilder brauchen.')
+          )}
+          <SettingRow
+            label={t('Zwischenspeicher')}
+            description={t('Fertige Fassungen werden aufgehoben, bis dieser Platz voll ist. Die ältesten fliegen zuerst raus.')}
+            stacked
+          >
+            <BytesField
+              label={t('Größe')}
+              value={v<number | null>('images.transformCache')}
+              onChange={(value) => set('images.transformCache', value)}
+              nullLabel={t('Standard (512 MB)')}
+              error={!!errors['images.transformCache']}
+              helperText={errors['images.transformCache']}
+            />
+          </SettingRow>
         </SettingsSection>
         <SettingsSection title={t('Wasserzeichen')}>
           {toggle(
@@ -1327,6 +1401,29 @@ export function SettingsPanel({
             t(
               'Dateien und Alben lassen sich direkt aus dem Dashboard an bis zu fünf Adressen schicken. Braucht den E-Mail-Versand weiter unten.'
             )
+          )}
+        </SettingsSection>
+        <SettingsSection
+          title={t('Kommentare')}
+          description={t(
+            'Unter Dateien und Alben. Jeder schaltet sie für seine Ansichtsseiten unter Gestalten ab oder für einzelne Dateien und Alben an und aus. Besitzer und Admins können Kommentare ausblenden und löschen.'
+          )}
+        >
+          {choice('comments.mode', t('Wer kommentieren darf'), t('Lesen dürfen alle, die die Datei sehen.'), [
+            { value: 'off', label: t('Niemand') },
+            { value: 'accounts', label: t('Mit Konto') },
+            { value: 'everyone', label: t('Alle, auch Gäste') },
+          ])}
+          {toggle(
+            'comments.guestLinks',
+            t('Links von Gästen erlauben'),
+            t('Ausgeschaltet werden Kommentare von Gästen mit Links abgewiesen. Das hält die meiste Werbung fern.')
+          )}
+          {list(
+            'comments.blockedWords',
+            t('Gesperrte Wörter'),
+            t('Kommentare mit diesen Wörtern werden abgewiesen. Groß- und Kleinschreibung zählt nicht.'),
+            t('Wort')
           )}
         </SettingsSection>
         <SettingsSection
@@ -1785,6 +1882,14 @@ export function SettingsPanel({
             t('Zeilenumbrüche bleiben erhalten, Adressen und E-Mails werden zu Links.'),
             20000
           )}
+        </SettingsSection>
+        <SettingsSection
+          title={t('Nutzungsbedingungen')}
+          description={t(
+            'Wer sich registriert, stimmt ihnen zu. Bei einer neuen Fassung stimmen alle beim nächsten Besuch neu zu. Sie stehen unter /nutzungsbedingungen und unten auf jeder Seite.'
+          )}
+        >
+          <TermsEditor />
         </SettingsSection>
         <SettingsSection
           title={t('Datenschutz')}

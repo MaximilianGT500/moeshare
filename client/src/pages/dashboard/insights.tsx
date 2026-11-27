@@ -1,12 +1,15 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Box from '@mui/material/Box';
 import ButtonBase from '@mui/material/ButtonBase';
 import Button from '@mui/material/Button';
 import Typography from '@mui/material/Typography';
 import AccessibilityNewRounded from '@mui/icons-material/AccessibilityNewRounded';
-import type { FileItem, StatsOverview } from '../../lib/types';
-import { fetchStatsOverview } from '../../lib/api';
-import { formatNumber } from '../../lib/format';
+import ChatBubbleOutlineRounded from '@mui/icons-material/ChatBubbleOutlineRounded';
+import VisibilityOffOutlined from '@mui/icons-material/VisibilityOffOutlined';
+import type { FileItem, RecentComment, StatsOverview } from '../../lib/types';
+import { fetchRecentComments, fetchStatsOverview } from '../../lib/api';
+import { formatNumber, relativeMs } from '../../lib/format';
+import { UserAvatar } from '../../components/UserAvatar';
 import { t, tn } from '../../lib/i18n';
 import { FileThumb } from '../../components/FileThumb';
 import { StatsPanel } from '../../components/StatsView';
@@ -110,6 +113,89 @@ function Reacted({ reactions, onOpen }: { reactions: NonNullable<StatsOverview['
   );
 }
 
+function RecentComments() {
+  const [items, setItems] = useState<RecentComment[] | null>(null);
+  useEffect(() => {
+    fetchRecentComments(8)
+      .then((result) => setItems(result.enabled ? result.comments : []))
+      .catch(() => setItems([]));
+  }, []);
+  if (!items || !items.length) return null;
+  return (
+    <Box component="section" aria-labelledby="recent-comments-title" sx={{ mt: 4 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+        <ChatBubbleOutlineRounded sx={{ color: c.secondary }} />
+        <Typography id="recent-comments-title" variant="h6" component="h2">
+          {t('Neue Kommentare')}
+        </Typography>
+      </Box>
+      <Box component="ul" sx={{ listStyle: 'none', m: 0, p: 0, display: 'grid', gap: 0.5 }}>
+        {items.map((item) => {
+          const href =
+            item.target.kind === 'f'
+              ? `/view/${encodeURIComponent(item.target.slug)}`
+              : item.target.code
+                ? `/a/${encodeURIComponent(item.target.code)}`
+                : null;
+          return (
+            <li key={item.id}>
+              <ButtonBase
+                component="a"
+                href={href || undefined}
+                target="_blank"
+                rel="noopener"
+                disabled={!href}
+                sx={{
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: 1.5,
+                  p: 1,
+                  textAlign: 'left',
+                  borderRadius: `${radius.md}px`,
+                  transition: `background-color 160ms ${css.standard}`,
+                  '&:hover': { bgcolor: c.surfaceContainerHigh },
+                  '&.Mui-focusVisible': { outline: `2px solid ${c.primary}`, outlineOffset: 2 },
+                }}
+              >
+                <UserAvatar name={item.name || '?'} src={item.avatar} size={32} />
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Typography variant="body2" sx={{ display: 'flex', gap: 0.75, alignItems: 'baseline', flexWrap: 'wrap' }}>
+                    <Box component="span" sx={{ fontWeight: 700 }}>
+                      {item.name}
+                    </Box>
+                    <Box component="span" sx={{ color: 'text.secondary' }}>
+                      {t('zu {target}', { target: item.target.name || t('einer Datei') })}
+                    </Box>
+                    <Box component="span" sx={{ color: 'text.secondary', fontSize: '0.75rem' }}>
+                      {relativeMs(item.createdAt)}
+                    </Box>
+                    {item.hidden && (
+                      <VisibilityOffOutlined sx={{ fontSize: 14, color: c.tertiary, alignSelf: 'center' }} aria-label={t('Ausgeblendet')} />
+                    )}
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      color: 'text.secondary',
+                      display: '-webkit-box',
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: 'vertical',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    {item.body}
+                  </Typography>
+                </Box>
+              </ButtonBase>
+            </li>
+          );
+        })}
+      </Box>
+    </Box>
+  );
+}
+
 function AltNudge({ count, onFix, onShow }: { count: number; onFix: () => void; onShow: () => void }) {
   return (
     <Box
@@ -172,6 +258,7 @@ export function InsightsView({
         )}
       />
       {missingAlt > 0 && onAltFix && onAltShow && <AltNudge count={missingAlt} onFix={onAltFix} onShow={onAltShow} />}
+      <RecentComments />
       <UploadCalendarSection onDay={onDay} />
       <YearReviewSection onOpen={onOpen} />
     </Box>

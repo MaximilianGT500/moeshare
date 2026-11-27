@@ -3,7 +3,7 @@
 const express = require('express');
 const logger = require('../lib/logger');
 const ephemeral = require('../lib/ephemeral');
-const { HttpError, badRequest, forbidden, gone, tooManyRequests, unauthorized } = require('../lib/errors');
+const { HttpError, badRequest, conflict, forbidden, gone, tooManyRequests, unauthorized } = require('../lib/errors');
 const { text, flag } = require('../lib/input');
 const { tr } = require('../lib/i18n');
 const { limiter } = require('../lib/limiter');
@@ -12,6 +12,7 @@ const { Throttle } = require('../lib/throttle');
 const { randomToken, safeEqual } = require('../lib/secrets');
 const { safeNext, isSecure, storedIp } = require('../lib/request');
 const { requireApi, sameOriginOnly } = require('../middleware/auth');
+const terms = require('../services/termsService');
 const settings = require('../services/settingsService');
 const sessions = require('../services/sessionService');
 const users = require('../services/userService');
@@ -247,10 +248,30 @@ router.get('/register', async (req, res) => {
         passwordMinLength: settings.get('auth.passwordMinLength'),
         passwordless: !passwordLogin(),
         passkeys: settings.get('auth.passkeys'),
+        terms: terms.active() ? { version: terms.version(), url: '/nutzungsbedingungen' } : null,
       },
     },
   });
 });
+
+function assertTerms(req) {
+  if (!terms.active()) return false;
+  if (req.body.acceptTerms !== true) {
+    throw badRequest('Lies die Nutzungsbedingungen und stimm ihnen zu.', { field: 'acceptTerms', code: 'terms_required' });
+  }
+  if (Number(req.body.termsVersion) !== terms.version()) {
+    throw conflict('Die Nutzungsbedingungen wurden gerade geändert. Lade die Seite neu und lies die neue Fassung.', {
+      code: 'terms_changed',
+    });
+  }
+  return true;
+}
+
+async function acceptedTerms(row, accepted) {
+  if (!accepted) return row;
+  await terms.accept(row.id, terms.version());
+  return { ...row, terms_version: terms.version(), terms_accepted_at: Date.now() };
+}
 
 async function logout(req, res) {
   if (req.sessionToken) {
@@ -586,7 +607,8 @@ async function registerWithProvider(req, res, pendingId) {
   if (!entry || !oauth.isKnown(entry.provider)) throw gone(loginError('oauth_expired'));
   const label = oauth.labelOf(entry.provider);
   const invite = entry.invite ? await invites.requireUsable(entry.invite) : null;
-  const row = await users.create({
+  const accepted = assertTerms(req);
+  const created = await users.create({
     username: text(req.body.username, 64),
     password: passwordLogin() ? text(req.body.password, 300) : '',
     role: oauth.roleFromGroups(entry.provider, entry.membership, invite ? invite.role : 'mitglied'),
@@ -594,6 +616,7 @@ async function registerWithProvider(req, res, pendingId) {
     maxFileBytes: invite ? invite.maxFileBytes : null,
     identity: { provider: entry.provider, subject: entry.profile.subject, name: entry.profile.name, label },
   });
+  const row = await acceptedTerms(created, accepted);
   if (invite) await invites.consume(invite.code);
   await oauth.dropSignup(pendingId);
   audit.log('user_registered', {
@@ -618,8 +641,9 @@ router.post('/api/auth/register', guarded, async (req, res) => {
   const passwordless = !passwordLogin();
   if (passwordless && !settings.get('auth.passkeys'))
     throw forbidden('Neue Konten gibt es auf diesem Server nur über einen Anmeldedienst.');
+  const accepted = assertTerms(req);
 
-  const row = await users.create({
+  const created = await users.create({
     username: text(req.body.username, 64),
     password: passwordless ? '' : text(req.body.password, 300),
     passwordless,
@@ -627,6 +651,7 @@ router.post('/api/auth/register', guarded, async (req, res) => {
     quotaBytes: invite ? invite.quotaBytes : null,
     maxFileBytes: invite ? invite.maxFileBytes : null,
   });
+  const row = await acceptedTerms(created, accepted);
   if (invite) await invites.consume(invite.code);
   const method = passwordless ? 'passwordless' : 'password';
   audit.log('user_registered', { userId: row.id, req, details: { method, invite: invite ? invite.code.slice(0, 4) : null } });

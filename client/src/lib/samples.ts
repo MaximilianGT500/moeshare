@@ -35,6 +35,7 @@ export function sampleView(username: string): { file: ViewFile; urls: ViewUrls }
       protected: false,
       username,
       owner: false,
+      palette: ['#ff9a8b', '#ff6a88', '#c13fb8', '#7b2ff7', '#3d1a78'],
     },
     urls: {
       view: '#',

@@ -264,6 +264,7 @@ async function remove(userId) {
   await db.run('DELETE FROM album_files WHERE album_id IN (SELECT id FROM albums WHERE user_id = ?)', [user.id]);
   await db.run("DELETE FROM reactions WHERE kind = 'a' AND ref_id IN (SELECT id FROM albums WHERE user_id = ?)", [user.id]);
   await db.run("DELETE FROM reaction_notices WHERE kind = 'a' AND ref_id IN (SELECT id FROM albums WHERE user_id = ?)", [user.id]);
+  await db.run("DELETE FROM comments WHERE kind = 'a' AND ref_id IN (SELECT id FROM albums WHERE user_id = ?)", [user.id]);
   for (const table of [
     'sessions',
     'api_tokens',
@@ -281,6 +282,9 @@ async function remove(userId) {
     'profile_icons',
     'auto_shares',
     'reaction_notices',
+    'upload_rules',
+    'phone_links',
+    'comments',
   ]) {
     await db.run(`DELETE FROM ${table} WHERE user_id = ?`, [user.id]);
   }

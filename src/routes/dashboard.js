@@ -40,6 +40,10 @@ const years = require('../services/yearService');
 const mailShare = require('../services/mailShareService');
 const { limiter } = require('../lib/limiter');
 const reactions = require('../services/reactionService');
+const posters = require('../services/posterService');
+const phone = require('../services/phoneService');
+const comments = require('../services/commentService');
+const transforms = require('../services/transformService');
 const media = require('../lib/media');
 const { lineDiff } = require('../lib/diff');
 
@@ -88,6 +92,9 @@ function uploadOptions(prefs, user, watermark) {
     encrypted: settings.get('uploads.encrypted'),
     linkChecks: settings.get('links.check'),
     interstitial: settings.get('links.interstitial'),
+    phone: phone.enabled(),
+    comments: comments.mode(),
+    transforms: transforms.enabled(),
   };
 }
 
@@ -307,6 +314,28 @@ async function ownedVideo(req) {
   return record;
 }
 
+function posterBody(req, res, next) {
+  if (req.is('application/json')) return next();
+  return express.raw({ type: () => true, limit: posters.MAX_IMAGE_BYTES })(req, res, (error) => {
+    if (error && error.type === 'entity.too.large') return next(tooLarge('Das Bild ist zu groß. Erlaubt sind bis zu 15 MB.'));
+    return next(error);
+  });
+}
+
+router.post('/api/files/:id/poster', signedIn, posterBody, async (req, res) => {
+  const record = await ownedFile(req);
+  const updated = Buffer.isBuffer(req.body)
+    ? await posters.useImage(record, req.body)
+    : await posters.chooseFrame(record, req.body && req.body.at);
+  const [file] = await files.withTags([updated]);
+  res.json({ file });
+});
+
+router.delete('/api/files/:id/poster', signedIn, async (req, res) => {
+  const [file] = await files.withTags([await posters.reset(await ownedFile(req))]);
+  res.json({ file });
+});
+
 router.get('/api/files/:id/subtitles', signedIn, async (req, res) => {
   const record = await ownedVideo(req);
   res.json({ subtitles: await subtitles.list(record.id) });
@@ -457,6 +486,7 @@ router.patch('/api/files/:id', signedIn, async (req, res) => {
     if (expiry.error)
       throw badRequest(expiry.error === 'too_long' ? 'So lange darf hier nichts bleiben.' : 'Ungültige Ablaufzeit.', { field: 'expires' });
     fields.expires_at = expiry.ms ? Date.now() + expiry.ms : null;
+    fields.retention_at = null;
   }
   if (body.password !== undefined) {
     const hashed = body.password ? await protection.hashPassword(body.password) : null;
@@ -493,6 +523,12 @@ router.patch('/api/files/:id', signedIn, async (req, res) => {
   if (body.starred !== undefined) {
     if (typeof body.starred !== 'boolean') throw badRequest('Erwartet wird an oder aus.', { field: 'starred' });
     fields.starred_at = body.starred ? record.starred_at || Date.now() : null;
+    if (body.starred && record.retention_at && body.expires === undefined) Object.assign(fields, { expires_at: null, retention_at: null });
+  }
+  if (body.comments !== undefined) {
+    if (body.comments !== null && typeof body.comments !== 'boolean')
+      throw badRequest('Erwartet wird an, aus oder Standard.', { field: 'comments' });
+    fields.comments = body.comments === null ? null : body.comments ? 1 : 0;
   }
   const releaseNow = body.publishAt === null && Boolean(record.publish_at);
   if (body.publishAt !== undefined && body.publishAt !== null) fields.publish_at = files.publishTime(body.publishAt);
@@ -562,12 +598,16 @@ router.post('/api/files/bulk', signedIn, async (req, res) => {
     else if (action === 'unlist') await files.patch(record, { listed: 0 });
     else if (action === 'tag') await files.addTags(record, req.body.tags);
     else if (action === 'untag') await files.removeTags(record, req.body.tags);
-    else if (action === 'expire') await files.patch(record, { expires_at: expiresAt });
+    else if (action === 'expire') await files.patch(record, { expires_at: expiresAt, retention_at: null });
     else if (action === 'protect') await files.patch(record, { password_hash: passwordHash });
     else if (action === 'unprotect') await files.patch(record, { password_hash: null, max_views: null });
     else if (action === 'warn') await files.patch(record, { warning });
     else if (action === 'unwarn') await files.patch(record, { warning: null });
-    else if (action === 'star') await files.patch(record, { starred_at: record.starred_at || Date.now() });
+    else if (action === 'star')
+      await files.patch(record, {
+        starred_at: record.starred_at || Date.now(),
+        ...(record.retention_at ? { expires_at: null, retention_at: null } : {}),
+      });
     else if (action === 'unstar') await files.patch(record, { starred_at: null });
   }
   if (action === 'delete' && records.length) {

@@ -451,6 +451,19 @@ const MIGRATIONS = [
       await createIndexes(db, 'links');
     },
   },
+  {
+    version: 17,
+    name: 'Sortierregeln, Handy-Uploads, Kommentare, Audio-Cover, Farbpaletten, Kurzlink-Ziele und Nutzungsbedingungen',
+    async up(db) {
+      await addColumns(db, 'users', ['terms_version', 'terms_accepted_at']);
+      await addColumns(db, 'file_data', ['audio_meta', 'palette', 'poster_ms', 'comments', 'retention_at']);
+      await addColumns(db, 'links', ['targets']);
+      await addColumns(db, 'albums', ['comments']);
+      await addColumns(db, 'reaction_notices', ['comments']);
+      for (const table of ['upload_rules', 'phone_links', 'comments']) await createTable(db, table);
+      await createIndexes(db, 'file_data');
+    },
+  },
 ];
 
 const LATEST_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

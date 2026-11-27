@@ -44,6 +44,12 @@ import { VideoFrame } from '../../components/VideoPlayer';
 import { Waveform } from '../../components/Waveform';
 import { PeaksWaveform } from '../../components/PeaksWaveform';
 import { hasCamera, settingsText, takenText } from '../../lib/camera';
+import { PaletteSwatches, audioByline } from '../../components/MediaExtras';
+import { Comments, CommentsCard } from '../../components/Comments';
+import Dialog from '@mui/material/Dialog';
+import DialogContent from '@mui/material/DialogContent';
+import DialogTitle from '@mui/material/DialogTitle';
+import ChatBubbleOutlineRounded from '@mui/icons-material/ChatBubbleOutlineRounded';
 import { fileIcon, typeDescription } from '../../components/FileIcons';
 import { FooterLinks, SiteFooter } from '../../components/SiteFooter';
 import { ReportButton } from '../../components/ReportDialog';
@@ -73,7 +79,7 @@ export interface ViewModel {
   onUnseal?: (opened: UnsealedView) => void;
 }
 
-export const labelOf = (file: ViewFile) => file.title || file.originalName || file.filename;
+export const labelOf = (file: ViewFile) => file.title || (file.audio && file.audio.title) || file.originalName || file.filename;
 
 function formatTime(seconds: number) {
   if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
@@ -82,7 +88,21 @@ function formatTime(seconds: number) {
   return `${minutes}:${String(rest).padStart(2, '0')}`;
 }
 
-export function AudioStage({ src, seed, peaks = null, color }: { src: string; seed: string; peaks?: number[] | null; color?: string }) {
+export function AudioStage({
+  src,
+  seed,
+  peaks = null,
+  color,
+  cover = null,
+  byline = '',
+}: {
+  src: string;
+  seed: string;
+  peaks?: number[] | null;
+  color?: string;
+  cover?: string | null;
+  byline?: string;
+}) {
   const { r } = useDesign();
   const audio = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
@@ -106,6 +126,45 @@ export function AudioStage({ src, seed, peaks = null, color }: { src: string; se
         boxShadow: elevation[3],
       }}
     >
+      {(cover || byline) && (
+        <Box
+          className="ms-audio-meta"
+          sx={{
+            display: 'flex',
+            flexDirection: { xs: 'column', sm: 'row' },
+            alignItems: { xs: 'center', sm: 'flex-end' },
+            gap: { xs: 1.5, sm: 3 },
+            mb: { xs: 2.5, sm: 3 },
+            textAlign: { xs: 'center', sm: 'left' },
+          }}
+        >
+          {cover && (
+            <Box
+              component="img"
+              src={cover}
+              alt={t('Cover')}
+              className="ms-cover"
+              sx={{
+                width: { xs: 'min(220px, 64vw)', sm: 168 },
+                aspectRatio: '1',
+                objectFit: 'cover',
+                borderRadius: `${r(radius.lg)}px`,
+                boxShadow: elevation[3],
+                flexShrink: 0,
+              }}
+            />
+          )}
+          {byline && (
+            <Typography
+              variant="subtitle1"
+              className="ms-byline"
+              sx={{ color: 'text.secondary', fontWeight: 600, overflowWrap: 'anywhere' }}
+            >
+              {byline}
+            </Typography>
+          )}
+        </Box>
+      )}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 2, sm: 3 } }}>
         <IconButton
           aria-label={playing ? t('Pausieren') : t('Abspielen')}
@@ -374,7 +433,14 @@ export function MediaStage({
   if (file.type === 'audio') {
     return (
       <Box className="ms-media">
-        <AudioStage src={urls.direct} seed={file.filename} peaks={file.waveform} color={model.accent} />
+        <AudioStage
+          src={urls.direct}
+          seed={file.filename}
+          peaks={file.waveform}
+          color={model.accent}
+          cover={file.audio && file.audio.cover ? urls.poster : null}
+          byline={audioByline(file.audio)}
+        />
       </Box>
     );
   }
@@ -395,7 +461,19 @@ export function MediaStage({
           preview={file.textPreview}
           sizeBytes={file.sizeBytes}
           downloadUrl={urls.download}
-          format={file.syntax === 'markdown' ? 'markdown' : ext === 'csv' || ext === 'tsv' ? 'csv' : null}
+          format={
+            file.syntax === 'markdown'
+              ? 'markdown'
+              : ext === 'csv' || ext === 'tsv'
+                ? 'csv'
+                : ext === 'ipynb'
+                  ? 'notebook'
+                  : file.syntax === 'json' || ext === 'json'
+                    ? 'json'
+                    : file.syntax === 'diff' || ext === 'diff' || ext === 'patch'
+                      ? 'diff'
+                      : null
+          }
           filename={file.filename}
         />
       </Box>
@@ -681,6 +759,11 @@ export function MetaList({ model, owner = true, dense = false }: { model: ViewMo
       )}
       {file.protected && <MetaItem icon={<LockOutlined />}>{t('Mit Passwort geschützt')}</MetaItem>}
       <CameraItems model={model} />
+      {shows('palette') && file.palette && file.palette.length > 0 && (
+        <Box component="li" className="ms-palette" sx={{ display: 'flex', alignItems: 'center' }}>
+          <PaletteSwatches colors={file.palette} size={20} />
+        </Box>
+      )}
     </Box>
   );
 }
@@ -826,6 +909,55 @@ export function ReactionBar({
   const initial = sample ? (model.site.reactions ? (boot.reactions ?? SAMPLE_REACTIONS) : null) : boot.reactions;
   if (!initial || !shows('reactions') || (file.sealed && !sample)) return null;
   return <Reactions id={file.slug} counts={initial} send={(key) => react(file.slug, key)} sample={sample} align={align} tone={tone} />;
+}
+
+function commentsOf(model: ViewModel) {
+  const { boot, file, site } = model;
+  const sample = Boolean(boot.sample || boot.preview);
+  if (file.sealed && !sample) return null;
+  if (sample) return site.comments ? { sample, total: 2 } : null;
+  return boot.comments ? { sample, total: boot.comments.total } : null;
+}
+
+export function CommentsSection({ model, plain = false, sx }: { model: ViewModel; plain?: boolean; sx?: object }) {
+  const { shows, r } = useDesign();
+  const info = commentsOf(model);
+  if (!info || !shows('comments')) return null;
+  const content = <Comments base={`/view/${encodeURIComponent(model.file.slug)}`} sample={info.sample} />;
+  return (
+    <Box className="ms-comments-section" sx={{ width: '100%', ...sx }}>
+      {plain ? content : <CommentsCard sx={{ borderRadius: `${r(radius.xl)}px` }}>{content}</CommentsCard>}
+    </Box>
+  );
+}
+
+export function CommentsButton({ model, tone = 'normal' }: { model: ViewModel; tone?: 'normal' | 'glass' }) {
+  const { shows } = useDesign();
+  const info = commentsOf(model);
+  const [open, setOpen] = useState(false);
+  const [total, setTotal] = useState(info ? info.total : 0);
+  if (!info || !shows('comments')) return null;
+  return (
+    <>
+      <Button
+        onClick={() => setOpen(true)}
+        startIcon={<ChatBubbleOutlineRounded />}
+        sx={{
+          justifySelf: 'start',
+          color: tone === 'glass' ? '#fff' : undefined,
+          '&:hover': tone === 'glass' ? { bgcolor: 'rgb(255 255 255 / 0.12)' } : undefined,
+        }}
+      >
+        {total ? tn(total, '1 Kommentar', '{count} Kommentare') : t('Kommentieren')}
+      </Button>
+      <Dialog open={open} onClose={() => setOpen(false)} fullWidth maxWidth="sm" aria-labelledby="comments-dialog-title">
+        <DialogTitle id="comments-dialog-title">{t('Kommentare')}</DialogTitle>
+        <DialogContent>
+          <Comments base={`/view/${encodeURIComponent(model.file.slug)}`} sample={info.sample} title={false} onTotal={setTotal} />
+        </DialogContent>
+      </Dialog>
+    </>
+  );
 }
 
 export function NoteBlock({ align = 'left' }: { align?: 'left' | 'center' }) {

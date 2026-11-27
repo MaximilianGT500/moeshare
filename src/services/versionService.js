@@ -88,7 +88,7 @@ async function replace(record, filename, { originalName, note = null, scanStatus
     await tx.run(
       `UPDATE file_data SET filename = ?, slug = ?, size_bytes = ?, original_name = ?, sha256 = ?, deduped = 0, resolution_width = 0,
        resolution_height = 0, dominant_color = '#ffffff', storage = 'local', variants = NULL, version = ?, version_at = ?, scan_status = ?,
-       exif = ?, waveform = NULL WHERE id = ?`,
+       exif = ?, waveform = NULL, audio_meta = NULL, palette = NULL, poster_ms = NULL WHERE id = ?`,
       [
         filename,
         record.slug || record.filename,
@@ -131,7 +131,7 @@ async function restore(record, versionId) {
     await tx.insertRow('file_versions', archived(record, now));
     await tx.run(
       `UPDATE file_data SET filename = ?, size_bytes = ?, original_name = ?, sha256 = ?, deduped = 0, resolution_width = ?, resolution_height = ?,
-       dominant_color = ?, storage = ?, variants = ?, version = ?, version_at = ?, exif = NULL, waveform = NULL WHERE id = ?`,
+       dominant_color = ?, storage = ?, variants = ?, version = ?, version_at = ?, exif = NULL, waveform = NULL, audio_meta = NULL, palette = NULL, poster_ms = NULL WHERE id = ?`,
       [
         row.filename,
         Number(row.size_bytes) || 0,

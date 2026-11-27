@@ -20,6 +20,9 @@ import TextField from '@mui/material/TextField';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import ScreenshotMonitorRounded from '@mui/icons-material/ScreenshotMonitorRounded';
+import QrCode2Rounded from '@mui/icons-material/QrCode2Rounded';
+import WallpaperRounded from '@mui/icons-material/WallpaperRounded';
+import MicNoneRounded from '@mui/icons-material/MicNoneRounded';
 import TuneRounded from '@mui/icons-material/TuneRounded';
 import CloseRounded from '@mui/icons-material/CloseRounded';
 import DeleteOutlineRounded from '@mui/icons-material/DeleteOutlineRounded';
@@ -73,6 +76,7 @@ export function FileMenu({
   onImageEdit,
   onClip,
   onSubtitles,
+  onPoster,
   onVersions,
   onWarning,
   onStar,
@@ -92,6 +96,7 @@ export function FileMenu({
   onImageEdit?: (file: FileItem) => void;
   onClip?: (file: FileItem) => void;
   onSubtitles?: (file: FileItem) => void;
+  onPoster?: (file: FileItem) => void;
   onVersions?: (file: FileItem) => void;
   onWarning?: (file: FileItem) => void;
   onStar?: (file: FileItem) => void;
@@ -232,6 +237,22 @@ export function FileMenu({
                   <SubtitlesOutlined />
                 </ListItemIcon>
                 {t('Untertitel')}
+              </MenuItem>,
+            ]
+          : []),
+        ...(onPoster && file.type === 'video'
+          ? [
+              <MenuItem
+                key="poster"
+                onClick={() => {
+                  onClose();
+                  onPoster(file);
+                }}
+              >
+                <ListItemIcon>
+                  <WallpaperRounded />
+                </ListItemIcon>
+                {t('Vorschaubild wählen')}
               </MenuItem>,
             ]
           : []),
@@ -761,6 +782,8 @@ export function EmptyState({
   onUrl,
   onText,
   onCapture,
+  onPhone,
+  onVoice,
   onOptions,
 }: {
   filtered: boolean;
@@ -770,6 +793,8 @@ export function EmptyState({
   onUrl?: () => void;
   onText?: () => void;
   onCapture?: () => void;
+  onPhone?: () => void;
+  onVoice?: () => void;
   onOptions?: () => void;
 }) {
   return (
@@ -822,6 +847,16 @@ export function EmptyState({
             {onCapture && (
               <Button variant="tonal" startIcon={<ScreenshotMonitorRounded />} onClick={onCapture}>
                 {t('Bildschirm aufnehmen')}
+              </Button>
+            )}
+            {onPhone && (
+              <Button variant="tonal" startIcon={<QrCode2Rounded />} onClick={onPhone} sx={{ display: { xs: 'none', sm: 'inline-flex' } }}>
+                {t('Vom Handy')}
+              </Button>
+            )}
+            {onVoice && (
+              <Button variant="tonal" startIcon={<MicNoneRounded />} onClick={onVoice}>
+                {t('Sprachnotiz')}
               </Button>
             )}
           </>

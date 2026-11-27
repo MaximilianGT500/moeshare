@@ -22,8 +22,11 @@ const ELEMENTS = [
   'frame',
   'original',
   'reactions',
+  'comments',
+  'palette',
   'footer',
 ];
+const OFF_BY_DEFAULT = new Set(['palette']);
 
 const MAX_NOTE = 280;
 const MAX_LABEL = 40;
@@ -39,7 +42,7 @@ const DEFAULT_DESIGN = Object.freeze({
   background: 'ambient',
   font: 'rounded',
   corners: 'round',
-  show: Object.freeze(Object.fromEntries(ELEMENTS.map((key) => [key, true]))),
+  show: Object.freeze(Object.fromEntries(ELEMENTS.map((key) => [key, !OFF_BY_DEFAULT.has(key)]))),
   note: '',
   button: Object.freeze({ label: '', url: '' }),
   css: '',
@@ -269,7 +272,7 @@ function normalizeDesign(input) {
   for (const key of ELEMENTS) {
     const value = shown[key];
     if (value !== undefined && typeof value !== 'boolean') throw invalid('Erwartet wird an oder aus.', `show.${key}`);
-    show[key] = value === undefined ? true : value;
+    show[key] = value === undefined ? !OFF_BY_DEFAULT.has(key) : value;
   }
   const css = input.css === undefined || input.css === null ? '' : input.css;
   if (typeof css !== 'string') throw invalid('Ungültiger Text.', 'css');

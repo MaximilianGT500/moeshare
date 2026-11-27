@@ -25,6 +25,8 @@ import EventRepeatOutlined from '@mui/icons-material/EventRepeatOutlined';
 import InsightsOutlined from '@mui/icons-material/InsightsOutlined';
 import StorageOutlined from '@mui/icons-material/StorageOutlined';
 import TimerOutlined from '@mui/icons-material/TimerOutlined';
+import ChatBubbleOutlineRounded from '@mui/icons-material/ChatBubbleOutlineRounded';
+import AutoDeleteOutlined from '@mui/icons-material/AutoDeleteOutlined';
 import type { NotifyKey } from '../../lib/types';
 import { readBoot } from '../../lib/boot';
 import {
@@ -80,6 +82,13 @@ const EVENTS: PushEvent[] = [
     description: t('Gesammelt, wenn Besucher auf deine Dateien oder Alben reagiert haben.'),
   },
   {
+    key: 'comments',
+    admin: false,
+    icon: <ChatBubbleOutlineRounded />,
+    label: t('Kommentare zu deinen Uploads'),
+    description: t('Gesammelt, wenn jemand deine Dateien oder Alben kommentiert hat.'),
+  },
+  {
     key: 'memories',
     admin: false,
     icon: <EventRepeatOutlined />,
@@ -106,6 +115,13 @@ const EVENTS: PushEvent[] = [
     icon: <TimerOutlined />,
     label: t('Dateien laufen bald ab'),
     description: t('Einen Tag bevor Uploads mit Ablaufdatum gelöscht werden.'),
+  },
+  {
+    key: 'retention',
+    admin: false,
+    icon: <AutoDeleteOutlined />,
+    label: t('Unbenutzte Dateien'),
+    description: t('Wenn Dateien lange nicht aufgerufen wurden und deshalb bald in den Papierkorb wandern.'),
   },
   {
     key: 'reports',
@@ -242,8 +258,9 @@ export function PushSection({ isAdmin }: { isAdmin: boolean }) {
 
   const current = hash ? state.devices.find((device) => device.endpointHash === hash) || null : null;
   const others = state.devices.filter((device) => device !== current);
-  const reactionsOn = Boolean(readBoot().site.reactions);
-  const events = EVENTS.filter((event) => (isAdmin || !event.admin) && (event.key !== 'reactions' || reactionsOn));
+  const site = readBoot().site;
+  const hidden: Partial<Record<NotifyKey, boolean>> = { reactions: !site.reactions, comments: !site.comments, retention: !site.retention };
+  const events = EVENTS.filter((event) => (isAdmin || !event.admin) && !hidden[event.key]);
 
   const enable = async () => {
     if (!state.publicKey) return;

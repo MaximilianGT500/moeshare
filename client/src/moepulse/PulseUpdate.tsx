@@ -29,6 +29,8 @@ const LABELS = {
     security: 'Sicherheitsupdate',
     yanked: (version: string, latest: string | null) =>
       `Version ${version} wurde zurückgezogen. ${latest ? `Wechsel bitte auf ${latest}.` : 'Ein Ersatz folgt.'}`,
+    unsupported: (version: string, minimum: string | null) =>
+      `Version ${version} wird nicht mehr unterstützt${minimum ? `, mindestens ${minimum} ist nötig` : ''}. Sie bekommt keine Sicherheitsupdates mehr, bitte aktualisiere bald.`,
     changelog: 'Changelog öffnen',
     more: 'Mehr zeigen',
     less: 'Weniger zeigen',
@@ -46,6 +48,8 @@ const LABELS = {
     security: 'Security update',
     yanked: (version: string, latest: string | null) =>
       `Version ${version} was withdrawn. ${latest ? `Please switch to ${latest}.` : 'A replacement is coming.'}`,
+    unsupported: (version: string, minimum: string | null) =>
+      `Version ${version} is no longer supported${minimum ? `, at least ${minimum} is required` : ''}. It gets no more security updates, please update soon.`,
     changelog: 'Open changelog',
     more: 'Show more',
     less: 'Show less',
@@ -164,6 +168,9 @@ export function PulseUpdate({ load, info: given, app = 'Die App', language = 'de
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+      {info.supported === false && !info.yanked && (
+        <Alert severity="error">{labels.unsupported(info.version ?? '', info.minimum ?? null)}</Alert>
+      )}
       {info.yanked && (
         <Alert severity="error">
           {labels.yanked(info.version ?? '', info.update || info.version !== latest.version ? latest.version : null)}

@@ -75,6 +75,12 @@ const EVENTS = {
   upload_request_created: 'Datei-Anfrage erstellt',
   upload_request_deleted: 'Datei-Anfrage gelöscht',
   announcement_changed: 'Ankündigung geändert',
+  sort_rules_updated: 'Sortierregeln geändert',
+  phone_link_created: 'Upload vom Handy gestartet',
+  comment_removed: 'Kommentar entfernt',
+  terms_accepted: 'Nutzungsbedingungen angenommen',
+  terms_published: 'Nutzungsbedingungen veröffentlicht',
+  retention_applied: 'Aufbewahrungsregeln angewendet',
 };
 
 const WARNINGS = new Set(['login_failed', 'account_locked', 'reauth_failed', 'recovery_code_used']);

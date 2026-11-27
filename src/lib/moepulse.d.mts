@@ -1,5 +1,5 @@
 export declare const PROTOCOL = 1;
-export declare const SDK_VERSION = '1.2.0';
+export declare const SDK_VERSION = '1.3.1';
 export declare const DEFAULT_ENDPOINT = 'https://pulse.moestudio.net';
 export type Primitive = string | number | boolean | null;
 export type Facts = Record<string, Primitive>;
@@ -200,6 +200,8 @@ export interface UpdateInfo {
   update: boolean;
   security: boolean;
   yanked: boolean;
+  supported: boolean;
+  minimum: string | null;
   behind: number;
   releases: Release[];
   checkedAt: number;
@@ -209,6 +211,7 @@ export interface UpdateSummary {
   update: boolean;
   security: boolean;
   yanked: boolean;
+  supported: boolean;
   url: string | null;
 }
 export interface Pulse {

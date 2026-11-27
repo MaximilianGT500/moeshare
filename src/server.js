@@ -17,6 +17,7 @@ const oauth = require('./services/oauthService');
 const invites = require('./services/inviteService');
 const files = require('./services/fileService');
 const links = require('./services/linkService');
+const retention = require('./services/retentionService');
 const storage = require('./services/storageService');
 const backups = require('./services/backupService');
 const domains = require('./services/domainService');
@@ -143,7 +144,7 @@ function scheduleMaintenance() {
       log.warn('Kameradaten und Wellenformen ließen sich nicht nachtragen', { error });
       return null;
     });
-    if (done && (done.cameras || done.waveforms)) log.debug('Kameradaten und Wellenformen nachgetragen', done);
+    if (done && (done.cameras || done.waveforms || done.audio || done.palettes)) log.debug('Mediendaten nachgetragen', done);
   });
   setTimeout(mediaBackfill, Math.min(8000, config.tickMs * 2)).unref();
   setInterval(mediaBackfill, config.tickMs * 2).unref();
@@ -156,6 +157,9 @@ function scheduleMaintenance() {
   });
   setTimeout(linkChecks, Math.min(15000, config.tickMs * 3)).unref();
   setInterval(linkChecks, config.tickMs * 5).unref();
+  const retentionRun = exclusive('retention', 30 * 60 * 1000, () => retention.tick());
+  setTimeout(retentionRun, Math.min(20000, config.tickMs * 4)).unref();
+  setInterval(retentionRun, 60 * 60 * 1000).unref();
 
   storage
     .cleanupLocalCopies()

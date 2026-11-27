@@ -11,6 +11,7 @@ const webhook = require('./webhookService');
 const addresses = require('./addressService');
 const avatars = require('./avatarService');
 const preferences = require('./preferenceService');
+const sorting = require('./sortService');
 
 const VISIBILITY = ['private', 'link', 'public'];
 const LAYOUTS = ['rows', 'grid', 'masonry', 'timeline'];
@@ -45,6 +46,7 @@ function present(row, extra = {}) {
     members: row.member_count !== undefined ? Number(row.member_count) || 0 : undefined,
     rule: ruleOf(row),
     layout: layoutOf(row),
+    comments: row.comments === null || row.comments === undefined ? null : Boolean(Number(row.comments)),
     ...extra,
   };
 }
@@ -290,6 +292,11 @@ async function update(user, id, patch = {}) {
     if (!VISIBILITY.includes(patch.visibility)) throw badRequest('Ungültige Sichtbarkeit.', { field: 'visibility' });
     fields.visibility = patch.visibility;
   }
+  if (patch.comments !== undefined) {
+    if (patch.comments !== null && typeof patch.comments !== 'boolean')
+      throw badRequest('Erwartet wird an, aus oder Standard.', { field: 'comments' });
+    fields.comments = patch.comments === null ? null : patch.comments ? 1 : 0;
+  }
   if (patch.layout !== undefined) {
     if (patch.layout !== null && !LAYOUTS.includes(patch.layout)) throw badRequest('Diese Anordnung gibt es nicht.', { field: 'layout' });
     fields.layout = patch.layout && patch.layout !== 'rows' ? patch.layout : null;
@@ -338,8 +345,10 @@ async function remove(user, id) {
     await tx.run("DELETE FROM stats_sources WHERE kind = 'a' AND ref_id = ?", [row.id]);
     await tx.run("DELETE FROM reactions WHERE kind = 'a' AND ref_id = ?", [row.id]);
     await tx.run("DELETE FROM reaction_notices WHERE kind = 'a' AND ref_id = ?", [row.id]);
+    await tx.run("DELETE FROM comments WHERE kind = 'a' AND ref_id = ?", [row.id]);
     await tx.run('DELETE FROM albums WHERE id = ?', [row.id]);
   });
+  await sorting.forgetAlbum(row.id).catch(() => {});
   return present(row);
 }
 
@@ -499,7 +508,7 @@ function publicFile(file, { taken = false } = {}) {
     slug: file.slug,
     title: guarded ? null : file.title,
     alt: guarded ? null : file.alt || null,
-    name: guarded ? null : file.title || file.originalName || file.filename,
+    name: guarded ? null : file.title || (file.audio && file.audio.title) || file.originalName || file.filename,
     filename: guarded ? null : file.filename,
     type: file.type,
     isGif: file.isGif,
@@ -511,7 +520,12 @@ function publicFile(file, { taken = false } = {}) {
     once: Boolean(file.maxViews),
     view: file.urls.view,
     createdAt: file.createdAt || null,
-    preview: guarded ? null : file.type === 'image' || file.type === 'video' ? file.urls.preview : null,
+    preview: guarded
+      ? null
+      : file.type === 'image' || file.type === 'video' || (file.type === 'audio' && file.audio && file.audio.cover)
+        ? file.urls.preview
+        : null,
+    artist: guarded || file.type !== 'audio' || !file.audio ? null : file.audio.artist || null,
     direct: guarded ? null : file.urls.direct,
     playback: guarded ? null : file.urls.playback || null,
     download: guarded ? null : file.urls.download,

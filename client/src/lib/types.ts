@@ -51,6 +51,12 @@ export interface FileItem {
   deduped: boolean;
   camera?: CameraInfo | null;
   waveform?: number[] | null;
+  audio?: AudioMeta | null;
+  palette?: string[] | null;
+  poster?: PosterChoice | null;
+  comments?: boolean | null;
+  commentCount?: number;
+  retentionAt?: number | null;
   versions?: number;
   twins?: number;
   match?: SearchMatch;
@@ -58,6 +64,196 @@ export interface FileItem {
   mine?: boolean;
   sealedKey?: string | null;
   urls: FileUrls;
+}
+
+export interface AudioMeta {
+  title?: string;
+  artist?: string;
+  album?: string;
+  albumArtist?: string;
+  year?: string;
+  track?: number;
+  genre?: string;
+  cover: boolean;
+}
+
+export interface PosterChoice {
+  custom: boolean;
+  at: number | null;
+}
+
+export type SortType = 'image' | 'video' | 'audio' | 'text' | 'file';
+export type SortSource = 'browser' | 'token' | 'telegram' | 'discord' | 'phone' | 'request';
+
+export interface SortConditions {
+  types: SortType[];
+  extensions: string[];
+  names: string[];
+  sources: SortSource[];
+  tokens: number[];
+  minSize: number | null;
+  maxSize: number | null;
+}
+
+export interface SortActions {
+  album: number | null;
+  tags: string[];
+  expires: ExpiryChoice | null;
+  warning: string | null;
+  star: boolean;
+}
+
+export interface SortRule {
+  id: number;
+  name: string;
+  enabled: boolean;
+  order: number;
+  conditions: SortConditions;
+  actions: SortActions;
+  stopAfter: boolean;
+  matches: number;
+  lastMatchedAt: number | null;
+  createdAt: number;
+  updatedAt: number;
+  album: { id: number; code: string; title: string } | null;
+}
+
+export interface SortRuleInput {
+  name: string;
+  enabled?: boolean;
+  conditions: Partial<Omit<SortConditions, 'names'>> & { names?: string[] | string };
+  actions: Partial<Omit<SortActions, 'album'>> & { album?: number | string | null };
+  stopAfter?: boolean;
+}
+
+export interface SortTestResult {
+  facts: { type: SortType; extension: string; source: SortSource | null };
+  matched: Array<{ id: number; name: string }>;
+  album: number | null;
+  tags: string[];
+  expires: ExpiryChoice | null;
+  warning: string | null;
+  star: boolean;
+}
+
+export interface PhoneLink {
+  id: number;
+  code?: string;
+  url?: string;
+  createdAt: number;
+  expiresAt: number;
+  closedAt: number | null;
+  open: boolean;
+  uploads: number;
+  max: number;
+  lastUploadAt: number | null;
+  device: string | null;
+  album: { id: number; code: string; title: string } | null;
+  files: FileItem[];
+}
+
+export interface PublicPhone {
+  found: boolean;
+  open: boolean;
+  username: string | null;
+  expiresAt: number | null;
+  uploads: number;
+  max: number;
+  album: string | null;
+}
+
+export interface CommentItem {
+  id: number;
+  body: string;
+  name: string;
+  username: string | null;
+  avatar: string | null;
+  guest: boolean;
+  byOwner: boolean;
+  createdAt: number;
+  hidden: boolean;
+  mine: boolean;
+  deletable: boolean;
+}
+
+export interface CommentRights {
+  enabled: boolean;
+  canPost: boolean;
+  needsName: boolean;
+  signInToPost: boolean;
+  moderate: boolean;
+  owner: boolean;
+  admin: boolean;
+}
+
+export interface CommentList extends CommentRights {
+  comments: CommentItem[];
+  more: boolean;
+  total: number;
+}
+
+export interface RecentComment extends CommentItem {
+  target: { kind: 'f'; id: number; name: string; slug: string } | { kind: 'a'; id: number; name: string; code: string | null };
+}
+
+export interface LinkTargets {
+  ios: string | null;
+  android: string | null;
+  languages: Record<string, string>;
+}
+
+export type DoctorStatus = 'ok' | 'info' | 'warn' | 'error';
+
+export interface DoctorCheck {
+  id: string;
+  status: DoctorStatus;
+  title: string;
+  detail: string;
+  hint: string;
+}
+
+export interface DoctorReport {
+  at: number;
+  summary: Record<DoctorStatus, number>;
+  checks: DoctorCheck[];
+}
+
+export interface TermsState {
+  enabled: boolean;
+  version: number;
+  publishedAt: number | null;
+  text: string;
+}
+
+export interface AdminTerms extends TermsState {
+  accepted: number;
+  pending: number;
+  total: number;
+}
+
+export interface AccountTerms extends TermsState {
+  mine: { version: number | null; acceptedAt: number | null; current: boolean } | null;
+}
+
+export interface RetentionPreview {
+  enabled: boolean;
+  unused: number;
+  grace: number;
+  admins: boolean;
+  blocked: 'stats' | 'statsOff' | 'history' | null;
+  statsDays: number;
+  since: string | null;
+  pending: { count: number; bytes: number };
+  lastRun: { at: number; marked: number; released: number; users: number } | null;
+  count: number;
+  bytes: number;
+  users: Array<{ username: string; count: number; bytes: number }>;
+}
+
+export interface TransformUsage {
+  enabled: boolean;
+  bytes: number;
+  limit: number;
 }
 
 export interface CameraInfo {
@@ -349,6 +545,8 @@ export interface SiteInfo {
   push?: boolean;
   frames?: boolean;
   reactions?: boolean;
+  comments?: boolean;
+  retention?: boolean;
   mailShare?: boolean;
   hotlink?: boolean;
   language?: 'de' | 'en';
@@ -391,7 +589,12 @@ export interface UploadOptionsInfo {
   encrypted?: boolean;
   linkChecks?: boolean;
   interstitial?: 'off' | 'always';
+  phone?: boolean;
+  comments?: CommentMode;
+  transforms?: boolean;
 }
+
+export type CommentMode = 'off' | 'accounts' | 'everyone';
 
 export interface TagCount {
   tag: string;
@@ -412,6 +615,7 @@ export interface ShortLink {
   blocked: { at: number; reason: string } | null;
   short: string;
   interstitial: boolean;
+  targets?: LinkTargets | null;
   check: LinkCheck | null;
 }
 
@@ -456,6 +660,7 @@ export interface Album {
   files: number;
   rule?: AlbumRule | null;
   layout?: AlbumLayout;
+  comments?: boolean | null;
   blocked?: { at: number; reason: string } | null;
   cover?: { type: FileType; url: string | null; color: string } | null;
   items?: FileItem[];
@@ -476,7 +681,18 @@ export interface AlbumMember {
 }
 
 export type NotifyKey =
-  'security' | 'reports' | 'users' | 'system' | 'requests' | 'reactions' | 'memories' | 'digest' | 'quota' | 'expiring';
+  | 'security'
+  | 'reports'
+  | 'users'
+  | 'system'
+  | 'requests'
+  | 'reactions'
+  | 'comments'
+  | 'memories'
+  | 'digest'
+  | 'quota'
+  | 'expiring'
+  | 'retention';
 
 export interface Preferences {
   language: 'de' | 'en' | null;
@@ -611,7 +827,7 @@ export interface AuditEvent {
   actor: { id: number; username: string | null } | null;
 }
 
-export type SetupStep = 'password' | 'mfa' | null;
+export type SetupStep = 'password' | 'mfa' | 'terms' | null;
 
 export interface AccountOverview {
   user: {
@@ -650,6 +866,7 @@ export interface AccountOverview {
   choices: PreferenceChoices;
   email: EmailState;
   domains: DomainState;
+  terms: AccountTerms | null;
 }
 
 export interface EmailState {
@@ -806,6 +1023,8 @@ export type DesignElement =
   | 'frame'
   | 'original'
   | 'reactions'
+  | 'comments'
+  | 'palette'
   | 'footer';
 
 export interface ViewDesign {
@@ -1039,7 +1258,8 @@ type PageName =
   | 'album'
   | 'profile'
   | 'report'
-  | 'request';
+  | 'request'
+  | 'phone';
 
 interface BootBase {
   page: PageName;
@@ -1095,6 +1315,7 @@ export interface LoginBoot extends BootBase {
     passwordMinLength: number;
     passwordless: boolean;
     passkeys: boolean;
+    terms?: { version: number; url: string } | null;
   };
 }
 
@@ -1135,6 +1356,7 @@ export interface SudoMethods {
 
 export interface AdminBoot extends BootBase {
   page: 'admin';
+  doctor?: DoctorReport | null;
   user: SessionUser;
   greeting: string;
   stats: GlobalStats;
@@ -1175,6 +1397,8 @@ export interface UpdateInfo {
   error: string | null;
   changelog: string;
   yanked: boolean;
+  supported: boolean;
+  minimum: string | null;
   behind: number;
   via: 'moepulse' | 'website' | null;
   details: PulseUpdateInfo | null;
@@ -1187,6 +1411,8 @@ export interface UpdateNotice {
   current?: string;
   security: boolean;
   yanked?: boolean;
+  unsupported?: boolean;
+  minimum?: string | null;
   changelog: string;
 }
 
@@ -1370,6 +1596,11 @@ export interface RequestBoot extends BootBase {
   request: PublicRequest;
 }
 
+export interface PhoneBoot extends BootBase {
+  page: 'phone';
+  phone: PublicPhone;
+}
+
 export interface Subtitle {
   id: number;
   language: string;
@@ -1508,6 +1739,8 @@ export interface ViewFile {
   camera?: CameraInfo | null;
   cameraPublic?: boolean;
   waveform?: number[] | null;
+  audio?: AudioMeta | null;
+  palette?: string[] | null;
 }
 
 export interface InterstitialInfo {
@@ -1519,6 +1752,7 @@ export interface InterstitialInfo {
   brokenSince: number | null;
   checkedAt: number | null;
   owner: boolean;
+  via?: string | null;
 }
 
 export interface ViewUrls {
@@ -1553,6 +1787,7 @@ export interface ViewBoot extends BootBase, OwnerStyle {
   sample?: boolean;
   sampleUser?: string;
   reactions?: Record<ReactionKey, number> | null;
+  comments?: { total: number } | null;
   frame?: string | null;
 }
 
@@ -1626,6 +1861,7 @@ export interface AlbumItem {
   createdAt?: number | null;
   taken?: string | null;
   waveform?: number[] | null;
+  artist?: string | null;
 }
 
 export interface AlbumBoot extends BootBase, OwnerStyle {
@@ -1649,6 +1885,7 @@ export interface AlbumBoot extends BootBase, OwnerStyle {
   owner?: boolean;
   dashboard?: string | null;
   reactions?: Record<ReactionKey, number> | null;
+  comments?: (CommentRights & { total: number }) | null;
 }
 
 export interface PublicAlbum {
@@ -1770,7 +2007,7 @@ export interface SetupBoot extends BootBase {
 
 export interface LegalBoot extends BootBase {
   page: 'legal';
-  legal: { title: string; text: string; heading?: string };
+  legal: { title: string; text: string; heading?: string; updatedAt?: number | null };
 }
 
 export type AnyBoot =
@@ -1787,7 +2024,8 @@ export type AnyBoot =
   | AlbumBoot
   | ProfileBoot
   | ReportBoot
-  | RequestBoot;
+  | RequestBoot
+  | PhoneBoot;
 
 export interface StorageDisk {
   originals: number;

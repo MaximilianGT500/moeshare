@@ -23,14 +23,17 @@ import { ApiPanel } from './ApiPanel';
 import { ProfilePanel } from './ProfilePanel';
 import { PreferencesPanel } from './PreferencesPanel';
 import { DomainsPanel } from './DomainsPanel';
+import { SortRulesPanel } from './SortRulesPanel';
+import { TermsGate } from './TermsGate';
 import { c, ease, radius } from '../../theme/tokens';
 import { t } from '../../lib/i18n';
 
-type TabKey = 'sicherheit' | 'einstellungen' | 'domains' | 'geraete' | 'sharex' | 'konto';
-const ALL_TABS: TabKey[] = ['sicherheit', 'einstellungen', 'domains', 'geraete', 'sharex', 'konto'];
+type TabKey = 'sicherheit' | 'einstellungen' | 'sortieren' | 'domains' | 'geraete' | 'sharex' | 'konto';
+const ALL_TABS: TabKey[] = ['sicherheit', 'einstellungen', 'sortieren', 'domains', 'geraete', 'sharex', 'konto'];
 const LABELS: Record<TabKey, string> = {
   sicherheit: t('Sicherheit'),
   einstellungen: t('Einstellungen'),
+  sortieren: t('Sortierregeln'),
   domains: t('Domains'),
   geraete: t('Geräte'),
   sharex: t('ShareX und API'),
@@ -69,6 +72,7 @@ function Account({ boot }: { boot: AccountBoot }) {
   const [editingAvatar, setEditingAvatar] = useState(false);
   const [welcome] = useState(() => new URLSearchParams(window.location.search).get('passkey') === 'neu');
   const setup = account.setup;
+  const gate = setup === 'terms' && account.terms ? account.terms : null;
 
   const reload = useCallback(async () => {
     try {
@@ -137,7 +141,7 @@ function Account({ boot }: { boot: AccountBoot }) {
         accountSummary={storageSummary(boot.userStats)}
       >
         <Box sx={{ maxWidth: 960 }}>
-          {setup && (
+          {setup && setup !== 'terms' && (
             <m.div
               initial={{ opacity: 0, y: -8 }}
               animate={{ opacity: 1, y: 0 }}
@@ -197,67 +201,74 @@ function Account({ boot }: { boot: AccountBoot }) {
             </Box>
           </Box>
 
-          <Box sx={{ mt: 3, mb: 3, borderBottom: `1px solid ${c.outlineVariant}` }}>
-            <ScrollTabs value={tab} onChange={select} label={t('Bereiche')}>
-              {TABS.map((key) => (
-                <Tab
-                  key={key}
-                  value={key}
-                  id={`tab-${key}`}
-                  aria-controls={`panel-${key}`}
-                  disabled={!!setup && key !== 'sicherheit'}
-                  label={key === 'geraete' ? `${LABELS[key]} (${account.sessions.length})` : LABELS[key]}
-                />
-              ))}
-            </ScrollTabs>
-          </Box>
+          {gate && <TermsGate initial={gate} siteTitle={boot.site.title} />}
 
-          <AnimatePresence mode="wait" initial={false} custom={direction}>
-            <m.div
-              key={tab}
-              role="tabpanel"
-              id={`panel-${tab}`}
-              aria-labelledby={`tab-${tab}`}
-              initial={{ opacity: 0, x: direction * 28 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: direction * -28, transition: { duration: 0.14, ease: ease.emphasizedAccelerate } }}
-              transition={{ duration: 0.32, ease: ease.emphasizedDecelerate }}
-            >
-              {tab === 'sicherheit' && (
-                <SecurityPanel
-                  account={account}
-                  siteTitle={boot.site.title}
-                  minPasswordLength={account.policy.passwordMinLength}
-                  reload={reload}
-                  autoOpen={setup}
-                  welcome={welcome}
-                />
-              )}
-              {tab === 'einstellungen' && (
-                <PreferencesPanel account={account} onSaved={(preferences) => setAccount((current) => ({ ...current, preferences }))} />
-              )}
-              {tab === 'domains' && (
-                <DomainsPanel
-                  initial={account.domains}
-                  preferences={account.preferences}
-                  onPreferences={(preferences) => setAccount((current) => ({ ...current, preferences }))}
-                />
-              )}
-              {tab === 'geraete' && <SessionsPanel sessions={account.sessions} reload={reload} />}
-              {tab === 'sharex' && (
-                <ApiPanel
-                  tokens={account.tokens}
-                  reload={reload}
-                  siteTitle={boot.site.title}
-                  baseUrl={boot.site.baseUrl}
-                  features={{ texts: account.choices.texts, links: account.choices.links }}
-                  telegram={account.telegram}
-                  maxExpiry={account.choices.maxExpiry}
-                />
-              )}
-              {tab === 'konto' && <ProfilePanel account={account} />}
-            </m.div>
-          </AnimatePresence>
+          {!gate && (
+            <>
+              <Box sx={{ mt: 3, mb: 3, borderBottom: `1px solid ${c.outlineVariant}` }}>
+                <ScrollTabs value={tab} onChange={select} label={t('Bereiche')}>
+                  {TABS.map((key) => (
+                    <Tab
+                      key={key}
+                      value={key}
+                      id={`tab-${key}`}
+                      aria-controls={`panel-${key}`}
+                      disabled={!!setup && key !== 'sicherheit'}
+                      label={key === 'geraete' ? `${LABELS[key]} (${account.sessions.length})` : LABELS[key]}
+                    />
+                  ))}
+                </ScrollTabs>
+              </Box>
+
+              <AnimatePresence mode="wait" initial={false} custom={direction}>
+                <m.div
+                  key={tab}
+                  role="tabpanel"
+                  id={`panel-${tab}`}
+                  aria-labelledby={`tab-${tab}`}
+                  initial={{ opacity: 0, x: direction * 28 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: direction * -28, transition: { duration: 0.14, ease: ease.emphasizedAccelerate } }}
+                  transition={{ duration: 0.32, ease: ease.emphasizedDecelerate }}
+                >
+                  {tab === 'sicherheit' && (
+                    <SecurityPanel
+                      account={account}
+                      siteTitle={boot.site.title}
+                      minPasswordLength={account.policy.passwordMinLength}
+                      reload={reload}
+                      autoOpen={setup === 'terms' ? null : setup}
+                      welcome={welcome}
+                    />
+                  )}
+                  {tab === 'einstellungen' && (
+                    <PreferencesPanel account={account} onSaved={(preferences) => setAccount((current) => ({ ...current, preferences }))} />
+                  )}
+                  {tab === 'domains' && (
+                    <DomainsPanel
+                      initial={account.domains}
+                      preferences={account.preferences}
+                      onPreferences={(preferences) => setAccount((current) => ({ ...current, preferences }))}
+                    />
+                  )}
+                  {tab === 'geraete' && <SessionsPanel sessions={account.sessions} reload={reload} />}
+                  {tab === 'sharex' && (
+                    <ApiPanel
+                      tokens={account.tokens}
+                      reload={reload}
+                      siteTitle={boot.site.title}
+                      baseUrl={boot.site.baseUrl}
+                      features={{ texts: account.choices.texts, links: account.choices.links }}
+                      telegram={account.telegram}
+                      maxExpiry={account.choices.maxExpiry}
+                    />
+                  )}
+                  {tab === 'sortieren' && <SortRulesPanel account={account} />}
+                  {tab === 'konto' && <ProfilePanel account={account} />}
+                </m.div>
+              </AnimatePresence>
+            </>
+          )}
         </Box>
         <AvatarDialog
           open={editingAvatar}

@@ -6,6 +6,7 @@ const { storedIp, deviceLabel, isSecure, safeNext } = require('../lib/request');
 const settings = require('./settingsService');
 const { languageOf } = require('./preferenceService');
 const audit = require('./auditService');
+const terms = require('./termsService');
 const log = require('../lib/logger').scope('auth');
 
 const COOKIE = 'ms_session';
@@ -51,6 +52,7 @@ const toUser = (row) => ({
   hasPassword: Boolean(row.password_hash),
   language: languageOf(row.preferences),
   avatar: row.avatar || null,
+  termsVersion: Number(row.terms_version) || 0,
 });
 
 async function resolve(token) {
@@ -58,7 +60,7 @@ async function resolve(token) {
   const id = sha256(token);
   const row = await db.get(
     `SELECT s.*, u.username, u.role, u.status, u.must_change_password, u.totp_enabled_at,
-            u.password AS password_hash, u.preferences, u.avatar,
+            u.password AS password_hash, u.preferences, u.avatar, u.terms_version,
             (SELECT COUNT(*) FROM passkeys p WHERE p.user_id = u.id) AS passkey_count
      FROM sessions s JOIN users u ON u.id = s.user_id
      WHERE s.id = ?`,
@@ -141,7 +143,8 @@ function pendingSetup(user) {
   if (user.mustChangePassword && settings.get('auth.passwordLogin')) return 'password';
   const enforce = settings.get('auth.enforceMfa');
   const required = enforce === 'all' || (enforce === 'admins' && user.isAdmin);
-  return required && !user.totpEnabled ? 'mfa' : null;
+  if (required && !user.totpEnabled) return 'mfa';
+  return terms.required(user) ? 'terms' : null;
 }
 
 const pendingSetupFor = (row) =>
@@ -149,6 +152,7 @@ const pendingSetupFor = (row) =>
     isAdmin: row.role === 'admin',
     mustChangePassword: Boolean(row.must_change_password),
     totpEnabled: Boolean(row.totp_enabled_at),
+    termsVersion: Number(row.terms_version) || 0,
   });
 
 async function start(req, res, row, { method, remember = true, next = '', details = {} } = {}) {

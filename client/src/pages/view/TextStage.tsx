@@ -15,35 +15,27 @@ import { MarkdownView } from '../../components/MarkdownView';
 import { CsvTable } from '../../components/CsvTable';
 import { detectDelimiter, parseCsv } from '../../lib/csv';
 import { formatBytes, formatNumber } from '../../lib/format';
-import { t } from '../../lib/i18n';
+import { t, tn } from '../../lib/i18n';
+import { JsonTree, parseJson } from '../../components/JsonTree';
+import { NotebookView, parseNotebook } from '../../components/NotebookView';
+import { DiffView, parseDiff } from '../../components/DiffView';
 import { syntaxLabel } from '../../lib/syntax';
 import { hljsTheme } from '../../lib/codeTheme';
 import { mix } from '../../lib/color';
 import { c, elevation, fonts, radius } from '../../theme/tokens';
+import { highlight, type Highlighted } from '../../lib/highlight';
 
-export type TextFormat = 'markdown' | 'csv' | null;
+export type TextFormat = 'markdown' | 'csv' | 'json' | 'notebook' | 'diff' | null;
+
+const RENDERED_LABEL: Record<Exclude<TextFormat, null>, () => string> = {
+  markdown: () => t('Formatiert'),
+  csv: () => t('Tabelle'),
+  json: () => t('Baum'),
+  notebook: () => t('Notebook'),
+  diff: () => t('Änderungen'),
+};
 
 const CSV_ROWS = 1000;
-
-interface Highlighted {
-  html: string;
-  language: string;
-}
-
-async function highlight(text: string, syntax: string): Promise<Highlighted> {
-  const { default: hljs } = await import('highlight.js/lib/common');
-  if ((syntax === 'powershell' || syntax === 'dos') && !hljs.getLanguage(syntax)) {
-    const module =
-      syntax === 'powershell' ? await import('highlight.js/lib/languages/powershell') : await import('highlight.js/lib/languages/dos');
-    hljs.registerLanguage(syntax, module.default);
-  }
-  if (text.length > 400_000) return { html: hljs.highlight(text, { language: 'plaintext' }).value, language: 'plaintext' };
-  if (syntax && syntax !== 'auto' && hljs.getLanguage(syntax)) {
-    return { html: hljs.highlight(text, { language: syntax, ignoreIllegals: true }).value, language: syntax };
-  }
-  const auto = hljs.highlightAuto(text);
-  return { html: auto.value, language: auto.language || 'plaintext' };
-}
 
 export function TextStage({
   rawUrl,
@@ -80,8 +72,27 @@ export function TextStage({
     };
   }, [rawUrl, preview]);
 
+  const lines = useMemo(() => (text === null ? 0 : text.split('\n').length - (text.endsWith('\n') ? 1 : 0)), [text]);
+  const table = useMemo(() => {
+    if (format !== 'csv' || text === null) return null;
+    const delimiter = detectDelimiter(text, /\.tsv$/i.test(filename) ? '\t' : undefined);
+    return { delimiter, ...parseCsv(text, delimiter, CSV_ROWS + 1) };
+  }, [format, text, filename]);
+  const json = useMemo(() => (format === 'json' && text !== null ? parseJson(text) : null), [format, text]);
+  const notebook = useMemo(() => (format === 'notebook' && text !== null ? parseNotebook(text) : null), [format, text]);
+  const diff = useMemo(() => (format === 'diff' && text !== null ? parseDiff(text) : null), [format, text]);
+  const usable =
+    text === null ||
+    format === 'markdown' ||
+    format === 'csv' ||
+    (format === 'json' && Boolean(json && json.ok)) ||
+    (format === 'notebook' && Boolean(notebook)) ||
+    (format === 'diff' && Boolean(diff));
+  const language = result?.language || (syntax !== 'auto' ? syntax : 'plaintext');
+  const rendered = Boolean(format) && usable && mode === 'rendered';
+
   useEffect(() => {
-    if (text === null || mode !== 'source' || result) return;
+    if (text === null || rendered || result) return;
     let cancelled = false;
     highlight(text, syntax)
       .then((highlighted) => !cancelled && setResult(highlighted))
@@ -89,16 +100,7 @@ export function TextStage({
     return () => {
       cancelled = true;
     };
-  }, [text, syntax, mode, result]);
-
-  const lines = useMemo(() => (text === null ? 0 : text.split('\n').length - (text.endsWith('\n') ? 1 : 0)), [text]);
-  const table = useMemo(() => {
-    if (format !== 'csv' || text === null) return null;
-    const delimiter = detectDelimiter(text, /\.tsv$/i.test(filename) ? '\t' : undefined);
-    return { delimiter, ...parseCsv(text, delimiter, CSV_ROWS + 1) };
-  }, [format, text, filename]);
-  const language = result?.language || (syntax !== 'auto' ? syntax : 'plaintext');
-  const rendered = Boolean(format) && mode === 'rendered';
+  }, [text, syntax, rendered, result]);
 
   if (!preview || failed) {
     return (
@@ -129,7 +131,14 @@ export function TextStage({
     );
   }
 
-  const label = format === 'csv' ? (/\.tsv$/i.test(filename) ? 'TSV' : 'CSV') : syntaxLabel(format === 'markdown' ? 'markdown' : language);
+  const label =
+    format === 'csv'
+      ? /\.tsv$/i.test(filename)
+        ? 'TSV'
+        : 'CSV'
+      : format === 'notebook'
+        ? 'Jupyter Notebook'
+        : syntaxLabel(format === 'markdown' ? 'markdown' : format === 'json' ? 'json' : format === 'diff' ? 'diff' : language);
   const summary =
     text === null
       ? ''
@@ -139,7 +148,15 @@ export function TextStage({
             columns: formatNumber(table.columns),
             size: formatBytes(sizeBytes),
           })
-        : t('{lines} Zeilen · {size}', { lines: formatNumber(lines), size: formatBytes(sizeBytes) });
+        : notebook && rendered
+          ? t('{cells} Zellen · {size}', { cells: formatNumber(notebook.cells.length), size: formatBytes(sizeBytes) })
+          : diff && rendered
+            ? t('{files} · +{additions} −{deletions}', {
+                files: tn(diff.files.length, '1 Datei', '{count} Dateien'),
+                additions: formatNumber(diff.additions),
+                deletions: formatNumber(diff.deletions),
+              })
+            : t('{lines} Zeilen · {size}', { lines: formatNumber(lines), size: formatBytes(sizeBytes) });
 
   return (
     <Box
@@ -172,7 +189,7 @@ export function TextStage({
           {summary}
         </Typography>
         <Box sx={{ flex: 1 }} />
-        {format && (
+        {format && usable && (
           <ToggleButtonGroup
             exclusive
             size="small"
@@ -181,7 +198,7 @@ export function TextStage({
             aria-label={t('Darstellung')}
             sx={{ mr: 1 }}
           >
-            <ToggleButton value="rendered">{format === 'csv' ? t('Tabelle') : t('Formatiert')}</ToggleButton>
+            <ToggleButton value="rendered">{RENDERED_LABEL[format]()}</ToggleButton>
             <ToggleButton value="source">{format === 'csv' ? t('Text') : t('Quelltext')}</ToggleButton>
           </ToggleButtonGroup>
         )}
@@ -220,6 +237,16 @@ export function TextStage({
         </Box>
       ) : rendered && table ? (
         <CsvTable data={table} limit={CSV_ROWS} />
+      ) : rendered && (json || notebook || diff) ? (
+        <Box sx={{ maxHeight: { xs: '75vh', md: 'min(80vh, calc(100dvh - 240px))' }, overflow: 'auto' }}>
+          {json && json.ok ? (
+            <JsonTree value={json.value} />
+          ) : notebook ? (
+            <NotebookView notebook={notebook} />
+          ) : diff ? (
+            <DiffView diff={diff} />
+          ) : null}
+        </Box>
       ) : (
         <Box
           sx={{

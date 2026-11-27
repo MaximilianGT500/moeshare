@@ -19,7 +19,9 @@ import { ProviderButtons } from './ProviderButtons';
 import { providerIcon } from '../../lib/providers';
 import { OrDivider, postAuth, Shake } from './AuthLayout';
 import { c, radius } from '../../theme/tokens';
-import { t } from '../../lib/i18n';
+import { rich, t } from '../../lib/i18n';
+import Checkbox from '@mui/material/Checkbox';
+import FormControlLabel from '@mui/material/FormControlLabel';
 
 const USERNAME_HINT = t('Buchstaben, Ziffern, Punkt, Unterstrich oder Bindestrich. Erscheint in deinen Datei-Links.');
 
@@ -92,9 +94,16 @@ function Header({ site, icon, title, text }: { site: SiteInfo; icon?: ReactNode;
 export function RegisterForm({ boot, onSuccess }: { boot: LoginBoot; onSuccess: (redirect: string) => void }) {
   const registration = boot.registration!;
   const { invite, oauth: pending } = registration;
+  const terms = registration.terms || null;
+  const [agreed, setAgreed] = useState(false);
   const form = useAccountForm(
     '/api/auth/register',
-    () => ({ invite: invite?.code || undefined, oauth: pending?.id || undefined, remember: true }),
+    () => ({
+      invite: invite?.code || undefined,
+      oauth: pending?.id || undefined,
+      remember: true,
+      ...(terms ? { acceptTerms: agreed, termsVersion: terms.version } : {}),
+    }),
     onSuccess,
     pending ? pending.suggestion : ''
   );
@@ -209,6 +218,23 @@ export function RegisterForm({ boot, onSuccess }: { boot: LoginBoot; onSuccess: 
               )}
             </Stack>
           </Shake>
+          {terms && (
+            <FormControlLabel
+              sx={{ alignItems: 'flex-start', mr: 0, '& .MuiCheckbox-root': { mt: -0.75 } }}
+              control={<Checkbox checked={agreed} onChange={(event) => setAgreed(event.target.checked)} />}
+              label={
+                <Typography variant="body2" sx={{ color: form.field === 'acceptTerms' ? c.error : undefined }}>
+                  {rich('Ich habe die {terms} gelesen und stimme ihnen zu.', {
+                    terms: (
+                      <Link href={terms.url} target="_blank" rel="noopener" underline="always">
+                        {t('Nutzungsbedingungen')}
+                      </Link>
+                    ),
+                  })}
+                </Typography>
+              }
+            />
+          )}
           <Collapse in={!!form.error} unmountOnExit>
             <Alert severity="error" role="alert">
               {form.error}
@@ -219,7 +245,7 @@ export function RegisterForm({ boot, onSuccess }: { boot: LoginBoot; onSuccess: 
             variant="contained"
             size="large"
             fullWidth
-            disabled={form.busy}
+            disabled={form.busy || Boolean(terms && !agreed)}
             startIcon={form.busy ? <CircularProgress size={18} color="inherit" /> : null}
           >
             {t('Konto erstellen')}

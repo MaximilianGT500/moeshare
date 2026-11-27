@@ -13,6 +13,7 @@ const designs = require('../services/designService');
 const domains = require('../services/domainService');
 const protection = require('../services/protectionService');
 const reactions = require('../services/reactionService');
+const comments = require('../services/commentService');
 const mailShare = require('../services/mailShareService');
 const audit = require('../services/auditService');
 const settings = require('../services/settingsService');
@@ -30,6 +31,7 @@ const BLOCKED = 'Dieses Album wurde von der Moderation gesperrt.';
 
 const unlockLimiter = limiter({ windowMs: 15 * 60 * 1000, limit: 30 });
 const reactLimiter = limiter({ windowMs: 60 * 1000, limit: 30 });
+const commentLimiter = limiter({ windowMs: 60 * 1000, limit: 30 });
 const mailLimiter = limiter({ windowMs: 60 * 1000, limit: 10 });
 const mailShareOn = (req, res, next) =>
   next(mailShare.enabled() ? undefined : forbidden('Teilen per E-Mail ist auf diesem Server abgeschaltet.'));
@@ -99,6 +101,7 @@ router.get('/a/:code', async (req, res) => {
       report: settings.get('reports.enabled') ? { kind: 'album', target: row.code } : null,
       feed: feedable(row) ? `${view.album.url}/feed.xml` : null,
       reactions: reactions.enabled() && style.design.show.reactions !== false ? await reactions.counts('a', row.id) : null,
+      comments: await commentHint(req, row, style.design),
     },
     scheme: style.design.scheme,
   });
@@ -151,6 +154,45 @@ router.post('/a/:code/unlock', sameOriginOnly, unlockLimiter, async (req, res) =
   }
   protection.grant(req, res, 'a', row.id);
   res.json({ ok: true });
+});
+
+async function commentHint(req, row, design) {
+  const target = {
+    kind: 'a',
+    id: row.id,
+    ownerId: row.user_id,
+    override: row.comments === null || row.comments === undefined ? null : Number(row.comments),
+    byDefault: !(design.show && design.show.comments === false),
+  };
+  const allowed = comments.rights(target, req.user || null);
+  return allowed.enabled ? { ...allowed, total: await comments.count('a', row.id) } : null;
+}
+
+async function commentTarget(req, res) {
+  const row = await publicAlbum(req);
+  if (!row) throw notFound(MISSING);
+  const access = await albums.access(req, row);
+  if (access.state === 'hidden') throw notFound(MISSING);
+  if (access.state === 'blocked') throw new HttpError(451, BLOCKED);
+  if (access.state === 'locked') throw forbidden('Dieses Album ist mit einem Passwort geschützt.', { code: 'locked' });
+  const owner = await db.get('SELECT username FROM users WHERE id = ?', [row.user_id]);
+  const { design } = await designs.forOwner(owner ? owner.username : '');
+  res.set('Cache-Control', 'no-store');
+  return {
+    kind: 'a',
+    id: row.id,
+    ownerId: row.user_id,
+    override: row.comments === null || row.comments === undefined ? null : Number(row.comments),
+    byDefault: !(design.show && design.show.comments === false),
+  };
+}
+
+router.get('/a/:code/comments', async (req, res) => {
+  res.json(await comments.list(await commentTarget(req, res), req.user, { before: req.query.before }));
+});
+
+router.post('/a/:code/comments', sameOriginOnly, commentLimiter, async (req, res) => {
+  res.status(201).json(await comments.create(await commentTarget(req, res), req.body || {}, req));
 });
 
 router.post('/a/:code/react', sameOriginOnly, reactLimiter, async (req, res) => {

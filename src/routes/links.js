@@ -50,23 +50,27 @@ function hostOf(url) {
 }
 
 function interstitial(req, res, row, access) {
-  const host = hostOf(row.url);
+  const destination = links.destinationFor(row, req);
+  const host = hostOf(destination.url);
   const heading = translate(req.language, 'Weiterleitung zu {host}', { host });
   res.set('Referrer-Policy', 'no-referrer');
+  res.vary('User-Agent');
+  res.vary('Accept-Language');
   return renderPage(res, {
     page: 'view',
     title: 'Weiterleitung',
     head: [
       '<meta name="robots" content="noindex" />',
       `<meta property="og:title" content="${escapeHtml(heading)}" />`,
-      `<meta property="og:description" content="${escapeHtml(row.url)}" />`,
+      `<meta property="og:description" content="${escapeHtml(destination.url)}" />`,
     ].join('\n'),
     data: {
       interstitial: {
         code: row.code,
-        url: row.url,
+        url: destination.url,
         host,
-        secure: /^https:/i.test(row.url),
+        secure: /^https:/i.test(destination.url),
+        via: destination.via,
         next: `/s/${displayPath(row.code)}?go=1`,
         brokenSince: row.broken_since ? Number(row.broken_since) : null,
         checkedAt: row.checked_at ? Number(row.checked_at) : null,
@@ -110,7 +114,9 @@ router.get('/s/:code', async (req, res) => {
   if (!crawler && !access.owner && !(await links.click(row))) return renderMessage(res, 410, USED, { title: 'Nicht mehr verfügbar' });
   if (!access.owner) stats.track(req, 'l', row.id, 'views');
   res.set('Referrer-Policy', 'no-referrer');
-  return res.redirect(302, row.url);
+  res.vary('User-Agent');
+  res.vary('Accept-Language');
+  return res.redirect(302, links.destinationFor(row, req).url);
 });
 
 router.post('/s/:code/unlock', sameOriginOnly, unlockLimiter, async (req, res) => {

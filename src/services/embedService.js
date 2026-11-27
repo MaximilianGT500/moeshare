@@ -185,6 +185,18 @@ function metaTags(record, embed, { domain = null, locale = 'de_DE' } = {}) {
       tag('property', 'og:audio', urls.direct),
       tag('property', 'og:audio:type', MIME[ext] || 'audio/mpeg')
     );
+    const meta = files.audioOf(record.audio_meta);
+    if (meta && meta.cover && storage.hasVariant(record, 'poster')) {
+      tags.push(
+        tag('property', 'og:image', urls.preview),
+        tag('name', 'twitter:image', urls.preview),
+        tag('name', 'twitter:card', 'summary')
+      );
+    }
+    if (meta && meta.artist) tags.push(tag('property', 'music:musician', meta.artist));
+    if (meta && meta.album) tags.push(tag('property', 'music:album', meta.album));
+    if (meta && meta.title && !(embed.enabled && embed.title) && !record.title)
+      tags.push(tag('property', 'og:title', meta.artist ? `${meta.artist} – ${meta.title}` : meta.title));
   } else {
     tags.push(tag('property', 'og:type', 'website'));
   }

@@ -33,6 +33,7 @@ const watermarks = require('./watermarkService');
 const addresses = require('./addressService');
 const similarity = require('../lib/similarity');
 const pulse = require('./pulseService');
+const sorting = require('./sortService');
 
 const log = logger.scope('upload');
 
@@ -123,10 +124,12 @@ function withPreset(raw, preset) {
   return merged;
 }
 
+const sourceOfRequest = (req) => (req.token ? { kind: 'token', tokenId: Number(req.token.id) || null } : { kind: 'browser' });
+
 function rawOptions(req, { preset = true } = {}) {
   const body = req.body || {};
   const header = (name) => req.get(name);
-  return withPreset(readOptions(body, header), preset && req.token ? req.token.preset : null);
+  return { ...withPreset(readOptions(body, header), preset && req.token ? req.token.preset : null), source: sourceOfRequest(req) };
 }
 
 function readOptions(body, header) {
@@ -224,6 +227,12 @@ async function resolveOptions(user, raw = {}, { kind = 'file' } = {}) {
     syntax,
     tags: raw.tags ? files.normalizeTags(raw.tags) : [],
     albumId: album ? album.id : null,
+    source: raw.source && typeof raw.source === 'object' ? raw.source : null,
+    explicit: {
+      album: first(raw.album) !== undefined,
+      expires: first(raw.expires) !== undefined,
+      warning: first(raw.warning) !== undefined,
+    },
   };
 }
 
@@ -387,7 +396,7 @@ async function accept(user, filename, { via = 'upload', originalName = null, opt
   const account = typeof user === 'string' ? await db.get('SELECT id, username FROM users WHERE username = ?', [user]) : user;
   const actor = account || { username: user };
   const username = actor.username;
-  const chosen = options || (await resolveOptions(actor, {}));
+  let chosen = options || (await resolveOptions(actor, {}));
   let prepared;
   try {
     prepared = await prepare(actor, filename, { chosen, originalName, via });
@@ -401,6 +410,13 @@ async function accept(user, filename, { via = 'upload', originalName = null, opt
     const { file } = filePaths(username, prepared.filename);
     const sha256 = await hashFile(file);
     const { size } = await fsp.stat(file);
+    const sorted = await sorting
+      .apply(actor, { via, filename: prepared.filename, originalName: prepared.originalName, syntax: chosen.syntax, size }, chosen)
+      .catch((error) => {
+        log.warn('Sortierregeln konnten nicht angewendet werden', { user: username, error });
+        return null;
+      });
+    if (sorted) chosen = sorted;
     const link = await dedupe.linkUpload(username, file, sha256, size);
     twin = link.twin;
     record = await insertWithSlug(
@@ -433,6 +449,7 @@ async function accept(user, filename, { via = 'upload', originalName = null, opt
   }
   if (prepared.original) await versions.keepOriginal(record, prepared.original);
   if (chosen.tags && chosen.tags.length) await files.setTags(record, chosen.tags);
+  if (chosen.star) await files.patch(record, { starred_at: Date.now() });
   if (chosen.albumId) {
     const order = await db.count('SELECT COALESCE(MAX(sort_order), 0) FROM album_files WHERE album_id = ?', [chosen.albumId]);
     await db.insertIgnore('album_files', {
@@ -456,6 +473,7 @@ async function accept(user, filename, { via = 'upload', originalName = null, opt
   analyzeLater(record, type);
   if (via !== 'import') pulse.count(type === 'text' ? 'text' : 'upload');
   const links = linksFor(record, chosen.domain);
+  if (chosen.sortedBy && chosen.sortedBy.length) links.rules = chosen.sortedBy;
   if (twin)
     links.duplicateOf = {
       id: twin.id,

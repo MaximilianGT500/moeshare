@@ -30,6 +30,7 @@ export interface PulseState {
   installId: string | null;
   lastHeartbeat: number | null;
   lastError: string | null;
+  blocked?: boolean;
 }
 
 export interface PulseConsentProps {
@@ -66,6 +67,8 @@ const LABELS = {
     never: 'Noch nichts gesendet',
     last: 'Zuletzt gesendet',
     problem: 'Letzter Versuch fehlgeschlagen',
+    blocked:
+      'MoeStudio nimmt von dieser Installation gerade keine Daten an. Es wird nichts gesendet. Hebt MoeStudio die Sperre auf, geht es von selbst weiter.',
   },
   en: {
     stats: 'Share usage statistics',
@@ -89,6 +92,8 @@ const LABELS = {
     never: 'Nothing sent yet',
     last: 'Last sent',
     problem: 'Last attempt failed',
+    blocked:
+      'MoeStudio currently does not accept data from this installation. Nothing is sent. Once MoeStudio lifts the block, it continues on its own.',
   },
 };
 
@@ -148,7 +153,8 @@ export function PulseConsent({ texts, value, onChange, preview, onForget, status
           </Typography>
         </Collapse>
       </Box>
-      {status && (
+      {status?.blocked && <Alert severity="warning">{t.blocked}</Alert>}
+      {status && !status.blocked && (
         <Typography variant="caption" sx={{ color: status.lastError ? 'error.main' : 'text.secondary' }}>
           {status.lastError
             ? `${t.problem}: ${status.lastError}`

@@ -8,7 +8,20 @@ const settings = require('./settingsService');
 const domains = require('./domainService');
 
 const LANGUAGES = ['de', 'en'];
-const NOTIFY_KEYS = ['security', 'reports', 'users', 'system', 'requests', 'reactions', 'memories', 'digest', 'quota', 'expiring'];
+const NOTIFY_KEYS = [
+  'security',
+  'reports',
+  'users',
+  'system',
+  'requests',
+  'reactions',
+  'comments',
+  'memories',
+  'digest',
+  'quota',
+  'expiring',
+  'retention',
+];
 const DEFAULTS = { language: null, urlStyle: null, domain: null, expiry: null, optimize: null, camera: false };
 const NOTIFY_DEFAULTS = {
   security: true,
@@ -17,10 +30,12 @@ const NOTIFY_DEFAULTS = {
   system: true,
   requests: true,
   reactions: false,
+  comments: true,
   memories: false,
   digest: false,
   quota: true,
   expiring: false,
+  retention: true,
 };
 
 function parse(raw) {

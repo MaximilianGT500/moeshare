@@ -76,6 +76,35 @@ function reactionMessage(language, entries) {
   };
 }
 
+function commentMessage(language, entries) {
+  const t = (text, values) => i18n.translate(language, text, values);
+  const total = entries.reduce((sum, entry) => sum + entry.count, 0);
+  const first = entries[0];
+  const subject =
+    entries.length === 1
+      ? total === 1
+        ? t('Neuer Kommentar zu {name}', { name: quoted(language, first.name) })
+        : t('{count} neue Kommentare zu {name}', { count: total, name: quoted(language, first.name) })
+      : t('{count} neue Kommentare zu deinen Uploads', { count: total });
+  const lines = entries
+    .slice(0, MAX_LINES)
+    .map((entry) =>
+      entry.count === 1
+        ? t('{name}: ein Kommentar', { name: quoted(language, entry.name) })
+        : t('{name}: {count} Kommentare', { name: quoted(language, entry.name), count: entry.count })
+    );
+  if (entries.length > MAX_LINES) lines.push(t('und {count} weitere', { count: entries.length - MAX_LINES }));
+  const url = entries.length === 1 ? `${first.url}#kommentare` : `${settings.get('site.baseUrl')}/dashboard#kommentare`;
+  return {
+    subject,
+    title: subject,
+    paragraphs: [t('Jemand hat deine Uploads kommentiert.'), ...lines],
+    button: { label: entries.length === 1 ? t('Kommentare lesen') : t('Im Dashboard ansehen'), url },
+    footer: t('Diese Hinweise schaltest du unter Konto › Einstellungen ab.'),
+    push: { title: subject, body: lines.join(' · '), url, tag: 'comments' },
+  };
+}
+
 async function deliverReactions(now = Date.now()) {
   const rows = await reactions.due(now);
   if (!rows.length) return 0;
@@ -85,20 +114,29 @@ async function deliverReactions(now = Date.now()) {
   for (const row of rows) {
     const target = targets.get(`${row.kind}${row.ref_id}`);
     if (!target) continue;
-    const list = byUser.get(Number(row.user_id)) || [];
-    list.push({ ...target, count: Number(row.reactions) || 0 });
-    byUser.set(Number(row.user_id), list);
+    const entry = byUser.get(Number(row.user_id)) || { reactions: [], comments: [] };
+    entry.reactions.push({ ...target, count: Number(row.reactions) || 0 });
+    entry.comments.push({ ...target, count: Number(row.comments) || 0 });
+    byUser.set(Number(row.user_id), entry);
   }
   let sent = 0;
-  for (const [userId, entries] of byUser) {
-    const merged = entries.filter((entry) => entry.count > 0).sort((a, b) => b.count - a.count);
-    if (!merged.length) continue;
-    await mail
-      .notifyUser(userId, 'reactions', (language) => reactionMessage(language, merged))
+  const deliver = (userId, kind, entries, build) => {
+    const merged = entries.filter((item) => item.count > 0).sort((a, b) => b.count - a.count);
+    if (!merged.length) return Promise.resolve();
+    return mail
+      .notifyUser(userId, kind, (language) => build(language, merged))
       .then(() => {
         sent += 1;
       })
-      .catch((error) => log.warn('Hinweis auf Reaktionen ließ sich nicht senden', { error }));
+      .catch((error) =>
+        log.warn(kind === 'comments' ? 'Hinweis auf Kommentare ließ sich nicht senden' : 'Hinweis auf Reaktionen ließ sich nicht senden', {
+          error,
+        })
+      );
+  };
+  for (const [userId, entry] of byUser) {
+    await deliver(userId, 'reactions', entry.reactions, reactionMessage);
+    await deliver(userId, 'comments', entry.comments, commentMessage);
   }
   return sent;
 }

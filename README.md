@@ -32,13 +32,17 @@ Offizielle Instance: [v3.moeshare.eu](https://v3.moeshare.eu).
 - [Andere Programme](#andere-programme)
 - [Rechte und Vorgaben für Tokens](#rechte-und-vorgaben-für-tokens)
 - [Bildschirm aufnehmen](#bildschirm-aufnehmen)
+- [Vom Handy hochladen](#vom-handy-hochladen)
+- [Sprachnotizen](#sprachnotizen)
 - [Discord-App](#discord-app)
 - [Telegram-Bot](#telegram-bot)
 - [Automatisch teilen](#automatisch-teilen)
+- [Sortierregeln](#sortierregeln)
 - [Texte, Kurzlinks und Alben](#texte-kurzlinks-und-alben)
 - [Kurzlinks prüfen und Zwischenseite](#kurzlinks-prüfen-und-zwischenseite)
+- [Kurzlinks nach Gerät und Sprache](#kurzlinks-nach-gerät-und-sprache)
 - [Anordnung der Albumseite](#anordnung-der-albumseite)
-- [Vorschau für PDF, Markdown, CSV, ZIP und Schriften](#vorschau-für-pdf-markdown-csv-zip-und-schriften)
+- [Vorschau für Dokumente, Daten und Code](#vorschau-für-dokumente-daten-und-code)
 - [Datei-Anfragen](#datei-anfragen)
 - [QR-Codes](#qr-codes)
 - [Eigene Adressen und eigener Pfad](#eigene-adressen-und-eigener-pfad)
@@ -49,6 +53,7 @@ Offizielle Instance: [v3.moeshare.eu](https://v3.moeshare.eu).
 - [Duplikate und Volltextsuche](#duplikate-und-volltextsuche)
 - [Farbe, Zeitraum und Upload-Kalender](#farbe-zeitraum-und-upload-kalender)
 - [Aufräumen](#aufräumen)
+- [Unbenutzte Dateien](#unbenutzte-dateien)
 - [Favoriten und Rückblick](#favoriten-und-rückblick)
 - [Später veröffentlichen](#später-veröffentlichen)
 - [Smarte Alben](#smarte-alben)
@@ -57,13 +62,16 @@ Offizielle Instance: [v3.moeshare.eu](https://v3.moeshare.eu).
 - [Befehlspalette](#befehlspalette)
 - [Bilder bearbeiten](#bilder-bearbeiten)
 - [Bilder optimieren und Wasserzeichen](#bilder-optimieren-und-wasserzeichen)
+- [Bildgrößen über die Adresse](#bildgrößen-über-die-adresse)
 - [Videos kürzen und GIFs](#videos-kürzen-und-gifs)
 - [Videos für alle Browser](#videos-für-alle-browser)
 - [Untertitel](#untertitel)
 - [Inhaltswarnungen](#inhaltswarnungen)
 - [Beschreibung und Alternativtext](#beschreibung-und-alternativtext)
 - [Kameradaten und Wellenform](#kameradaten-und-wellenform)
+- [Audio-Cover, Vorschaubilder und Farbpalette](#audio-cover-vorschaubilder-und-farbpalette)
 - [Reaktionen](#reaktionen)
+- [Kommentare](#kommentare)
 - [Einbetten](#einbetten)
 - [Per E-Mail teilen](#per-e-mail-teilen)
 - [Vorschauseiten gestalten](#vorschauseiten-gestalten)
@@ -85,6 +93,7 @@ Offizielle Instance: [v3.moeshare.eu](https://v3.moeshare.eu).
 - [Datenbank](#datenbank)
 - [Dateien in S3](#dateien-in-s3)
 - [Speicher im Blick](#speicher-im-blick)
+- [Systemprüfung](#systemprüfung)
 - [Einstellungen und Umgebungsvariablen](#einstellungen-und-umgebungsvariablen)
 - [Sprache](#sprache)
 - [Anmelden über andere Dienste](#anmelden-über-andere-dienste)
@@ -92,6 +101,7 @@ Offizielle Instance: [v3.moeshare.eu](https://v3.moeshare.eu).
 - [Einmal-Links](#einmal-links)
 - [Hinweis bei neuen Anmeldungen](#hinweis-bei-neuen-anmeldungen)
 - [Startseite, Impressum und Links](#startseite-impressum-und-links)
+- [Nutzungsbedingungen](#nutzungsbedingungen)
 - [Eigener Name und Versionshinweise](#eigener-name-und-versionshinweise)
 - [Ankündigungen und Wartungsmodus](#ankündigungen-und-wartungsmodus)
 - [App fürs Handy](#app-fürs-handy)
@@ -112,13 +122,16 @@ Offizielle Instance: [v3.moeshare.eu](https://v3.moeshare.eu).
 
 - **Hochladen** per ShareX, Drag & Drop, Zwischenablage oder Link, mit Vorschaubildern, Video-Standbildern und optionalem HLS-Streaming
 - **Bildschirm aufnehmen** im Browser: Bildschirmfoto oder Bildschirmvideo mit Ton, direkt hochgeladen, auch auf dem Mac und unter Linux
+- **Vom Handy hochladen**: Das Dashboard zeigt einen QR-Code, das Handy scannt ihn und lädt Fotos, Videos und Dateien ohne Anmeldung hoch. Sie erscheinen sofort am Rechner
+- **Sprachnotizen** direkt im Browser aufnehmen, mit Pegel, Pause und Vorhören
 - **Discord-App**: Anhänge aus Discord per Rechtsklick dauerhaft speichern statt mit Links, die nach einem Tag ablaufen, dazu `/hochladen` und `/kürzen`, auf jedem Server und in DMs
 - **Telegram-Bot**: Fotos, Videos, Dateien, Sprachnachrichten und Texte einfach an den Bot deiner Instanz schicken, er speichert sie im Konto und antwortet mit dem Link. Hashtags werden zu Tags, ein einzelner Link wird gekürzt
 - **Große Dateien** gehen im Browser in Teilen hoch und laufen nach einem Abbruch an derselben Stelle weiter, auch nach dem Neuladen der Seite
 - **Ordner und ZIP-Archive** als Album hochladen, entpackt wird im Browser
 - **Texte und Code** wie in einem Pastebin, mit Syntaxhervorhebung, aus ShareX oder direkt im Browser
-- **Vorschau für PDF, Markdown, CSV, ZIP und Schriften**: PDFs im Browser, Markdown formatiert, Tabellen als Tabelle, ZIP-Archive mit ihrem Inhalt, aus dem sich einzelne Dateien herunterladen lassen, und Schriftdateien mit Probetext in mehreren Größen
+- **Vorschau für PDF, Markdown, CSV, ZIP, Schriften, JSON, Notebooks und Diffs**: PDFs im Browser, Markdown formatiert, Tabellen als Tabelle, ZIP-Archive mit ihrem Inhalt, aus dem sich einzelne Dateien herunterladen lassen, Schriftdateien mit Probetext in mehreren Größen, JSON als aufklappbarer Baum, Jupyter-Notebooks mit Zellen und Ergebnissen und Diffs mit farbigen Zeilen
 - **Kurzlinks** für lange Adressen, auch direkt aus ShareX. MoeShare prüft die Ziele regelmäßig und markiert Links, die ins Leere führen, auf Wunsch zeigt eine Zwischenseite vorher, wohin es geht
+- **Kurzlinks nach Gerät und Sprache**: ein Link, der iPhones in den App Store, Android-Geräte zu Google Play und Besucher je nach Sprache auf die passende Seite schickt
 - **Schutz pro Upload**: Ablaufzeit, Passwort oder nur ein einziger Abruf, für Dateien, Texte und Kurzlinks
 - **Ende-zu-Ende verschlüsselt teilen**: Dateien und Texte werden schon im Browser verschlüsselt, den Schlüssel enthält nur der Link, der Server kennt weder Inhalt noch Namen
 - **Inhaltswarnungen**: Bilder und Videos erscheinen erst nach einem Klick, auch die Vorschau in Discord bleibt verschwommen
@@ -131,6 +144,7 @@ Offizielle Instance: [v3.moeshare.eu](https://v3.moeshare.eu).
 - **Upload-Kalender**: ein ganzes Jahr auf einen Blick, je dunkler ein Tag, desto mehr Uploads. Ein Klick zeigt die Dateien dieses Tages
 - **Papierkorb**: Gelöschtes lässt sich 30 Tage lang zurückholen
 - **Aufräumen**: große, nie aufgerufene und lange nicht mehr aufgerufene Dateien auf einen Blick, gesammelt löschen oder ablaufen lassen
+- **Unbenutzte Dateien**: Was lange niemand aufgerufen hat, läuft auf Wunsch nach einer Vorwarnung ab. Favoriten bleiben, die Besitzer bekommen vorher Bescheid
 - **Favoriten**: wichtige Dateien mit einem Stern markieren und mit einem Klick herausfiltern, beim Aufräumen bleiben sie außen vor
 - **Rückblick „An diesem Tag“**: Das Dashboard zeigt, was du am selben Tag vor einem oder mehreren Jahren hochgeladen hast, auf Wunsch kommt morgens eine E-Mail oder Push-Benachrichtigung
 - **Später veröffentlichen**: Uploads erscheinen erst zu einem gewählten Zeitpunkt, bis dahin sehen Besucher nur, wann es so weit ist
@@ -143,10 +157,15 @@ Offizielle Instance: [v3.moeshare.eu](https://v3.moeshare.eu).
 - **Ansichtsseiten** mit Bild-, Video- und Audioplayer in sechs Designs, mit Farben aus der Datei oder eigener Akzentfarbe, wählbarer Schrift, ein- und ausblendbaren Angaben und auf Wunsch eigenem CSS
 - **Kameradaten**: Kamera, Objektiv, Brennweite, Blende, Belichtungszeit, ISO und Aufnahmezeit aus jedem Foto, im Dashboard immer und auf der Ansichtsseite nur, wenn du es willst. Standort, Seriennummer und Namen bleiben draußen
 - **Wellenform**: Audiodateien zeigen ihre echte Wellenform, ein Klick oder eine Pfeiltaste springt an die Stelle
+- **Audio mit Titel und Cover**: Titel, Interpret, Album und Jahr aus MP3, FLAC, M4A und Co., das eingebettete Cover erscheint in Kacheln, auf der Ansichtsseite und in Link-Vorschauen
+- **Eigenes Vorschaubild für Videos**: eine Stelle aus dem Video wählen oder ein eigenes Bild hochladen
+- **Farbpalette**: bis zu sechs prägende Farben jedes Bildes, mit einem Klick als Hex-Wert kopiert, auf Wunsch auch auf der Ansichtsseite
 - **Beschreibung und Alternativtext** für jede Datei: stehen auf der Ansichtsseite und in Link-Vorschauen, helfen Menschen mit Screenreader und werden durchsucht, auch direkt aus ShareX
 - **Reaktionen** auf Dateien und Alben: Besucher reagieren mit 👍 ❤️ 😂 😮 🔥 👏, ohne Konto und ohne dass MoeShare IP-Adressen speichert. Neue Reaktionen kommen gesammelt per E-Mail oder Push
+- **Kommentare** unter Dateien und Alben, mit Konto oder auf Wunsch auch von Gästen, mit Schutz vor Spam, Moderation und gesammelten Hinweisen per E-Mail oder Push
 - **Einbetten**: Bilder, Videos, Audio, Alben und die Profilkarte mit einem iframe-Code in Blogs und Foren einbauen, dazu fertige Codes für Markdown, BBCode und HTML und **oEmbed** für WordPress, Ghost und Co.
 - **Automatisch teilen**: Neue Uploads landen als Link bei Discord, Slack, Telegram, ntfy, Matrix, Mastodon oder einem eigenen Webhook, mit bis zu zehn Regeln, Filtern nach Tag und Dateityp und eigener Nachricht
+- **Sortierregeln**: Neue Uploads sortieren sich selbst, je nach Dateityp, Endung, Namensmuster, Größe oder Weg, etwa ShareX, Handy oder Telegram: in ein Album, mit Tags, Ablaufzeit, Inhaltswarnung oder als Favorit
 - **Per E-Mail teilen**: Dateien und Alben direkt aus dem Dashboard an bis zu fünf Adressen schicken, mit persönlicher Nachricht
 - **Embed Builder** mit Live-Vorschau: eine Standardvorlage für alle und auf Wunsch eigene Vorlagen pro Benutzer, mit Platzhaltern wie `{dateiname}` oder `{größe}`
 - **Profilseiten** als Link-in-Bio-Seite: bis zu 30 Links mit Symbolen (automatisch, über 80 Dienste, Emojis oder eigene Bilder), Überschriften und Zeitplan, dazu Klickzahlen und „Kontakt speichern“, ausgewählte Dateien und öffentliche Alben
@@ -159,6 +178,7 @@ Offizielle Instance: [v3.moeshare.eu](https://v3.moeshare.eu).
 - **Bilder bearbeiten** im Browser: zuschneiden, drehen, spiegeln, Pfeile, Rahmen, Text und Verpixeln
 - **Präsentieren**: Screenshots im Editor auf einen Farbverlauf oder ihre eigene verschwommene Fassung legen, mit Rand, runden Ecken, Schatten, Fensterrahmen und festem Format, fertig für Social Media und Präsentationen
 - **Bilder optimieren** als WebP oder AVIF, auf Wunsch verkleinert und mit dem Original als älterer Fassung
+- **Bildgrößen über die Adresse**: `?w=800`, `?h=600`, `?fit=cover` oder `?format=webp` an der direkten Adresse liefern eine passende Fassung, zwischengespeichert und mit denselben Schutzregeln
 - **Wasserzeichen** aus Text oder Logo, automatisch auf jedem neuen Bild
 - **Videos kürzen und GIFs erstellen** direkt im Dashboard
 - **Videos für alle Browser**: HEVC, 10 Bit, MKV oder AVI bekommen im Hintergrund eine H.264-Fassung, hochkant gefilmte und anamorphe Videos erscheinen im richtigen Format
@@ -173,10 +193,12 @@ Offizielle Instance: [v3.moeshare.eu](https://v3.moeshare.eu).
 - **Push-Benachrichtigungen** aufs Handy oder den Rechner, etwa bei neuen Dateien in Datei-Anfragen oder einer Anmeldung auf einem neuen Gerät, auch ganz ohne E-Mail-Server
 - **Wochenbericht und Erinnerungen**: einmal in der Woche eine Übersicht über Uploads, Aufrufe und Speicher, ein Hinweis, bevor der Speicher voll ist, und eine Erinnerung, bevor Dateien ablaufen, per E-Mail oder Push
 - **Startseite** mit Statistiken und Upload-Verlauf, im Browser anpassbar oder abschaltbar
+- **Nutzungsbedingungen**, denen neue Konten bei der Registrierung und alle anderen nach einer Änderung zustimmen
 - **Dein Name**: Überall steht der Name deiner Instanz, auch in DNS-Einträgen, Dateinamen und Webhooks. „Läuft mit MoeShare“ und die Versionsnummer lassen sich abschalten
 - **Ankündigungen und Wartungsmodus**: Hinweise für alle oder nur Angemeldete, mit Zeitraum, und eine Wartungsseite, während du am Server arbeitest
 - **Update-Hinweis**: Admins sehen, wenn eine neue Version erschienen ist, mit den Neuerungen jeder verpassten Version, auf Wunsch abschaltbar
 - **Speicher im Blick**: belegter Platz nach Monat, Dateiart und Konto, die größten Dateien, was Duplikate sparen und eine Prüfung auf fehlende und verwaiste Dateien
+- **Systemprüfung**: Adresse, HTTPS, Proxy, Speicherplatz, Schreibrechte, Datenbank, E-Mail, Sicherungen, Virenscan, Uhrzeit und Version auf einen Blick, mit Tipps zum Beheben, im Adminbereich und mit `node cli.js doctor`
 - **Hilfe vom Entwickler**: Fragen und Fehler direkt aus dem Adminbereich an MoeStudio schicken, die Antwort kommt dorthin zurück. Nutzungsstatistik und Fehlerberichte über MoePulse, beides freiwillig
 - **Anmeldung** mit Passwort, Zwei-Faktor per Authenticator-App und Passkeys, dazu über Discord, GitHub, Google, Microsoft, GitLab oder jeden OpenID-Connect-Anbieter wie Authentik, Keycloak oder Authelia, dort auch mit Rollen aus Gruppen
 - **Ohne Passwort**: Die Anmeldung mit Passwort lässt sich ganz abschalten, dann geht es nur noch mit Passkey, über einen verknüpften Dienst oder mit einem Einmal-Link
@@ -392,6 +414,23 @@ Im Dashboard nimmt der Knopf **Bildschirm aufnehmen** neben „Von URL hochladen
 
 Videos landen als WebM (in Safari als MP4) in der normalen Warteschlange, große Aufnahmen gehen in Teilen hoch. Die Aufnahme braucht einen aktuellen Browser am Rechner, auf Handys gibt es den Knopf nicht, weil dort kein Browser den Bildschirm freigibt.
 
+## Vom Handy hochladen
+
+Fotos vom Handy landen ohne Umweg über Messenger oder Kabel im Dashboard. Ein Klick auf **Vom Handy hochladen** (das QR-Symbol über den Dateien, auch in der Befehlspalette) zeigt einen QR-Code. Scannst du ihn mit der Kamera des Handys, öffnet sich eine schlichte Seite mit zwei großen Knöpfen: **Foto oder Video aufnehmen** öffnet direkt die Kamera, **Aus der Galerie oder den Dateien** nimmt mehrere Dateien auf einmal. Am Handy brauchst du keine Anmeldung, die Dateien gehören trotzdem zu deinem Konto.
+
+- Jede Datei erscheint sofort im Fenster am Rechner, mit kleiner Vorschau und dem Gerät, von dem sie kam.
+- Der Link gilt 15 Minuten und lässt sich bis auf eine Stunde **verlängern**. Schließt du das Fenster am Rechner, endet er sofort. Über einen Link gehen höchstens 100 Dateien, gleichzeitig offen sind höchstens drei Links.
+- Wählst du oben ein **Album**, landen die Dateien direkt dort. Sonst gelten deine Vorgaben aus dem Konto und deine [Sortierregeln](#sortierregeln) mit der Quelle „Vom Handy“. Speicherlimit und gesperrte Dateitypen gelten wie immer.
+- Der Code im Link ist lang und zufällig, gespeichert wird nur sein Hash. Die Seite verrät beim Weiterklicken keine Adresse und erscheint in keiner Suchmaschine.
+
+Admins schalten die Funktion unter **Admin › Einstellungen › Uploads › Vom Handy hochladen** ab.
+
+## Sprachnotizen
+
+Mit dem Mikrofon-Knopf über den Dateien nimmst du eine **Sprachnotiz** auf, ganz ohne App. Ein Pegel zeigt, ob das Mikrofon etwas hört, zwischendurch kannst du pausieren. Nach dem Stopp hörst du die Aufnahme an, gibst ihr einen Namen und lädst sie hoch oder nimmst neu auf. Eine Aufnahme darf bis zu 15 Minuten lang sein. Je nach Browser entsteht eine M4A-, OGG- oder WEBA-Datei, die MoeShare wie jede andere Audiodatei mit Wellenform zeigt. Der Browser fragt beim ersten Mal, ob er das Mikrofon benutzen darf.
+
+`.weba` gehört ab 3.11.0 zu den Audioformaten. Hast du die Liste unter **Admin › Einstellungen › Uploads › Dateitypen** selbst angepasst, nimm die Endung dort dazu.
+
 ## Discord-App
 
 Anhänge in Discord bekommen Links, die nach rund einem Tag ablaufen. Mit der Discord-App landen sie dauerhaft in MoeShare:
@@ -472,6 +511,33 @@ Mit Schlüssel steht im Header `X-Webhook-Signature` der Wert `sha256=…`, gepr
 
 Admins schalten die Funktion unter **Admin › Einstellungen › Funktionen › Teilen und Reaktionen** für alle ab. Das ist unabhängig von den [Benachrichtigungen](#benachrichtigungen), die Admins über Ereignisse auf dem ganzen Server informieren. Über die [API](#api) verwaltest du die Regeln unter `/api/account/autoshare`.
 
+## Sortierregeln
+
+Unter **Konto › Sortierregeln** legst du bis zu 25 Regeln an, die neue Uploads von selbst einsortieren. Eine Regel besteht aus **Wenn** und **Dann**:
+
+| Wenn | Beispiel |
+| --- | --- |
+| Dateityp | Bilder, Videos, Audio, Texte oder andere Dateien |
+| Dateiendung | `png, jpg` |
+| Dateiname | Muster wie `Screenshot*` oder `IMG_????.HEIC`, `*` steht für beliebig viele Zeichen, `?` für genau eins |
+| Hochgeladen über | Browser, ShareX und API, Telegram, Discord, Handy oder Datei-Anfragen |
+| Zugang | nur bestimmte API-Tokens, etwa das von ShareX am Laptop |
+| Größe | mindestens und höchstens so viele MB |
+
+| Dann | Wirkung |
+| --- | --- |
+| Album | Die Datei landet in einem deiner Alben oder einem gemeinsamen Album |
+| Tags | kommen zu den Tags des Uploads dazu |
+| Ablaufzeit | etwa nach 30 Tagen löschen, höchstens so lange, wie der Server erlaubt |
+| Inhaltswarnung | mit oder ohne Hinweistext |
+| Favorit | Die Datei bekommt einen Stern |
+
+Alles, was du ausfüllst, muss zutreffen, leere Felder gelten immer. Die Regeln laufen von oben nach unten, die Reihenfolge änderst du mit den Pfeilen. Es greifen alle passenden Regeln: Tags sammeln sich, beim Album, bei der Ablaufzeit und bei der Warnung gewinnt die erste Regel. Mit **Danach keine weiteren Regeln prüfen** endet die Kette an dieser Stelle. Was du beim Hochladen selbst angibst, etwa ein Album oder `X-Expires` aus ShareX, hat immer Vorrang.
+
+Unter der Liste steht **Ausprobieren**: Gib einen Dateinamen ein, und MoeShare zeigt sofort, welche Regeln greifen und was passiert. Jede Regel zählt ihre Treffer, im Dashboard sagt eine Meldung nach dem Upload, nach welcher Regel einsortiert wurde, und die Antwort an ShareX und die API enthält `rules` mit `id` und `name`. [Smarte Alben](#smarte-alben) füllen sich selbst und stehen deshalb nicht zur Wahl. Wird ein Album gelöscht, verliert die Regel nur ihr Ziel.
+
+Über die [API](#api) stehen die Regeln unter `/api/account/rules`, `POST /api/account/rules/test` mit `{ "name": "Screenshot 1.png", "size": 120000, "source": "token" }` probiert sie aus.
+
 ## Texte, Kurzlinks und Alben
 
 **Texte** lädst du aus ShareX, über die API oder im Dashboard mit „Neuer Text“ hoch. MoeShare zeigt sie mit Syntaxhervorhebung, erkennt die Sprache auf Wunsch selbst und bietet die Rohfassung und einen Download an. Wie groß ein Text sein darf, legst du unter **Admin › Einstellungen › Uploads** fest.
@@ -490,6 +556,15 @@ Etwa einmal pro Woche ruft MoeShare das Ziel jedes Kurzlinks auf, zuerst nur den
 
 Mit **Zwischenseite vor der Weiterleitung** sehen Besucher zuerst, wohin ein Kurzlink führt: die Domain groß, die ganze Adresse und Hinweise, wenn die Verbindung nicht verschlüsselt ist oder das Ziel bei der letzten Prüfung nicht erreichbar war. Erst mit „Weiter“ geht es zum Ziel, und erst dann zählt der Klick. Einschalten lässt sie sich pro Link beim Kürzen oder Bearbeiten, über die API mit `"interstitial": true`. Unter **Admin › Einstellungen › Funktionen › Zwischenseite** gilt sie auf Wunsch für alle Kurzlinks. Ein `+` am Ende zeigt die Seite für jeden Kurzlink, etwa `/s/abc+`. Die Notiz zu einem Link bleibt dabei privat.
 
+## Kurzlinks nach Gerät und Sprache
+
+Ein Kurzlink kann je nach Besucher woanders hinführen. Beim Kürzen oder Bearbeiten öffnest du **Ziele nach Gerät und Sprache**:
+
+- **Auf iPhone und iPad** und **Auf Android**: etwa der App Store und Google Play für dieselbe App.
+- **Sprachen**: bis zu zehn Paare aus Sprachcode und Adresse, etwa `en` für die englische Seite oder `pt-br` für Brasilien. Es zählt die Spracheinstellung des Browsers, `en-GB` passt auch zu `en`.
+
+Das Gerät geht vor der Sprache, wer zu nichts passt, landet beim normalen Ziel. Die [Zwischenseite](#kurzlinks-prüfen-und-zwischenseite) zeigt das Ziel, das für den Besucher gilt, und sagt dazu, warum. Über die API setzt `"targets": { "ios": "…", "android": "…", "languages": { "en": "…" } }` beim Kürzen oder mit `PATCH /api/links/:id` die Ziele, `null` entfernt sie.
+
 ## Anordnung der Albumseite
 
 Unter **Bearbeiten** wählst du, wie die Albumseite die Dateien zeigt:
@@ -503,7 +578,7 @@ Unter **Bearbeiten** wählst du, wie die Albumseite die Dateien zeigt:
 
 Über die API setzt `PATCH /api/albums/:id` mit `{ "layout": "rows" }`, `"grid"`, `"masonry"` oder `"timeline"` die Anordnung.
 
-## Vorschau für PDF, Markdown, CSV, ZIP und Schriften
+## Vorschau für Dokumente, Daten und Code
 
 Viele Dateien zeigt die Ansichtsseite direkt an, statt nur einen Download anzubieten:
 
@@ -511,9 +586,12 @@ Viele Dateien zeigt die Ansichtsseite direkt an, statt nur einen Download anzubi
 - **Markdown** formatiert, mit Überschriften, Listen, Aufgabenlisten, Tabellen, Zitaten und Code mit Syntaxhervorhebung. HTML im Text bleibt Text, und Bilder von fremden Seiten erscheinen nur als Link. Über „Quelltext“ siehst du die Datei, wie sie ist.
 - **CSV und TSV** als Tabelle mit fester Kopfzeile, Zahlen stehen rechtsbündig. Ob Komma, Semikolon, Tabulator oder senkrechter Strich die Spalten trennt, erkennt MoeShare selbst. Die Tabelle zeigt die ersten 1.000 Zeilen, „Text“ die Rohfassung.
 - **ZIP-Archive** mit ihrem Inhalt als Ordnerbaum, mit Größe und Datum jeder Datei. Einzelne Dateien lädst du direkt herunter, ohne das ganze Archiv zu laden. Bei verschlüsselten Einträgen und seltenen Packverfahren bleibt nur der Download des ganzen Archivs. Angezeigt werden bis zu 10.000 Einträge.
+- **JSON** als aufklappbarer Baum mit farbigen Werten, dazu „Alles aufklappen“ und „Alles zuklappen“. Lange Listen zeigt der Baum in Schritten von 200 Einträgen.
+- **Jupyter-Notebooks** (`.ipynb`) mit Markdown-Zellen, Code mit Syntaxhervorhebung, Ausführungsnummern und Ergebnissen: Text, Fehlermeldungen und Bilder. HTML- und JavaScript-Ausgaben zeigt MoeShare aus Sicherheitsgründen nicht an.
+- **Diffs und Patches** (`.diff`, `.patch`) pro Datei mit Zeilennummern, hinzugefügte Zeilen grün, entfernte rot, dazu die Zahl der Änderungen.
 - **Schriften** als TTF, OTF, WOFF oder WOFF2 mit einem Probetext, den du selbst ändern und mit einem Regler vergrößern kannst, dazu Alphabet, Ziffern, Umlaute und Satzzeichen und derselbe Text in 12 bis 32 Pixeln. In der großen Ansicht im Dashboard steht ein „Aa“ mit Probesatz in der Schrift. Kann der Browser eine Datei nicht als Schrift lesen, bleibt der Download.
 
-Markdown und CSV kommen wie andere Texte bis 512 KB in die Vorschau, größere Dateien gibt es als Download.
+Markdown, CSV, JSON und Diffs kommen wie andere Texte bis 512 KB in die Vorschau, Notebooks bis 8 MB, größere Dateien gibt es als Download. Über „Quelltext“ siehst du jede Datei, wie sie ist.
 
 ## Datei-Anfragen
 
@@ -600,6 +678,16 @@ Unter **Dashboard › Aufräumen** findest du Dateien, die viel Platz brauchen, 
 
 Ähnliche Bilder erkennt MoeShare an einem Fingerabdruck, den es beim Hochladen aus einer stark verkleinerten Graustufen-Fassung berechnet (dHash). Dateiname, Auflösung und Format spielen dabei keine Rolle. Einfarbige Flächen und fast leere Bilder lässt MoeShare außen vor, weil sie sich alle gleichen. Für Bilder aus älteren Versionen holt MoeShare den Fingerabdruck im Hintergrund nach, 30 Bilder pro Minute.
 
+## Unbenutzte Dateien
+
+Auf vollen Servern sammelt sich gern, was niemand mehr braucht. Unter **Admin › Einstellungen › Uploads › Unbenutzte Dateien** wählst du, nach wie vielen Tagen ohne Aufruf eine Datei abläuft: 30, 60 oder 90 Tage, ein halbes, ein ganzes oder zwei Jahre. Gezählt werden Aufrufe der Ansichtsseite, Downloads und direkte Abrufe aus der [Statistik](#papierkorb-statistiken-und-zip).
+
+- Einmal am Tag markiert MoeShare passende Dateien. Sie laufen nach einer **Vorwarnung** von 3, 7, 14 oder 30 Tagen ab und landen dann im [Papierkorb](#papierkorb-statistiken-und-zip), ist er abgeschaltet, werden sie gelöscht. Die Besitzer bekommen eine gesammelte E-Mail oder Push-Nachricht, abschalten lässt sie sich unter **Konto › Einstellungen**.
+- Wird eine markierte Datei in der Zwischenzeit wieder aufgerufen, nimmt MoeShare die Ablaufzeit beim nächsten Durchlauf von selbst zurück. Ein **Stern** behält sie ebenfalls. Im Dashboard zeigt ein eigenes Symbol auf der Kachel, welche Dateien betroffen sind.
+- **Nie betroffen** sind Favoriten, Dateien mit eigener Ablaufzeit, gesperrte und geplante Dateien und, solange **Auch für Admins** aus ist, die Dateien der Admins.
+- Eine **Vorschau** zeigt vorher, wie viele Dateien und Konten es träfe. **Jetzt anwenden** markiert sofort, statt auf den nächsten Durchlauf zu warten. Schaltest du die Regel ab, nimmt MoeShare alle noch offenen Ablaufzeiten innerhalb einer Stunde zurück.
+- Die Regel braucht die Statistik. Ist sie aus, wird sie kürzer aufbewahrt als die gewählte Frist oder reicht sie noch nicht weit genug zurück, passiert nichts, und die Vorschau sagt, warum.
+
 ## Farbe, Zeitraum und Upload-Kalender
 
 **Nach Farbe filtern**: Über das Filter-Symbol in der Leiste über den Dateien wählst du eine von zehn Farben, etwa Rot, Blau oder Grautöne. Dann zeigt das Dashboard nur Bilder und Videos, deren Hauptfarbe dazu passt, auch zusammen mit Suche, Dateityp, Tag und Favoriten. Die Hauptfarbe bestimmt MoeShare beim Hochladen, solange unter **Admin › Einstellungen › Uploads** „Hauptfarbe erkennen“ an ist (Standard). Dateien aus älteren Versionen ordnet MoeShare nach dem Update im Hintergrund einer Farbe zu.
@@ -654,6 +742,21 @@ Gespeichert wird als Kopie oder anstelle des Originals. Beim Ersetzen bleibt der
 
 **Wasserzeichen**: Unter **Gestalten › Wasserzeichen** legt jede Person einen Text mit bis zu 80 Zeichen oder ein Logo fest (PNG mit transparentem Hintergrund oder SVG, höchstens 4 MB). Dazu kommen Position (neun Stellen oder über das ganze Bild verteilt), Größe, Deckkraft, Farbe und ein Schatten, der Text auf hellen und dunklen Bildern lesbar hält. Eine Vorschau zeigt das Ergebnis auf deinem letzten Bild oder einem Beispielbild. Das Wasserzeichen landet in jedem neuen Bild, schon hochgeladene bleiben unverändert. Mit „Original aufheben“ bleibt das Bild ohne Wasserzeichen als ältere Fassung erhalten, die nur du siehst. Einzelne Uploads nimmst du in den Upload-Optionen oder mit `X-Watermark: false` aus. Admins schalten Wasserzeichen unter **Admin › Einstellungen › Bilder** für alle ab. Für Text bringt MoeShare die Schrift Inter mit, eine installierte Schrift braucht der Server dafür nicht.
 
+## Bildgrößen über die Adresse
+
+Jedes Bild gibt es über seine direkte Adresse auch in anderen Größen und Formaten. Häng einfach Parameter an:
+
+| Parameter | Bedeutung |
+| --- | --- |
+| `w`, `h` | Breite und Höhe in Pixeln, 1 bis 4096. Eins reicht, das Seitenverhältnis bleibt |
+| `fit` | `inside` (Standard, passt hinein), `cover` (füllt und schneidet zu), `contain` (mit Rand) oder `fill` (verzerrt) |
+| `format` | `webp`, `avif`, `jpeg` oder `png` |
+| `q` | Qualität von 30 bis 100 |
+
+Ein Beispiel: `https://share.example.com/uploads/max/sonnenuntergang.png?w=800&format=webp`. Bewegte GIFs und WebPs bleiben bewegt, größer als das Original wird ein Bild nie. Passwörter, Aufruflimits und der [Hotlink-Schutz](#hotlink-schutz) gelten wie für das Original. Fertige Fassungen liegen in einem Zwischenspeicher, standardmäßig bis 512 MB, die ältesten fliegen zuerst raus. Pro Besucher rechnet der Server höchstens 60 neue Fassungen in der Minute. In der großen Ansicht im Dashboard baut dir der Kasten **Andere Größe oder anderes Format** unter Details die Adresse zusammen.
+
+Unter **Admin › Einstellungen › Bilder › Bildgrößen über die Adresse** schaltest du die Funktion ab oder änderst die Größe des Zwischenspeichers, unter **Admin › Speicher** siehst du, wie voll er ist, und leerst ihn.
+
 ## Videos kürzen und GIFs
 
 Ein Video öffnest du im Dashboard über das Menü der Datei oder in der großen Ansicht mit „Kürzen oder GIF machen“. Start und Ende legst du auf einer Zeitleiste fest, der Ausschnitt lässt sich vorher abspielen. Als **MP4** speicherst du ihn mit oder ohne Ton als neue Datei oder als neue Fassung des Videos, dann bleibt der Link gleich. Als **GIF** wählst du 10 bis 25 Bilder pro Sekunde und eine Breite von 320 bis 800 Pixeln, ein GIF darf höchstens 30 Sekunden lang sein. FFmpeg rechnet auf dem Server im Hintergrund, den Fortschritt zeigt der Dialog. Das Ergebnis übernimmt die Inhaltswarnung des Videos und zählt zum Speicher wie jeder andere Upload.
@@ -688,6 +791,14 @@ Beim Hochladen liest MoeShare aus Fotos **Kamera, Objektiv, Brennweite** (mit Kl
 
 **Audiodateien** bekommen beim Hochladen eine echte Wellenform, berechnet mit FFmpeg. Auf der Ansichtsseite springst du per Klick, Ziehen oder Pfeiltaste an jede Stelle, im Dashboard zeigen die Kacheln die Form und wie weit eine Datei abgespielt ist. Ältere Audiodateien bekommen ihre Wellenform im Hintergrund, drei pro Durchgang.
 
+## Audio-Cover, Vorschaubilder und Farbpalette
+
+- **Audio**: Aus MP3, FLAC, M4A, OGG und Co. liest MoeShare mit FFmpeg Titel, Interpret, Album, Jahr, Titelnummer und Genre. Ein eingebettetes **Cover** erscheint in der Kachel, auf der Ansichtsseite, im Album und in Link-Vorschauen, etwa in Discord. Ohne eigenen Titel heißt die Datei dort so wie das Lied.
+- **Vorschaubild für Videos**: Im Dashboard unter **⋮ › Vorschaubild wählen** spulst du zu einer Stelle und nimmst dieses Bild, oder du lädst ein eigenes hoch, als PNG, JPEG, WebP oder AVIF bis 15 MB. **Automatisch** holt das ursprüngliche Bild zurück. Kacheln, Ansichtsseite, Einbettungen und Link-Vorschauen zeigen das neue Bild sofort, auch die Hauptfarbe passt sich an.
+- **Farbpalette**: Für Bilder und Videos bestimmt MoeShare bis zu sechs prägende Farben. Sie stehen in der großen Ansicht unter Details, ein Klick kopiert den Hex-Wert. Unter **Gestalten › Was die Seite zeigt › Farbpalette** erscheinen sie auch auf deinen Ansichtsseiten.
+
+Für ältere Dateien trägt MoeShare Audio-Angaben, Cover und Paletten nach dem Update im Hintergrund nach.
+
 ## Reaktionen
 
 Unter jeder Datei und auf Albumseiten können Besucher mit 👍 ❤️ 😂 😮 🔥 👏 reagieren, ohne Konto. Gespeichert werden nur die Summen pro Emoji. Damit niemand die Zahlen in die Höhe treibt, zählt jedes Emoji pro Besucher einmal am Tag. Dafür merkt sich MoeShare für 24 Stunden einen Fingerabdruck aus IP-Adresse und Browser, verschlüsselt mit einem Schlüssel, der jeden Tag wechselt, und nur im Arbeitsspeicher. IP-Adressen landen nirgends.
@@ -695,6 +806,18 @@ Unter jeder Datei und auf Albumseiten können Besucher mit 👍 ❤️ 😂 😮
 Dateien mit Aufruflimit und verschlüsselte Dateien zeigen keine Reaktionen, Dateien und Alben mit Passwort erst nach dem Entsperren, private Alben nie. Unter **Gestalten › Vorschauseite** blendest du die Reaktionen für deine Seiten und Alben aus, Admins schalten sie unter **Admin › Einstellungen › Funktionen › Teilen und Reaktionen** für alle ab.
 
 Im Dashboard steht die Zahl der Reaktionen auf jeder Kachel und in den Details, die Sortierung **Meiste Reaktionen** zeigt die beliebtesten Dateien zuerst und die **Statistik** listet sie mit der Gesamtzahl. Unter **Konto › Einstellungen** schaltest du Hinweise auf neue Reaktionen ein, per [E-Mail](#e-mail) oder [Push](#push-benachrichtigungen). Damit nicht jedes Emoji einzeln klingelt, sammelt MoeShare die Reaktionen zehn Minuten lang und schickt dann eine Nachricht für alle Dateien und Alben zusammen. Eigene Reaktionen lösen keinen Hinweis aus.
+
+## Kommentare
+
+Unter Dateien und Alben können Besucher kommentieren. Wer das darf, legen Admins unter **Admin › Einstellungen › Funktionen › Kommentare** fest: niemand, nur angemeldete Konten (Standard) oder alle, auch Gäste mit einem Namen.
+
+- Jede Person schaltet Kommentare für ihre Ansichtsseiten unter **Gestalten › Was die Seite zeigt** ab und für einzelne Dateien und Alben beim Bearbeiten an oder aus.
+- **Moderation**: Besitzer und Admins blenden Kommentare aus oder löschen sie, ausgeblendete sehen nur sie. Wer selbst kommentiert hat, löscht seinen Kommentar, Gäste 24 Stunden lang im selben Browser. Antworten des Besitzers tragen ein Abzeichen.
+- **Gegen Spam**: ein unsichtbares Feld, in das nur Bots etwas schreiben, höchstens fünf Kommentare in zehn Minuten und 40 am Tag pro Person, ohne dass MoeShare IP-Adressen speichert, eine Liste gesperrter Wörter und, solange du es nicht erlaubst, keine Links von Gästen. Mehr als drei Links gehen nie.
+- **Hinweise**: Neue Kommentare kommen gesammelt per E-Mail oder Push, wie bei den [Reaktionen](#reaktionen). Im Dashboard unter **Statistik** stehen die neuesten Kommentare zu deinen Uploads, Kacheln zeigen die Zahl.
+- Dateien mit Passwort zeigen Kommentare erst nach dem Entsperren, Ende-zu-Ende verschlüsselte Dateien haben keine.
+
+Über die API liest `GET /view/:dateiname/comments` die Kommentare einer Datei und `GET /a/:code/comments` die eines Albums, `GET /api/comments/recent` die neuesten zu deinen Uploads.
 
 ## Einbetten
 
@@ -1014,6 +1137,26 @@ Unter **Admin › Speicher** siehst du, wie viel belegt ist, was zusammengelegte
 
 Auf der Kommandozeile geht dasselbe mit `node cli.js storage-check`, mit `--verschieben` legt der Befehl verwaiste Dateien gleich beiseite.
 
+## Systemprüfung
+
+Unter **Admin › System** prüft **Jetzt prüfen** in ein paar Sekunden, ob die Installation rund läuft:
+
+| Prüfung | Was sie ansieht |
+| --- | --- |
+| Adresse | ob die eingetragene Adresse zu der passt, über die du gerade zugreifst |
+| HTTPS | ob Verbindungen verschlüsselt sind |
+| Reverse-Proxy | ob „Hinter einem Reverse-Proxy“ zu den Anfragen passt |
+| Speicherplatz | wie viel auf der Festplatte frei ist |
+| Schreibrechte | ob MoeShare in `uploads` und `db` schreiben darf |
+| Datenbank, S3 | ob sie antworten und wie schnell |
+| FFmpeg, ClamAV, E-Mail, Caddy | ob die Dienste da sind und antworten |
+| Sicherungen | ob es eine aktuelle Sicherung gibt |
+| Anmeldung der Admins | ob alle Admins einen zweiten Faktor oder Passkeys nutzen |
+| Uhrzeit | ob die Uhr des Servers zu deinem Gerät passt, wichtig für Codes aus Authenticator-Apps |
+| Node.js, Version, MoePulse | ob alles aktuell ist und ankommt |
+
+Probleme stehen oben, jedes mit einem Tipp, wo du es behebst. **Bericht kopieren** legt das Ergebnis als Text in die Zwischenablage, praktisch für eine Frage an den Support. Auf dem Server geht dasselbe mit `node cli.js doctor`, bei Fehlern endet der Befehl mit Code 1.
+
 ## Einstellungen und Umgebungsvariablen
 
 Alle Einstellungen stehen in der Datenbank und werden unter **Admin › Einstellungen** geändert: Allgemein, Uploads, Bilder, Funktionen, Virenscan, Eigene Domains, Speicherort, Sicherungen, E-Mail, Anmeldung, Anmeldedienste, Rechtliches und Links, Benachrichtigungen, Import und System. Änderungen gelten sofort, auch für alle Prozesse im PM2-Cluster.
@@ -1111,6 +1254,17 @@ Unter der Adresse ohne Pfad zeigt MoeShare auf Wunsch eine Startseite mit Dateie
 Der Name aus **Admin › Einstellungen › Allgemein** steht überall, wo deine Seite gemeint ist: im Browser-Tab, bei der Anmeldung, in E-Mails, Benachrichtigungen und Link-Vorschauen. „MoeShare“ bleibt nur dort, wo die Software gemeint ist, etwa bei der Version. Den Hinweis „Läuft mit MoeShare“ unten auf der Startseite schaltest du dort ebenfalls ab.
 
 Impressum und Datenschutzerklärung trägst du unter **Admin › Einstellungen › Rechtliches und Links** ein, entweder als Link auf eine bestehende Seite oder als Text. Text zeigt MoeShare unter `/impressum` und `/datenschutz` an, Adressen und E-Mails werden dabei zu Links. Dort legst du auch bis zu acht eigene Links an, etwa zu deinem Discord-Server oder einer Status-Seite. Alle stehen im Fuß jeder Seite, auf der Startseite genauso wie bei der Anmeldung, im Dashboard und auf den Ansichtsseiten.
+
+## Nutzungsbedingungen
+
+Unter **Admin › Einstellungen › Rechtliches und Links › Nutzungsbedingungen** schreibst du eigene Nutzungsbedingungen und schaltest **Zustimmung verlangen** ein. Absätze trennst du mit einer Leerzeile, Überschriften beginnen mit `##`, Links werden von selbst klickbar.
+
+- Neue Konten setzen bei der Registrierung einen Haken, ohne ihn geht es nicht weiter. Wer sich über einen Anmeldedienst registriert, stimmt beim ersten Besuch zu.
+- **Veröffentlichen** erzeugt eine neue Fassung. Bestehende Konten sehen beim nächsten Besuch der Weboberfläche die neue Fassung und stimmen zu. Bis dahin bleiben ihre Dateien und Links erreichbar und ShareX lädt weiter hoch. **Nur kleine Korrektur** speichert Tippfehler, ohne dass jemand neu zustimmen muss.
+- Der Adminbereich zeigt, wie viele Konten der aktuellen Fassung zugestimmt haben, jedes Konto sieht unter **Konto › Konto**, wann es zugestimmt hat.
+- Die Bedingungen stehen unter `/nutzungsbedingungen` (oder `/terms`) und unten auf jeder Seite neben Impressum und Datenschutz.
+
+Zum Veröffentlichen fragt MoeShare noch einmal nach deinem Passwort oder Passkey.
 
 ## Eigener Name und Versionshinweise
 
@@ -1279,13 +1433,13 @@ Abschalten lässt sich die Prüfung dort oder unter **Admin › Einstellungen �
 
 ```json
 {
-  "version": "3.10.0",
-  "date": "2026-11-24",
-  "changelog": "https://moeshare.moestudio.net/changelog.html#v3.10.0",
+  "version": "3.11.0",
+  "date": "2026-11-27",
+  "changelog": "https://moeshare.moestudio.net/changelog.html#v3.11.0",
   "security": false,
   "notes": {
-    "de": ["Kameradaten, Wellenformen, Speicheranalyse, geprüfte Kurzlinks und neue Album-Anordnungen"],
-    "en": ["Camera data, waveforms, storage analysis, checked short links and new album layouts"]
+    "de": ["Sortierregeln, Uploads vom Handy, Sprachnotizen, Kommentare, Bildgrößen über die Adresse und eine Systemprüfung"],
+    "en": ["Sort rules, uploads from your phone, voice memos, comments, image sizes via the URL and a system check"]
   }
 }
 ```
@@ -1357,6 +1511,7 @@ Wer lieber selbst sichert, nimmt diese Ordner mit:
 | `node cli.js storage <s3\|lokal>` | Verschiebt vorhandene Dateien nach S3 oder zurück auf den Server |
 | `node cli.js videos` | Prüft vorhandene Videos: Abmessungen, Vorschaubilder und [Fassungen für alle Browser](#videos-für-alle-browser) |
 | `node cli.js storage-check [--verschieben]` | Sucht fehlende und verwaiste Dateien, siehe [Speicher im Blick](#speicher-im-blick). Mit `--verschieben` wandern verwaiste Dateien nach `uploads/.verwaist`. Fehlt eine Datei, endet der Befehl mit Code 2 |
+| `node cli.js doctor` | [Systemprüfung](#systemprüfung) auf der Kommandozeile. Bei Fehlern endet der Befehl mit Code 1 |
 | `node cli.js version` | Zeigt die installierte Version und fragt nach, ob es eine neuere gibt, siehe [Versionsprüfung](#versionsprüfung) |
 | `node cli.js import <zipline\|xbackbone\|chibisafe> --db <adresse> --files <ordner>` | Übernimmt einen anderen Uploader, siehe [Import](#import-aus-anderen-uploadern). Mit `--probe` nur ein Probelauf, `--ohne-admins` macht niemanden zum Admin, `--waisen-ueberspringen` lässt Dateien ohne Besitzer weg, `--als <admin>` bestimmt, wem sie gehören. |
 
@@ -1386,12 +1541,17 @@ Skripte und Uploader melden sich mit einem API-Token im Header `Authorization` a
 | `POST` | `/api/albums` | Album anlegen, mit `rule: { tag, type, starred, days }` als [smartes Album](#smarte-alben) und `layout` für die [Anordnung](#anordnung-der-albumseite). `PATCH /api/albums/:id` ändert beides, `rule: null` macht es wieder zu einem normalen Album |
 | `GET` | `/api/links?broken=1` | Nur Kurzlinks, deren Ziel bei der letzten [Prüfung](#kurzlinks-prüfen-und-zwischenseite) nicht erreichbar war. Jeder Link hat `check: { status, checkedAt, brokenSince }` und `interstitial` |
 | `POST` | `/api/links/:id/check` | Ziel eines eigenen Kurzlinks sofort prüfen. Antwort: `{ link }` |
+| `PATCH` | `/api/links/:id` | Eigenen Kurzlink ändern, darunter `targets: { ios, android, languages }` für [Ziele nach Gerät und Sprache](#kurzlinks-nach-gerät-und-sprache), `targets: null` entfernt sie. Antwort: `{ link }` |
+| `POST` | `/api/phone-links` | Link zum [Hochladen vom Handy](#vom-handy-hochladen), optional mit `album` (ID oder Code). Antwort: `{ link }` mit `url` und `expiresAt`. `GET /api/phone-links/:id` zeigt, was angekommen ist, `POST /api/phone-links/:id/extend` verlängert, `DELETE` beendet ihn |
 | `POST` | `/api/albums/:id/email` | Album per E-Mail teilen, wie bei Dateien |
 | `PATCH` | `/api/tags/:tag` | [Tag](#tags-verwalten) umbenennen oder mit `{ name }` in einen vorhandenen zusammenführen. `DELETE /api/tags/:tag` löscht ihn |
 | `GET` | `/api/account/autoshare` | Regeln zum [automatischen Teilen](#automatisch-teilen): `{ enabled, rules, kinds, types, max }`. `POST` legt eine an (`kind` plus die Felder des Ziels, dazu `name`, `tag`, `types`, `template`), `PATCH /api/account/autoshare/:id` ändert sie, `DELETE` entfernt sie, `POST /api/account/autoshare/:id/test` schickt eine Testnachricht |
+| `GET` | `/api/account/rules` | [Sortierregeln](#sortierregeln): `{ rules, max, types, sources }`. `POST` legt eine an (`name`, `conditions`, `actions`, `stopAfter`), `PATCH /api/account/rules/:id` ändert sie, `DELETE` entfernt sie, `POST /api/account/rules/order` mit `{ ids }` sortiert sie um, `POST /api/account/rules/test` probiert sie aus |
+| `POST` | `/api/files/:id/poster` | [Vorschaubild](#audio-cover-vorschaubilder-und-farbpalette) eines Videos: `{ "at": 12.5 }` nimmt das Bild bei 12,5 Sekunden, ein Bild als Body wird zum eigenen Vorschaubild. `DELETE` macht es wieder automatisch. Antwort: `{ file }` |
+| `GET` | `/api/comments/recent` | Die neuesten [Kommentare](#kommentare) zu deinen Dateien und Alben. `PATCH /api/comments/:id` mit `{ hidden }` blendet einen aus, `DELETE` löscht ihn |
 | `DELETE` | `/file/:dateiname` | Eigene Datei in den Papierkorb legen, ohne Papierkorb sofort löschen. Antwort: `{ ok, trashed }` |
 
-Öffentlich erreichbar sind `/view/:dateiname` (Ansichtsseite), `/download/:dateiname`, `/view/:dateiname/zip` und `/view/:dateiname/zip/:nr` ([Inhalt von ZIP-Archiven](#vorschau-für-pdf-markdown-csv-zip-und-schriften) und einzelne Dateien daraus), `/uploads/:benutzer/:dateiname` (die Datei selbst), `/s/:code` (Kurzlinks), `/a/:code` (Alben), `/a/:code/zip` (Album als ZIP), `/u/:benutzer` (Profilseiten), `/u/:benutzer/icons/:schlüssel` (eigene Symbole), `/u/:benutzer/contact.vcf` ([Kontakt speichern](#statistik-und-kontakt)), `/frame/:dateiname`, `/frame/a/:code` und `/frame/u/:benutzer` ([Einbetten](#einbetten)), `/oembed?url=…` (oEmbed für Dateien, Alben und Profile), `POST /view/:dateiname/react` und `POST /a/:code/react` mit `{ "reaction": "love" }` ([Reaktionen](#reaktionen)), `/a/:code/feed.xml` und `/u/:benutzer/feed.xml` ([RSS-Feeds](#diashow-und-rss-feeds)), `/r/:code` ([Datei-Anfragen](#datei-anfragen)), `/api/discord/interactions` (nur mit Signatur von Discord, siehe [Discord-App](#discord-app)), `/report` (Inhalt melden), `/oembed/:dateiname`, `/api/home` (Statistiken der Startseite), `/api/domains/tls` (Abfrage für Caddy), `/impressum`, `/datenschutz` und `/healthz` für Health-Checks. `/metrics` antwortet nur mit dem Token aus [Metriken für Prometheus](#metriken-für-prometheus). Geschützte Dateien liefert MoeShare erst nach Eingabe des Passworts auf der Ansichtsseite aus.
+Öffentlich erreichbar sind `/view/:dateiname` (Ansichtsseite), `/download/:dateiname`, `/view/:dateiname/zip` und `/view/:dateiname/zip/:nr` ([Inhalt von ZIP-Archiven](#vorschau-für-dokumente-daten-und-code) und einzelne Dateien daraus), `/uploads/:benutzer/:dateiname` (die Datei selbst), `/s/:code` (Kurzlinks), `/a/:code` (Alben), `/a/:code/zip` (Album als ZIP), `/u/:benutzer` (Profilseiten), `/u/:benutzer/icons/:schlüssel` (eigene Symbole), `/u/:benutzer/contact.vcf` ([Kontakt speichern](#statistik-und-kontakt)), `/frame/:dateiname`, `/frame/a/:code` und `/frame/u/:benutzer` ([Einbetten](#einbetten)), `/oembed?url=…` (oEmbed für Dateien, Alben und Profile), `POST /view/:dateiname/react` und `POST /a/:code/react` mit `{ "reaction": "love" }` ([Reaktionen](#reaktionen)), `/view/:dateiname/comments` und `/a/:code/comments` ([Kommentare](#kommentare)), `/m/:code` ([Vom Handy hochladen](#vom-handy-hochladen)), `/nutzungsbedingungen`, `/a/:code/feed.xml` und `/u/:benutzer/feed.xml` ([RSS-Feeds](#diashow-und-rss-feeds)), `/r/:code` ([Datei-Anfragen](#datei-anfragen)), `/api/discord/interactions` (nur mit Signatur von Discord, siehe [Discord-App](#discord-app)), `/report` (Inhalt melden), `/oembed/:dateiname`, `/api/home` (Statistiken der Startseite), `/api/domains/tls` (Abfrage für Caddy), `/impressum`, `/datenschutz` und `/healthz` für Health-Checks. `/metrics` antwortet nur mit dem Token aus [Metriken für Prometheus](#metriken-für-prometheus). Geschützte Dateien liefert MoeShare erst nach Eingabe des Passworts auf der Ansichtsseite aus.
 
 ```bash
 curl -H "Authorization: ms_…" -F "file=@bild.png" https://share.example.com/upload

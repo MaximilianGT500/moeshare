@@ -382,7 +382,36 @@ function AlbumTile({
               </Typography>
               {!item.locked && (
                 <Typography variant="caption" noWrap component="p" sx={{ color: c.onSurfaceVariant }}>
-                  {formatBytes(item.sizeBytes)}
+                  {[item.artist || '', formatBytes(item.sizeBytes)].filter(Boolean).join(' · ')}
+                </Typography>
+              )}
+            </Box>
+          </Box>
+        )}
+        {item.type === 'audio' && showImage && !veiled && (
+          <Box
+            sx={{
+              position: 'absolute',
+              inset: 'auto 0 0 0',
+              p: 1.5,
+              pt: 4,
+              background: 'linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.72) 100%)',
+              color: '#fff',
+              display: 'flex',
+              alignItems: 'flex-end',
+              gap: 1,
+            }}
+          >
+            <Box sx={{ display: 'flex', '& svg': { fontSize: 18 } }} aria-hidden>
+              {fileIcon(item.filename || '', 'audio')}
+            </Box>
+            <Box sx={{ minWidth: 0 }}>
+              <Typography variant="body2" noWrap sx={{ fontWeight: 700 }}>
+                {name}
+              </Typography>
+              {item.artist && (
+                <Typography variant="caption" noWrap component="p" sx={{ opacity: 0.85 }}>
+                  {item.artist}
                 </Typography>
               )}
             </Box>

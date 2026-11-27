@@ -32,6 +32,7 @@ export default defineConfig({
         notfound: entry('notfound'),
         legal: entry('legal'),
         request: entry('request'),
+        phone: entry('phone'),
       },
       output: {
         entryFileNames: 'assets/[name]-[hash].js',

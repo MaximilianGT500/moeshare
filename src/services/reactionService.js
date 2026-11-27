@@ -140,10 +140,14 @@ async function clear(rows) {
   if (!rows.length) return;
   await db.transaction(async (tx) => {
     for (const row of rows) {
-      await tx.run('UPDATE reaction_notices SET reactions = reactions - ? WHERE id = ?', [Number(row.reactions) || 0, Number(row.id)]);
+      await tx.run('UPDATE reaction_notices SET reactions = reactions - ?, comments = comments - ? WHERE id = ?', [
+        Number(row.reactions) || 0,
+        Number(row.comments) || 0,
+        Number(row.id),
+      ]);
     }
     const ids = rows.map((row) => Number(row.id));
-    await tx.run(`DELETE FROM reaction_notices WHERE id IN (${ids.map(() => '?').join(', ')}) AND reactions <= 0`, ids);
+    await tx.run(`DELETE FROM reaction_notices WHERE id IN (${ids.map(() => '?').join(', ')}) AND reactions <= 0 AND comments <= 0`, ids);
   });
 }
 

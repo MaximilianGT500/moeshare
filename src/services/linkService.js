@@ -61,6 +61,89 @@ function urlsFor(row, domain = null, username = null) {
   return { short: `${host}/s/${slugs.displayPath(row.code)}`, manage: `${base}/dashboard#links` };
 }
 
+const LANGUAGE = /^[a-z]{2,3}(?:-[a-z0-9]{2,8})?$/;
+const MAX_LANGUAGES = 10;
+
+function targetsOf(raw) {
+  if (typeof raw !== 'string' || !raw.startsWith('{')) return null;
+  try {
+    const value = JSON.parse(raw);
+    if (!value || typeof value !== 'object') return null;
+    const languages = value.languages && typeof value.languages === 'object' ? value.languages : {};
+    const result = {
+      ios: typeof value.ios === 'string' ? value.ios : null,
+      android: typeof value.android === 'string' ? value.android : null,
+      languages: Object.fromEntries(Object.entries(languages).filter(([key, url]) => LANGUAGE.test(key) && typeof url === 'string')),
+    };
+    return result.ios || result.android || Object.keys(result.languages).length ? result : null;
+  } catch {
+    return null;
+  }
+}
+
+function targetUrl(value) {
+  try {
+    return validateUrl(value);
+  } catch (error) {
+    throw badRequest(error.message, { field: 'targets' });
+  }
+}
+
+function cleanTargets(input) {
+  if (input === null || input === undefined || input === '') return null;
+  if (typeof input !== 'object' || Array.isArray(input)) throw badRequest('Ungültige Ziele.', { field: 'targets' });
+  const result = { ios: null, android: null, languages: {} };
+  for (const key of ['ios', 'android']) {
+    if (input[key] !== undefined && input[key] !== null && input[key] !== '') result[key] = targetUrl(input[key]);
+  }
+  const languages = input.languages && typeof input.languages === 'object' && !Array.isArray(input.languages) ? input.languages : {};
+  const entries = Object.entries(languages).filter(([, url]) => url !== null && url !== undefined && url !== '');
+  if (entries.length > MAX_LANGUAGES) throw badRequest(`Höchstens ${MAX_LANGUAGES} Sprachen pro Kurzlink.`, { field: 'targets' });
+  for (const [raw, url] of entries) {
+    const key = String(raw).trim().toLowerCase();
+    if (!LANGUAGE.test(key)) throw badRequest(`„${raw}“ ist kein Sprachcode wie de oder en-us.`, { field: 'targets' });
+    result.languages[key] = targetUrl(url);
+  }
+  return result.ios || result.android || Object.keys(result.languages).length ? JSON.stringify(result) : null;
+}
+
+function platformOf(userAgent) {
+  const agent = String(userAgent || '');
+  if (/\b(iPhone|iPad|iPod)\b/.test(agent)) return 'ios';
+  if (/\bAndroid\b/.test(agent)) return 'android';
+  return null;
+}
+
+function languagesOf(header) {
+  return String(header || '')
+    .split(',')
+    .map((part) => {
+      const [tag, ...params] = part.trim().split(';');
+      const q = params.map((param) => /^q=([\d.]+)$/.exec(param.trim())).find(Boolean);
+      return { tag: tag.trim().toLowerCase(), q: q ? Number(q[1]) : 1 };
+    })
+    .filter((entry) => entry.tag && entry.tag !== '*' && entry.q > 0)
+    .sort((a, b) => b.q - a.q)
+    .map((entry) => entry.tag);
+}
+
+function destinationFor(row, req) {
+  const targets = targetsOf(row.targets);
+  if (!targets) return { url: row.url, via: null };
+  const platform = platformOf(req.get('user-agent'));
+  if (platform && targets[platform]) return { url: targets[platform], via: platform };
+  const keys = Object.keys(targets.languages);
+  if (keys.length) {
+    for (const tag of languagesOf(req.get('accept-language'))) {
+      if (targets.languages[tag]) return { url: targets.languages[tag], via: tag };
+      const base = tag.split('-')[0];
+      const match = keys.find((key) => key === base) || keys.find((key) => key.split('-')[0] === base);
+      if (match) return { url: targets.languages[match], via: match };
+    }
+  }
+  return { url: row.url, via: null };
+}
+
 const toLink = (row) => ({
   id: row.id,
   code: row.code,
@@ -75,6 +158,7 @@ const toLink = (row) => ({
   blocked: row.blocked_at ? { at: Number(row.blocked_at), reason: row.blocked_reason || '' } : null,
   short: urlsFor(row).short,
   interstitial: Boolean(Number(row.interstitial)),
+  targets: targetsOf(row.targets),
   check: row.checked_at
     ? {
         status: row.check_status === null || row.check_status === undefined ? null : Number(row.check_status),
@@ -105,6 +189,7 @@ async function create(user, target, raw = {}) {
         max_clicks: options.maxViews,
         clicks: 0,
         interstitial: flag(raw.interstitial) ? 1 : 0,
+        targets: cleanTargets(raw.targets),
       });
     } catch (error) {
       if (db.isUniqueViolation(error) && options.code) throw conflict('Diese Adresse ist schon vergeben.', { field: 'code' });
@@ -158,6 +243,7 @@ async function update(userId, id, patch) {
     if (fields.url !== row.url) Object.assign(fields, { check_status: null, checked_at: null, broken_since: null });
   }
   if (patch.interstitial !== undefined) fields.interstitial = flag(patch.interstitial) ? 1 : 0;
+  if (patch.targets !== undefined) fields.targets = cleanTargets(patch.targets);
   if (patch.title !== undefined) fields.title = patch.title ? String(patch.title).replace(/\s+/g, ' ').trim().slice(0, 255) || null : null;
   if (patch.expires !== undefined) {
     const expiry = resolveExpiry(patch.expires, { max: settings.get('uploads.maxExpiry') });
@@ -324,4 +410,8 @@ module.exports = {
   ownerName,
   validateUrl,
   urlsFor,
+  destinationFor,
+  targetsOf,
+  platformOf,
+  languagesOf,
 };

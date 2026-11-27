@@ -24,6 +24,8 @@ import {
   PageFooter,
   PageHeader,
   ReactionBar,
+  CommentsSection,
+  CommentsButton,
   TitleBlock,
   type ViewModel,
 } from './parts';
@@ -97,6 +99,7 @@ function StandardLayout({ model, loaded, onLoaded, zooming, onZoom }: LayoutProp
             <NoteBlock />
           </Box>
         </m.section>
+        <CommentsSection model={model} sx={{ maxWidth: 860, mx: 'auto', mt: 3 }} />
       </Box>
       <PageFooter model={model} />
     </Box>
@@ -161,6 +164,7 @@ function MinimalLayout({ model, loaded, onLoaded, zooming, onZoom }: LayoutProps
           <ReactionBar model={model} />
           <NoteBlock />
         </Box>
+        <CommentsSection model={model} plain sx={{ mt: 4, pt: 3, borderTop: `1px solid ${c.outlineVariant}` }} />
       </Box>
       <PageFooter model={model} />
     </Box>
@@ -251,6 +255,7 @@ function StageLayout({ model, loaded, onLoaded, zooming, onZoom }: LayoutProps) 
                 <DescriptionBlock model={model} tone="glass" />
                 <MetaList model={model} />
                 <ReactionBar model={model} tone="glass" />
+                <CommentsButton model={model} tone="glass" />
                 <NoteBlock />
               </Box>
             </m.div>
@@ -380,6 +385,7 @@ function SplitLayout({ model, loaded, onLoaded, zooming, onZoom }: LayoutProps) 
           <ReactionBar model={model} />
           <NoteBlock />
           <Notices model={model} />
+          <CommentsSection model={model} plain sx={{ pt: 1, borderTop: `1px solid ${c.outlineVariant}` }} />
         </m.aside>
       </Box>
       <PageFooter model={model} />
@@ -482,6 +488,7 @@ function PolaroidLayout({ model, loaded, onLoaded, zooming, onZoom }: LayoutProp
           <ReactionBar model={model} align="center" />
           <NoteBlock align="center" />
         </Box>
+        <CommentsSection model={model} sx={{ mt: { xs: 4, md: 5 }, maxWidth: 640 }} />
       </Box>
       <PageFooter model={model} />
     </Box>
@@ -587,6 +594,7 @@ function MagazineLayout({ model, loaded, onLoaded, zooming, onZoom }: LayoutProp
             <NoteBlock />
           </Box>
         )}
+        <CommentsSection model={model} plain sx={{ mt: { xs: 4, md: 6 }, maxWidth: 760 }} />
       </Box>
       <PageFooter model={model} />
     </Box>

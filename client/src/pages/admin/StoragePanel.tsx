@@ -15,8 +15,17 @@ import TableRowsOutlined from '@mui/icons-material/TableRowsOutlined';
 import FactCheckOutlined from '@mui/icons-material/FactCheckOutlined';
 import DriveFileMoveOutlined from '@mui/icons-material/DriveFileMoveOutlined';
 import RefreshRounded from '@mui/icons-material/RefreshRounded';
-import { ApiError, fetchStorageAnalysis, fetchStorageCheck, moveOrphans, startStorageCheck } from '../../lib/api';
-import type { StorageAnalysis, StorageCheckResult, StorageCheckState, StorageKind } from '../../lib/types';
+import {
+  ApiError,
+  clearTransforms,
+  errorMessage,
+  fetchStorageAnalysis,
+  fetchStorageCheck,
+  fetchTransforms,
+  moveOrphans,
+  startStorageCheck,
+} from '../../lib/api';
+import type { StorageAnalysis, StorageCheckResult, StorageCheckState, StorageKind, TransformUsage } from '../../lib/types';
 import { formatBytes, formatNumber, relativeMs } from '../../lib/format';
 import { locale, t, tn } from '../../lib/i18n';
 import { mix } from '../../lib/color';
@@ -622,6 +631,62 @@ function CheckPanel({ onFinished }: { onFinished: () => void }) {
   );
 }
 
+function TransformCache() {
+  const toast = useToast();
+  const [usage, setUsage] = useState<TransformUsage | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    fetchTransforms()
+      .then(setUsage)
+      .catch(() => {});
+  }, []);
+
+  if (!usage) return null;
+  const share = usage.limit ? Math.min(1, usage.bytes / usage.limit) : 0;
+
+  const clear = async () => {
+    setBusy(true);
+    try {
+      const next = await clearTransforms();
+      setUsage(next);
+      toast(t('Zwischenspeicher geleert'), { variant: 'success' });
+    } catch (failure) {
+      toast(errorMessage(failure), { variant: 'error' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <SettingsSection
+      title={t('Bildgrößen über die Adresse')}
+      description={
+        usage.enabled
+          ? t('Fertig umgerechnete Größen und Formate liegen in einem Zwischenspeicher. Ist er voll, fliegen die ältesten zuerst raus.')
+          : t('Abgeschaltet. Unter Einstellungen › Bilder schaltest du es ein.')
+      }
+    >
+      <Box sx={{ px: { xs: 2, sm: 3 }, py: 2.25, display: 'grid', gap: 1.25 }}>
+        <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
+          <Typography variant="body2">
+            {t('{used} von {limit} belegt', { used: formatBytes(usage.bytes), limit: formatBytes(usage.limit) })}
+          </Typography>
+          <Button size="small" onClick={clear} disabled={busy || usage.bytes === 0}>
+            {t('Leeren')}
+          </Button>
+        </Box>
+        <LinearProgress
+          variant="determinate"
+          value={share * 100}
+          aria-label={t('Belegung des Zwischenspeichers')}
+          sx={{ height: 6, borderRadius: `${radius.full}px` }}
+        />
+      </Box>
+    </SettingsSection>
+  );
+}
+
 export function StoragePanel() {
   const [data, setData] = useState<StorageAnalysis | null>(null);
   const [error, setError] = useState('');
@@ -770,6 +835,8 @@ export function StoragePanel() {
       <SettingsSection title={t('Speicher prüfen')}>
         <CheckPanel onFinished={load} />
       </SettingsSection>
+
+      <TransformCache />
     </Stack>
   );
 }

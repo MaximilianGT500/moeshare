@@ -110,6 +110,19 @@ async function markStored(id, storage, variants) {
   cache.clear();
 }
 
+async function storeVariant(record, kind) {
+  if (record.storage !== 's3') return true;
+  const item = localArtifacts(record.username, record.filename).find((entry) => entry.kind === kind);
+  if (!item) return false;
+  await upload([item]);
+  const fresh = await db.get('SELECT variants FROM file_data WHERE id = ?', [record.id]);
+  const variants = [...new Set([...variantsOf(fresh || record), kind])].join(',');
+  await db.run('UPDATE file_data SET variants = ? WHERE id = ?', [variants, record.id]);
+  cache.clear();
+  await fsp.rm(item.file, { force: true });
+  return true;
+}
+
 async function markVersion(id, storage, variants) {
   await db.run('UPDATE file_versions SET storage = ?, variants = ? WHERE id = ?', [storage, variants || null, id]);
 }
@@ -396,6 +409,7 @@ module.exports = {
   configured,
   offload,
   offloadVersions,
+  storeVariant,
   removeArtifacts,
   migrate,
   testConnection,
